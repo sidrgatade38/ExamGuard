@@ -1,0 +1,33 @@
+{
+  "name": "examguard-backend",
+  "version": "1.0.0",
+  "description": "ExamGuard - Secure Examination Question Paper Management System Backend",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "test": "node scripts/verifyAuth.js && node scripts/testServiceLogic.js && node scripts/verifyRbac.js && node scripts/verifyQuestionPaper.js && node scripts/verifyEncryption.js && node scripts/verifyDigitalSignature.js && node scripts/verifyKeyManagement.js && node scripts/verifyExamCoordinator.js && node scripts/verifyAnswerKey.js && node scripts/verifyVerificationDecryption.js && node scripts/verifyNotifications.js && node scripts/verifyAuditLogs.js && node scripts/verifyAdminManagement.js && node scripts/verifySystemIntegration.js && node scripts/verifySystemValidation.js && node scripts/verifyProductionHardening.js && node scripts/verifyModule18QuestionBankAndGenerator.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.116.0",
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "express-rate-limit": "^8.7.1",
+    "helmet": "^8.0.0",
+    "jsonwebtoken": "^9.0.3",
+    "multer": "^2.4.0",
+    "pdfkit": "^0.20.2"
+  },
+  "devDependencies": {
+    "nodemon": "^1.14.10"
+  },
+  "keywords": [
+    "examguard",
+    "security",
+    "question-paper-management"
+  ],
+  "author": "",
+  "license": "ISC"
+}
