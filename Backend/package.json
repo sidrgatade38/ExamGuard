@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "test": "node scripts/verifyAuth.js && node scripts/testServiceLogic.js && node scripts/verifyRbac.js && node scripts/verifyQuestionPaper.js && node scripts/verifyEncryption.js && node scripts/verifyDigitalSignature.js && node scripts/verifyKeyManagement.js && node scripts/verifyExamCoordinator.js && node scripts/verifyAnswerKey.js && node scripts/verifyVerificationDecryption.js && node scripts/verifyNotifications.js && node scripts/verifyAuditLogs.js && node scripts/verifyAdminManagement.js && node scripts/verifySystemIntegration.js && node scripts/verifySystemValidation.js && node scripts/verifyProductionHardening.js && node scripts/verifyModule18QuestionBankAndGenerator.js"
+    "test": "node scripts/verifyAuth.js && node scripts/testServiceLogic.js && node scripts/verifyRbac.js && node scripts/verifyQuestionPaper.js && node scripts/verifyEncryption.js && node scripts/verifyDigitalSignature.js && node scripts/verifyKeyManagement.js && node scripts/verifyExamCoordinator.js && node scripts/verifyAnswerKey.js && node scripts/verifyVerificationDecryption.js && node scripts/verifyNotifications.js && node scripts/verifyAuditLogs.js && node scripts/verifyAdminManagement.js && node scripts/verifySystemIntegration.js && node scripts/verifySystemValidation.js && node scripts/verifyProductionHardening.js && node scripts/verifyModule18QuestionBankAndGenerator.js && node scripts/verifyQuestionPaperDeletion.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.116.0",

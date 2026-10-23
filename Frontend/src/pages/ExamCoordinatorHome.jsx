@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import examCoordinatorService from '../services/examCoordinatorService';
 import answerKeyService from '../services/answerKeyService';
 import NotificationBell from '../components/NotificationBell';
+import AlgorithmFlowDiagram from '../components/AlgorithmFlowDiagram';
 import {
   ClipboardCheck,
   FileText,
@@ -64,6 +65,9 @@ export default function ExamCoordinatorHome() {
 
   // Notification / Alert message state
   const [actionAlert, setActionAlert] = useState(null);
+
+  // Cryptographic Algorithm Flow Modal state (Module 20)
+  const [showAlgorithmModal, setShowAlgorithmModal] = useState(false);
 
   const handleLogout = () => {
     logout();
@@ -252,6 +256,14 @@ export default function ExamCoordinatorHome() {
 
         {/* Desktop Profile Section */}
         <div className="nav-desktop" style={styles.userProfile}>
+          <button
+            onClick={() => setShowAlgorithmModal(true)}
+            style={styles.algorithmFlowBtn}
+            title="View Cryptographic Algorithm Flow"
+          >
+            <Layers size={15} />
+            <span>Algorithm Flow</span>
+          </button>
           <NotificationBell onSelectPaper={(p) => setSelectedPaper(p)} />
           <div style={styles.roleBadge}>
             <Lock size={12} style={{ marginRight: '4px' }} />
@@ -322,7 +334,17 @@ export default function ExamCoordinatorHome() {
               </div>
             </div>
 
-            <div style={{ marginTop: 'auto', paddingTop: '1rem', borderTop: '1px solid var(--color-structure-border)' }}>
+            <div style={{ marginTop: 'auto', paddingTop: '1rem', borderTop: '1px solid var(--color-structure-border)', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <button
+                onClick={() => {
+                  setShowAlgorithmModal(true);
+                  setMobileMenuOpen(false);
+                }}
+                style={styles.mobileActionBtn}
+              >
+                <Layers size={18} />
+                <span>Algorithm Flow Diagram</span>
+              </button>
               <button onClick={handleLogout} style={styles.mobileLogoutBtn}>
                 <LogOut size={18} />
                 <span>Sign Out</span>
@@ -977,6 +999,12 @@ export default function ExamCoordinatorHome() {
           </div>
         </div>
       )}
+
+      {/* CRYPTOGRAPHIC ALGORITHM FLOW MODAL (Module 20) */}
+      <AlgorithmFlowDiagram
+        isOpen={showAlgorithmModal}
+        onClose={() => setShowAlgorithmModal(false)}
+      />
     </div>
   );
 }
@@ -1067,6 +1095,35 @@ const styles = {
     backgroundColor: 'var(--color-danger-subtle)',
     border: '1px solid var(--color-danger-border)',
     color: 'var(--color-danger)',
+    fontWeight: '600',
+    cursor: 'pointer',
+    minHeight: '44px',
+  },
+  algorithmFlowBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '0.4rem',
+    backgroundColor: 'rgba(56, 189, 248, 0.12)',
+    color: '#38bdf8',
+    border: '1px solid rgba(56, 189, 248, 0.3)',
+    padding: '0.45rem 0.85rem',
+    borderRadius: 'var(--radius-md)',
+    fontSize: '0.8rem',
+    fontWeight: '600',
+    cursor: 'pointer',
+    transition: 'all 0.15s ease',
+  },
+  mobileActionBtn: {
+    width: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '0.5rem',
+    padding: '0.75rem',
+    borderRadius: 'var(--radius-md)',
+    backgroundColor: 'rgba(56, 189, 248, 0.12)',
+    border: '1px solid rgba(56, 189, 248, 0.3)',
+    color: '#38bdf8',
     fontWeight: '600',
     cursor: 'pointer',
     minHeight: '44px',

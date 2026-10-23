@@ -198,40 +198,50 @@ supabaseClient.from = function (tableName) {
         }),
       }),
       select: () => ({
-        eq: (col, val) => ({
-          order: () => {
-            if (col === 'teacher_id') {
-              const matched = [];
-              for (const p of inMemoryPapers.values()) {
-                if (p.teacher_id === val) {
-                  const assignment = inMemoryAssignments.get(p.id);
-                  matched.push({
-                    ...p,
-                    question_paper_assignments: assignment ? [assignment] : [],
-                  });
+        eq: (col, val) => {
+          // Build a chainable object that supports .neq().neq().order()
+          // Required because getMyQuestionPapers chains .neq('status','ARCHIVED').neq('status','DELETED').order(...)
+          const excludedStatuses = [];
+          const chain = {
+            neq: (neqCol, neqVal) => {
+              if (neqCol === 'status') excludedStatuses.push(neqVal);
+              return chain;
+            },
+            order: () => {
+              if (col === 'teacher_id') {
+                const matched = [];
+                for (const p of inMemoryPapers.values()) {
+                  if (p.teacher_id === val && !excludedStatuses.includes(p.status)) {
+                    const assignment = inMemoryAssignments.get(p.id);
+                    matched.push({
+                      ...p,
+                      question_paper_assignments: assignment ? [assignment] : [],
+                    });
+                  }
                 }
+                return Promise.resolve({ data: matched, error: null });
               }
-              return Promise.resolve({ data: matched, error: null });
-            }
-            return Promise.resolve({ data: [], error: null });
-          },
-          maybeSingle: () => {
-            if (col === 'id') {
-              const paper = inMemoryPapers.get(val);
-              if (!paper) return Promise.resolve({ data: null, error: null });
-              const assignment = inMemoryAssignments.get(paper.id);
-              return Promise.resolve({
-                data: {
-                  ...paper,
-                  teacher: { id: paper.teacher_id, name: 'Alice Teacher', email: 'alice@examguard.edu' },
-                  question_paper_assignments: assignment ? [assignment] : [],
-                },
-                error: null,
-              });
-            }
-            return Promise.resolve({ data: null, error: null });
-          },
-        }),
+              return Promise.resolve({ data: [], error: null });
+            },
+            maybeSingle: () => {
+              if (col === 'id') {
+                const paper = inMemoryPapers.get(val);
+                if (!paper) return Promise.resolve({ data: null, error: null });
+                const assignment = inMemoryAssignments.get(paper.id);
+                return Promise.resolve({
+                  data: {
+                    ...paper,
+                    teacher: { id: paper.teacher_id, name: 'Alice Teacher', email: 'alice@examguard.edu' },
+                    question_paper_assignments: assignment ? [assignment] : [],
+                  },
+                  error: null,
+                });
+              }
+              return Promise.resolve({ data: null, error: null });
+            },
+          };
+          return chain;
+        },
       }),
       delete: () => ({
         eq: (col, val) => {

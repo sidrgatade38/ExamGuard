@@ -411,6 +411,7 @@ async function validateFeasibility(blueprintId, authorId, role) {
     role: role || 'TEACHER',
     subject: blueprint.subject,
     approvalStatus: 'APPROVED',
+    limit: 1000,
   });
 
   const allQuestions = bankResult.data || [];

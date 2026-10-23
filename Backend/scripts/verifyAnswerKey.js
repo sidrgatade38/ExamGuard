@@ -329,19 +329,46 @@ supabaseClient.from = function (tableName) {
   if (tableName === 'question_papers') {
     return {
       select: () => ({
-        eq: (col, val) => ({
-          maybeSingle: () => {
-            const paper = inMemoryPapers.get(val);
-            return Promise.resolve({ data: paper || null, error: null });
-          },
-          order: () => {
-            const matched = [];
-            for (const p of inMemoryPapers.values()) {
-              if (p[col] === val) matched.push(p);
-            }
-            return Promise.resolve({ data: matched, error: null });
-          },
-        }),
+                eq: (col, val) => {
+          // Supports .neq().neq().order() chain used by getMyQuestionPapers
+          const excludedStatuses = [];
+          const chain = {
+            neq: (neqCol, neqVal) => {
+              if (neqCol === 'status') excludedStatuses.push(neqVal);
+              return chain;
+            },
+            order: () => {
+              if (col === 'teacher_id') {
+                const matched = [];
+                for (const p of inMemoryPapers.values()) {
+                  if (p.teacher_id === val && !excludedStatuses.includes(p.status)) {
+                    const assignment = inMemoryAssignments.get(p.id);
+                    matched.push({ ...p, question_paper_assignments: assignment ? [assignment] : [] });
+                  }
+                }
+                return Promise.resolve({ data: matched, error: null });
+              }
+              return Promise.resolve({ data: [], error: null });
+            },
+            maybeSingle: () => {
+              if (col === 'id') {
+                const paper = inMemoryPapers.get(val);
+                if (!paper) return Promise.resolve({ data: null, error: null });
+                const assignment = inMemoryAssignments.get(paper.id);
+                return Promise.resolve({
+                  data: {
+                    ...paper,
+                    teacher: { id: paper.teacher_id, name: 'Alice Teacher', email: 'alice@examguard.edu' },
+                    question_paper_assignments: assignment ? [assignment] : [],
+                  },
+                  error: null,
+                });
+              }
+              return Promise.resolve({ data: null, error: null });
+            },
+          };
+          return chain;
+        },
       }),
     };
   }

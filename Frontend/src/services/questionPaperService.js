@@ -101,6 +101,19 @@ export const questionPaperService = {
     const response = await api.get(`/question-papers/${id}/verify-signature`);
     return response.data?.data;
   },
+
+  /**
+   * Securely deletes an eligible question paper (Module 20)
+   * @param {string} id - Question paper UUID
+   * @param {string} [reason] - Optional deletion reason
+   * @returns {Promise<{ success: boolean, message: string }>}
+   */
+  async deleteQuestionPaper(id, reason = '') {
+    const response = await api.delete(`/question-papers/${id}`, {
+      data: reason ? { reason } : {},
+    });
+    return response.data;
+  },
 };
 
 export default questionPaperService;

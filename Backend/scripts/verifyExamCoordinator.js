@@ -276,25 +276,46 @@ supabaseClient.from = function (tableName) {
           }
           return Promise.resolve({ data: list, error: null });
         },
-        eq: (col, val) => ({
-          order: () => {
-            const papers = Array.from(inMemoryPapers.values()).filter((p) => p.teacher_id === val);
-            return Promise.resolve({ data: papers, error: null });
-          },
-          maybeSingle: () => {
-            const paper = inMemoryPapers.get(val);
-            if (!paper) return Promise.resolve({ data: null, error: null });
-            const sigs = Array.from(inMemorySignatures.values()).filter((s) => s.question_paper_id === val);
-            return Promise.resolve({
-              data: {
-                ...paper,
-                teacher: { id: paper.teacher_id, name: 'Prof. Alice Smith', email: 'alice.teacher@examguard.edu' },
-                digital_signatures: sigs,
-              },
-              error: null,
-            });
-          },
-        }),
+                eq: (col, val) => {
+          // Supports .neq().neq().order() chain used by getMyQuestionPapers
+          const excludedStatuses = [];
+          const chain = {
+            neq: (neqCol, neqVal) => {
+              if (neqCol === 'status') excludedStatuses.push(neqVal);
+              return chain;
+            },
+            order: () => {
+              if (col === 'teacher_id') {
+                const matched = [];
+                for (const p of inMemoryPapers.values()) {
+                  if (p.teacher_id === val && !excludedStatuses.includes(p.status)) {
+                    const assignment = inMemoryAssignments.get(p.id);
+                    matched.push({ ...p, question_paper_assignments: assignment ? [assignment] : [] });
+                  }
+                }
+                return Promise.resolve({ data: matched, error: null });
+              }
+              return Promise.resolve({ data: [], error: null });
+            },
+            maybeSingle: () => {
+              if (col === 'id') {
+                const paper = inMemoryPapers.get(val);
+                if (!paper) return Promise.resolve({ data: null, error: null });
+                const assignment = inMemoryAssignments.get(paper.id);
+                return Promise.resolve({
+                  data: {
+                    ...paper,
+                    teacher: { id: paper.teacher_id, name: 'Prof. Alice Smith', email: 'alice.teacher@examguard.edu' },
+                    question_paper_assignments: assignment ? [assignment] : [],
+                  },
+                  error: null,
+                });
+              }
+              return Promise.resolve({ data: null, error: null });
+            },
+          };
+          return chain;
+        },
       }),
       delete: () => ({
         eq: (col, val) => {

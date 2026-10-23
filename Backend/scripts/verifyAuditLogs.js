@@ -289,10 +289,15 @@ supabaseClient.from = function (tableName) {
   if (tableName === 'question_papers') {
     return {
       select: () => ({
-        eq: () => ({
-          order: () => Promise.resolve({ data: [], error: null }),
-          maybeSingle: () => Promise.resolve({ data: null, error: null }),
-        }),
+        eq: (col, val) => {
+          const excl = [];
+          const ch = {
+            neq: (c, v) => { excl.push(v); return ch; },
+            order: () => Promise.resolve({ data: [], error: null }),
+            maybeSingle: () => Promise.resolve({ data: null, error: null }),
+          };
+          return ch;
+        },
       }),
     };
   }

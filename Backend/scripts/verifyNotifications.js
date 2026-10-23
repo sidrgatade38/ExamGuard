@@ -220,11 +220,17 @@ supabaseClient.from = function (tableName) {
             queryState.filters.push({ col, vals, type: 'in' });
             return builder;
           },
+          neq: (col, val) => {
+            queryState.filters.push({ col, val, type: 'neq' });
+            return builder;
+          },
           order: () => {
             let result = Array.from(inMemoryPapers.values());
             for (const f of queryState.filters) {
               if (f.type === 'eq') {
                 result = result.filter((p) => p[f.col] === f.val);
+              } else if (f.type === 'neq') {
+                result = result.filter((p) => p[f.col] !== f.val);
               } else if (f.type === 'in') {
                 result = result.filter((p) => f.vals.includes(p[f.col]));
               }
@@ -315,8 +321,11 @@ supabaseClient.from = function (tableName) {
       select: () => ({
         eq: (col, val) => ({
           maybeSingle: () => {
-            const keyRecord = inMemoryPaperKeys.get(val);
-            return Promise.resolve({ data: keyRecord || null, error: null });
+            if (col === 'question_paper_id') {
+              const k = inMemoryPaperKeys.get(val);
+              return Promise.resolve({ data: k || null, error: null });
+            }
+            return Promise.resolve({ data: null, error: null });
           },
         }),
       }),

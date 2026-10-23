@@ -276,6 +276,53 @@ async function getAssignedPapers(req, res, next) {
   }
 }
 
+/**
+ * Handles secure question paper deletion (DELETE /api/question-papers/:id)
+ */
+async function deletePaper(req, res, next) {
+  try {
+    const requesterId = req.user?.userId;
+    const requesterRole = req.userRole || req.user?.role;
+    const paperId = req.params.id;
+
+    if (!requesterId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required',
+      });
+    }
+
+    // Reject any client-supplied teacherId, storagePath, etc. in body
+    if (req.body?.teacher_id || req.body?.teacherId || req.body?.storage_path || req.body?.storagePath) {
+      return res.status(400).json({
+        success: false,
+        message: 'Client cannot supply teacherId or storagePath for deletion. Identity and storage references are strictly server-controlled.',
+      });
+    }
+
+    const result = await questionPaperService.deleteQuestionPaper(
+      paperId,
+      requesterId,
+      requesterRole,
+      req.body?.reason
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: result.message || 'Question paper deleted successfully.',
+      data: result,
+    });
+  } catch (err) {
+    if (err.statusCode) {
+      return res.status(err.statusCode).json({
+        success: false,
+        message: err.message,
+      });
+    }
+    return next(err);
+  }
+}
+
 module.exports = {
   submitPaper,
   getMyPapers,
@@ -284,5 +331,6 @@ module.exports = {
   downloadPaper,
   getRecipients,
   verifyPaperSignature,
+  deletePaper,
 };
 

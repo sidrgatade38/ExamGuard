@@ -10,6 +10,7 @@ const {
   downloadPaper,
   getRecipients,
   verifyPaperSignature,
+  deletePaper,
 } = require('../controllers/questionPaperController');
 const {
   uploadAnswerKey,
@@ -75,6 +76,14 @@ router.get(
   authenticateToken,
   authorizeRoles('TEACHER'),
   verifyPaperSignature
+);
+
+// DELETE /api/question-papers/:id - Secure question paper deletion & archival (TEACHER only, ownership verified in service)
+router.delete(
+  '/:id',
+  authenticateToken,
+  authorizeRoles('TEACHER'),
+  deletePaper
 );
 
 // Answer Key Routes (TEACHER only, alias under /api/question-papers)

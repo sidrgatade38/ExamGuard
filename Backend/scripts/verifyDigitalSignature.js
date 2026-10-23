@@ -203,44 +203,51 @@ supabaseClient.from = function (tableName) {
         }),
       }),
       select: () => ({
-        eq: (col, val) => ({
-          order: () => {
-            if (col === 'teacher_id') {
-              const matched = [];
-              for (const p of inMemoryPapers.values()) {
-                if (p.teacher_id === val) {
-                  const assignment = inMemoryAssignments.get(p.id);
-                  const sig = inMemorySignatures.get(p.id);
-                  matched.push({
-                    ...p,
-                    question_paper_assignments: assignment ? [assignment] : [],
-                    digital_signatures: sig ? [sig] : [],
-                  });
+                eq: (col, val) => {
+          // Supports .neq().neq().order() chain used by getMyQuestionPapers
+          const excludedStatuses = [];
+          const chain = {
+            neq: (neqCol, neqVal) => {
+              if (neqCol === 'status') excludedStatuses.push(neqVal);
+              return chain;
+            },
+            order: () => {
+              if (col === 'teacher_id') {
+                const matched = [];
+                for (const p of inMemoryPapers.values()) {
+                  if (p.teacher_id === val && !excludedStatuses.includes(p.status)) {
+                    const assignment = inMemoryAssignments.get(p.id);
+                    const sig = inMemorySignatures.get(p.id);
+                    matched.push({
+                      ...p,
+                      question_paper_assignments: assignment ? [assignment] : [],
+                      digital_signatures: sig ? [sig] : [],
+                    });
+                  }
                 }
+                return Promise.resolve({ data: matched, error: null });
               }
-              return Promise.resolve({ data: matched, error: null });
-            }
-            return Promise.resolve({ data: [], error: null });
-          },
-          maybeSingle: () => {
-            if (col === 'id') {
-              const paper = inMemoryPapers.get(val);
-              if (!paper) return Promise.resolve({ data: null, error: null });
-              const assignment = inMemoryAssignments.get(paper.id);
-              const sig = inMemorySignatures.get(paper.id);
-              return Promise.resolve({
-                data: {
-                  ...paper,
-                  teacher: { id: paper.teacher_id, name: 'Alice Teacher', email: 'alice@examguard.edu' },
-                  question_paper_assignments: assignment ? [assignment] : [],
-                  digital_signatures: sig ? [sig] : [],
-                },
-                error: null,
-              });
-            }
-            return Promise.resolve({ data: null, error: null });
-          },
-        }),
+              return Promise.resolve({ data: [], error: null });
+            },
+            maybeSingle: () => {
+              if (col === 'id') {
+                const paper = inMemoryPapers.get(val);
+                if (!paper) return Promise.resolve({ data: null, error: null });
+                const assignment = inMemoryAssignments.get(paper.id);
+                return Promise.resolve({
+                  data: {
+                    ...paper,
+                    teacher: { id: paper.teacher_id, name: 'Alice Teacher', email: 'alice@examguard.edu' },
+                    question_paper_assignments: assignment ? [assignment] : [],
+                  },
+                  error: null,
+                });
+              }
+              return Promise.resolve({ data: null, error: null });
+            },
+          };
+          return chain;
+        },
       }),
       delete: () => ({
         eq: (col, val) => {

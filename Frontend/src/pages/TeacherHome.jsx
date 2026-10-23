@@ -27,8 +27,11 @@ import {
   FileCheck,
   Sparkles,
   Menu,
+  Trash2,
 } from 'lucide-react';
 import QuestionPaperGeneratorWizard from '../components/QuestionPaperGeneratorWizard';
+import DeletePaperModal from '../components/DeletePaperModal';
+import AlgorithmFlowDiagram from '../components/AlgorithmFlowDiagram';
 
 export default function TeacherHome() {
   const { user, logout } = useAuth();
@@ -58,6 +61,15 @@ export default function TeacherHome() {
   // Digital Signature Verification state (Module 7)
   const [verifyingId, setVerifyingId] = useState(null);
   const [verificationResults, setVerificationResults] = useState({});
+
+  // Question Paper Deletion state (Module 20)
+  const [paperToDelete, setPaperToDelete] = useState(null);
+  const [isDeletingPaper, setIsDeletingPaper] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+  const [deleteSuccess, setDeleteSuccess] = useState('');
+
+  // Cryptographic Algorithm Flow Modal state (Module 20)
+  const [showAlgorithmModal, setShowAlgorithmModal] = useState(false);
 
   // Eligible Recipients for dropdown
   const [recipients, setRecipients] = useState([]);
@@ -386,6 +398,38 @@ export default function TeacherHome() {
     }
   };
 
+  // Open delete confirmation modal
+  const handleOpenDeleteModal = (paper) => {
+    setPaperToDelete(paper);
+    setDeleteError('');
+  };
+
+  // Execute secure question paper deletion (Module 20)
+  const handleConfirmDelete = async (paperId, reason) => {
+    setIsDeletingPaper(true);
+    setDeleteError('');
+    try {
+      await questionPaperService.deleteQuestionPaper(paperId, reason);
+      const deletedTitle = paperToDelete?.title || 'Paper';
+      setDeleteSuccess(`Question paper "${deletedTitle}" was successfully deleted from storage and archived.`);
+      setPaperToDelete(null);
+      if (selectedPaper?.id === paperId) {
+        setSelectedPaper(null);
+      }
+      setActionAlert({
+        type: 'success',
+        message: `Question paper "${deletedTitle}" deleted successfully.`,
+      });
+      await fetchPapers();
+      setTimeout(() => setDeleteSuccess(''), 6000);
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message || 'Failed to delete question paper.';
+      setDeleteError(msg);
+    } finally {
+      setIsDeletingPaper(false);
+    }
+  };
+
   // Filtered Papers (Authored)
   const filteredPapers = papers.filter((p) => {
     const q = searchTerm.toLowerCase();
@@ -423,6 +467,14 @@ export default function TeacherHome() {
 
         {/* Desktop Navigation Section */}
         <div className="nav-desktop" style={styles.navUserSection}>
+          <button
+            onClick={() => setShowAlgorithmModal(true)}
+            style={styles.algorithmFlowBtn}
+            title="View Cryptographic Algorithm Flow"
+          >
+            <Layers size={15} />
+            <span>Algorithm Flow</span>
+          </button>
           <NotificationBell onSelectPaper={(p) => setSelectedPaper(p)} />
           <div style={styles.userBadge}>
             <User size={16} color="var(--color-accent)" />
@@ -522,6 +574,16 @@ export default function TeacherHome() {
               >
                 <Plus size={18} />
                 <span>Create Question Paper</span>
+              </button>
+              <button
+                onClick={() => {
+                  setShowAlgorithmModal(true);
+                  setMobileMenuOpen(false);
+                }}
+                style={styles.mobileTabBtn}
+              >
+                <Layers size={18} />
+                <span>Algorithm Flow Diagram</span>
               </button>
             </div>
 
@@ -790,6 +852,17 @@ export default function TeacherHome() {
                             )}
                             <span>Download</span>
                           </button>
+
+                          {paper.status !== 'DELIVERED' && paper.status !== 'ARCHIVED' && paper.status !== 'DELETED' && (
+                            <button
+                              onClick={() => handleOpenDeleteModal(paper)}
+                              style={styles.deleteCardBtn}
+                              title="Delete Question Paper"
+                            >
+                              <Trash2 size={13} />
+                              <span>Delete</span>
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1627,6 +1700,18 @@ export default function TeacherHome() {
                   </button>
                 );
               })()}
+
+              {/* Delete Button in Details Modal (Module 20) */}
+              {selectedPaper.status !== 'DELIVERED' && selectedPaper.status !== 'ARCHIVED' && selectedPaper.status !== 'DELETED' && (
+                <button
+                  onClick={() => handleOpenDeleteModal(selectedPaper)}
+                  style={styles.modalDeleteBtn}
+                  title="Delete Question Paper"
+                >
+                  <Trash2 size={16} />
+                  <span>Delete Paper</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -1914,6 +1999,25 @@ export default function TeacherHome() {
           </div>
         </div>
       )}
+
+      {/* SECURE DELETE PAPER MODAL (Module 20) */}
+      <DeletePaperModal
+        isOpen={Boolean(paperToDelete)}
+        paper={paperToDelete}
+        onClose={() => {
+          setPaperToDelete(null);
+          setDeleteError('');
+        }}
+        onConfirm={handleConfirmDelete}
+        isDeleting={isDeletingPaper}
+        error={deleteError}
+      />
+
+      {/* CRYPTOGRAPHIC ALGORITHM FLOW MODAL (Module 20) */}
+      <AlgorithmFlowDiagram
+        isOpen={showAlgorithmModal}
+        onClose={() => setShowAlgorithmModal(false)}
+      />
     </div>
   );
 }
@@ -2775,6 +2879,50 @@ const styles = {
     border: '1px solid var(--color-danger-border)',
     color: 'var(--color-danger-text)',
     fontSize: '0.75rem',
+  },
+  deleteCardBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '0.35rem',
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    color: '#ef4444',
+    border: '1px solid rgba(239, 68, 68, 0.3)',
+    padding: '0.4rem 0.75rem',
+    borderRadius: 'var(--radius-sm)',
+    fontSize: '0.8rem',
+    fontWeight: '500',
+    cursor: 'pointer',
+    minHeight: '36px',
+    transition: 'all 0.15s ease',
+  },
+  modalDeleteBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+    backgroundColor: '#dc2626',
+    color: '#ffffff',
+    border: 'none',
+    padding: '0.6rem 1.25rem',
+    borderRadius: 'var(--radius-md)',
+    fontSize: '0.875rem',
+    fontWeight: '600',
+    cursor: 'pointer',
+    minHeight: '44px',
+    transition: 'background-color 0.15s ease',
+  },
+  algorithmFlowBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '0.4rem',
+    backgroundColor: 'rgba(59, 130, 246, 0.12)',
+    color: '#60a5fa',
+    border: '1px solid rgba(59, 130, 246, 0.3)',
+    padding: '0.45rem 0.85rem',
+    borderRadius: 'var(--radius-md)',
+    fontSize: '0.8rem',
+    fontWeight: '600',
+    cursor: 'pointer',
+    transition: 'all 0.15s ease',
   },
 };
 

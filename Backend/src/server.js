@@ -28,6 +28,20 @@ app.use(createCorsMiddleware());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Root status endpoint (browser friendly status confirmation)
+app.get('/', (req, res) => {
+  res.status(200).json({
+    success: true,
+    service: 'ExamGuard Backend API',
+    status: 'online',
+    version: '1.0.0',
+    endpoints: {
+      health: '/api/health',
+      ready: '/api/health/ready',
+    },
+  });
+});
+
 // Mount API routes
 app.use('/api', apiRoutes);
 

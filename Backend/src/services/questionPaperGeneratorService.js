@@ -89,6 +89,7 @@ async function generateExamSets({ blueprintId, teacherId, role = 'TEACHER' }) {
     role,
     subject: blueprint.subject,
     approvalStatus: 'APPROVED',
+    limit: 1000,
   });
   const allQuestions = bankResult.data || [];
 

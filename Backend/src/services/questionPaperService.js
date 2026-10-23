@@ -32,6 +32,11 @@ function isValidDateString(dateStr) {
   return !isNaN(d.getTime());
 }
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+function isValidUuid(id) {
+  return typeof id === 'string' && UUID_REGEX.test(id);
+}
+
 /**
  * Verifies that a target recipient faculty exists, is active, and possesses the TEACHER role.
  *
@@ -445,6 +450,8 @@ async function getMyQuestionPapers(teacherId) {
       )
     `)
     .eq('teacher_id', teacherId)
+    .neq('status', 'ARCHIVED')
+    .neq('status', 'DELETED')
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -981,6 +988,294 @@ async function getAssignedQuestionPapers(facultyId) {
     });
 }
 
+/**
+ * Securely deletes an eligible question paper (Module 20).
+ *
+ * Authoritative Server-Side Checks:
+ * 1. Valid UUID paper ID format.
+ * 2. Authenticated user must have TEACHER role.
+ * 3. Authoritative ownership: paper.teacher_id === requesterId (IDOR protection).
+ * 4. Already deleted/archived check: rejects repeat deletion attempts.
+ * 5. Lifecycle eligibility:
+ *    - Rejects deletion if paper.status === 'DELIVERED'.
+ *    - Rejects deletion if any assignment delivery_status === 'DELIVERED'.
+ *    - Rejects deletion if any answer key is already submitted for this paper.
+ * 6. Storage Deletion:
+ *    - Removes ciphertext object from private Supabase Storage using trusted server storage_path.
+ *    - Handles storage failure safely: fails closed without updating database.
+ * 7. Soft Delete & Archival Database Update:
+ *    - Updates question_papers status to 'ARCHIVED' (and is_deleted, deleted_at if migrated).
+ *    - Updates pending question_paper_assignments to CANCELLED.
+ * 8. Audit Logging:
+ *    - Records immutable audit trail in activity_logs with action 'DELETE'.
+ *
+ * @param {string} paperId - UUID of the question paper to delete
+ * @param {string} requesterId - UUID of the authenticated user
+ * @param {string} requesterRole - Authoritative role of the authenticated user
+ * @param {string} [reason] - Optional reason for deletion
+ * @returns {Promise<{ success: boolean, paperId: string, message: string }>}
+ */
+async function deleteQuestionPaper(paperId, requesterId, requesterRole, reason = '') {
+  if (!paperId || !isValidUuid(paperId)) {
+    const err = new Error('Invalid question paper ID format. Expected valid UUID.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  if (!requesterId) {
+    const err = new Error('Authentication required.');
+    err.statusCode = 401;
+    throw err;
+  }
+
+  if (requesterRole !== 'TEACHER') {
+    const err = new Error('Access forbidden. Only faculty members with the TEACHER role can delete question papers.');
+    err.statusCode = 403;
+    throw err;
+  }
+
+  // 1. Fetch paper record with trusted server-side metadata
+  const { data: paper, error: fetchErr } = await supabase
+    .from('question_papers')
+    .select('id, title, subject, teacher_id, storage_path, file_name, status, scheduled_delivery_date')
+    .eq('id', paperId)
+    .maybeSingle();
+
+  if (fetchErr) {
+    console.error('[QuestionPaperService] Error fetching paper for deletion:', fetchErr.message);
+    const dbErr = new Error('Failed to retrieve question paper details.');
+    dbErr.statusCode = 500;
+    throw dbErr;
+  }
+
+  if (!paper) {
+    const notFoundErr = new Error('Question paper not found.');
+    notFoundErr.statusCode = 404;
+    throw notFoundErr;
+  }
+
+  // 2. Authoritative Ownership Validation (IDOR defense)
+  if (paper.teacher_id !== requesterId) {
+    await auditLogService.logAuditEvent({
+      userId: requesterId,
+      role: requesterRole,
+      action: 'UNAUTHORIZED_ACCESS',
+      resourceType: 'QUESTION_PAPER',
+      resourceId: paperId,
+      outcome: 'DENIED',
+      summary: `Unauthorized attempt by user ${requesterId} to delete question paper ${paperId} owned by ${paper.teacher_id}`,
+      metadata: { requesterId, paperId, ownerId: paper.teacher_id },
+    });
+    const forbiddenErr = new Error('Access forbidden. You do not own this question paper.');
+    forbiddenErr.statusCode = 403;
+    throw forbiddenErr;
+  }
+
+  // 3. Check if paper is already deleted or archived
+  if (paper.status === 'ARCHIVED' || paper.status === 'DELETED') {
+    const conflictErr = new Error('Question paper has already been deleted or archived.');
+    conflictErr.statusCode = 409;
+    throw conflictErr;
+  }
+
+  // 4. Lifecycle & Retention Policy Verification:
+  // a) Rejection if paper status is DELIVERED
+  if (paper.status === 'DELIVERED') {
+    await auditLogService.logAuditEvent({
+      userId: requesterId,
+      role: requesterRole,
+      action: 'DELETE_BLOCKED',
+      resourceType: 'QUESTION_PAPER',
+      resourceId: paperId,
+      outcome: 'DENIED',
+      summary: `Deletion rejected: question paper ${paperId} has status DELIVERED`,
+      metadata: { paperId, status: paper.status },
+    });
+    const retentionErr = new Error('Deletion disallowed: Question paper has already been delivered and must be retained under university examination policy.');
+    retentionErr.statusCode = 403;
+    throw retentionErr;
+  }
+
+  // b) Check if any assignment has been DELIVERED
+  const { data: assignments, error: assignErr } = await supabase
+    .from('question_paper_assignments')
+    .select('id, delivery_status, delivered_at')
+    .eq('question_paper_id', paperId);
+
+  if (assignErr) {
+    console.error('[QuestionPaperService] Error checking assignments for deletion:', assignErr.message);
+    const dbErr = new Error('Failed to verify question paper delivery status.');
+    dbErr.statusCode = 500;
+    throw dbErr;
+  }
+
+  const hasDeliveredAssignment = (assignments || []).some(
+    (a) => a.delivery_status === 'DELIVERED' || a.delivered_at !== null
+  );
+
+  if (hasDeliveredAssignment) {
+    await auditLogService.logAuditEvent({
+      userId: requesterId,
+      role: requesterRole,
+      action: 'DELETE_BLOCKED',
+      resourceType: 'QUESTION_PAPER',
+      resourceId: paperId,
+      outcome: 'DENIED',
+      summary: `Deletion rejected: question paper ${paperId} has already been delivered to assigned coordinator`,
+      metadata: { paperId },
+    });
+    const retentionErr = new Error('Deletion disallowed: Question paper has already been delivered to examination coordinators and must be retained under university audit policy.');
+    retentionErr.statusCode = 403;
+    throw retentionErr;
+  }
+
+  // c) Check if any Answer Key exists for this paper
+  const { data: answerKey, error: akErr } = await supabase
+    .from('answer_keys')
+    .select('id')
+    .eq('question_paper_id', paperId)
+    .maybeSingle();
+
+  if (akErr) {
+    console.error('[QuestionPaperService] Error checking answer keys for deletion:', akErr.message);
+    const dbErr = new Error('Failed to verify answer key status.');
+    dbErr.statusCode = 500;
+    throw dbErr;
+  }
+
+  if (answerKey) {
+    await auditLogService.logAuditEvent({
+      userId: requesterId,
+      role: requesterRole,
+      action: 'DELETE_BLOCKED',
+      resourceType: 'QUESTION_PAPER',
+      resourceId: paperId,
+      outcome: 'DENIED',
+      summary: `Deletion rejected: question paper ${paperId} has an associated answer key ${answerKey.id}`,
+      metadata: { paperId, answerKeyId: answerKey.id },
+    });
+    const akRetentionErr = new Error('Deletion disallowed: An answer key has already been submitted for this examination paper. Retention policy requires preserving dependent records. Contact the Examination Cell administrator.');
+    akRetentionErr.statusCode = 400;
+    throw akRetentionErr;
+  }
+
+  // 5. Secure Storage Deletion
+  const bucketName = config.storageBucket || 'examguard-storage';
+  if (paper.storage_path) {
+    // Validate storage path against path traversal
+    if (paper.storage_path.includes('..') || !paper.storage_path.startsWith('question-papers/')) {
+      const pathErr = new Error('Invalid or corrupted storage path. Deletion aborted for security.');
+      pathErr.statusCode = 403;
+      throw pathErr;
+    }
+
+    const { error: storageError } = await supabase.storage
+      .from(bucketName)
+      .remove([paper.storage_path]);
+
+    if (storageError) {
+      console.error('[QuestionPaperService] Storage removal failed:', storageError.message);
+      await auditLogService.logAuditEvent({
+        userId: requesterId,
+        role: requesterRole,
+        action: 'DELETE',
+        resourceType: 'QUESTION_PAPER',
+        resourceId: paperId,
+        outcome: 'FAILURE',
+        summary: `Storage deletion failed for paper ${paperId}: ${storageError.message}`,
+        metadata: { paperId, storagePath: paper.storage_path, error: storageError.message },
+      });
+      const storageErr = new Error(`Failed to delete question paper from secure storage: ${storageError.message}`);
+      storageErr.statusCode = 502;
+      throw storageErr;
+    }
+  }
+
+  // 6. Database Update (Soft Delete / Archival with backward-compatible fallback)
+  const now = new Date().toISOString();
+
+  // Try updating with dedicated Module 20 columns first
+  const { error: fullUpdateErr } = await supabase
+    .from('question_papers')
+    .update({
+      status: 'ARCHIVED',
+      is_deleted: true,
+      deleted_at: now,
+      deleted_by_user_id: requesterId,
+      deletion_reason: reason || 'Teacher requested deletion',
+      updated_at: now,
+    })
+    .eq('id', paperId);
+
+  if (fullUpdateErr) {
+    // Check if failure is due to new columns not yet present in live Supabase DB
+    const isColMissing = (fullUpdateErr.message || '').includes('column') ||
+      fullUpdateErr.code === '42703' ||
+      fullUpdateErr.code === 'PGRST204';
+
+    if (isColMissing) {
+      // Fallback: update status to ARCHIVED which is supported in the baseline schema
+      const { error: fallbackErr } = await supabase
+        .from('question_papers')
+        .update({
+          status: 'ARCHIVED',
+          updated_at: now,
+        })
+        .eq('id', paperId);
+
+      if (fallbackErr) {
+        console.error('[QuestionPaperService] Database fallback update failed:', fallbackErr.message);
+        const dbErr = new Error('Failed to update question paper record during deletion.');
+        dbErr.statusCode = 500;
+        throw dbErr;
+      }
+    } else {
+      console.error('[QuestionPaperService] Database update failed:', fullUpdateErr.message);
+      const dbErr = new Error('Failed to update question paper record during deletion.');
+      dbErr.statusCode = 500;
+      throw dbErr;
+    }
+  }
+
+  // 7. Update pending/scheduled assignments to CANCELLED
+  try {
+    await supabase
+      .from('question_paper_assignments')
+      .update({
+        delivery_status: 'CANCELLED',
+        updated_at: now,
+      })
+      .eq('question_paper_id', paperId)
+      .neq('delivery_status', 'DELIVERED');
+  } catch (assignCancelErr) {
+    console.warn('[QuestionPaperService] Non-critical assignment cancellation note:', assignCancelErr?.message);
+  }
+
+  // 8. Record Immutable Audit Event
+  await auditLogService.logAuditEvent({
+    userId: requesterId,
+    role: requesterRole,
+    action: 'DELETE',
+    resourceType: 'QUESTION_PAPER',
+    resourceId: paperId,
+    outcome: 'SUCCESS',
+    summary: `Question paper ${paperId} ("${paper.title}") was securely deleted and archived by authoring faculty`,
+    metadata: {
+      paperId,
+      title: paper.title,
+      fileName: paper.file_name,
+      storagePath: paper.storage_path,
+      reason: reason || 'Teacher requested deletion',
+    },
+  });
+
+  return {
+    success: true,
+    paperId,
+    message: `Question paper "${paper.title}" successfully deleted.`,
+  };
+}
+
 module.exports = {
   submitQuestionPaper,
   getMyQuestionPapers,
@@ -992,4 +1287,5 @@ module.exports = {
   getEligibleRecipients,
   calculateNextCalendarDay,
   validateRecipientFaculty,
+  deleteQuestionPaper,
 };
