@@ -281,6 +281,12 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
       const res = await questionPaperGeneratorService.approveAndSubmit(currentSet.id, {
         assignedToUserId: submissionForm.assignedToUserId,
         examDate: submissionForm.examDate,
+        paperStructureSnapshot: currentSet.paperStructureSnapshot,
+        setCode: currentSet.setCode,
+        setOrder: currentSet.setOrder,
+        totalMarks: currentSet.totalMarks,
+        questionIds: currentSet.questionIds,
+        blueprintId: generatedPaperData?.blueprintId || generatedPaperData?.paperId,
       });
 
       if (onSuccess) {

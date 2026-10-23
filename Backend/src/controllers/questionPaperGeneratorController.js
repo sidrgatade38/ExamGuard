@@ -82,7 +82,16 @@ async function approveAndSubmit(req, res, next) {
     const { setId } = req.params;
     const teacherId = req.user?.userId;
     const role = req.user?.role;
-    const { assignedToUserId, examDate } = req.body;
+    const {
+      assignedToUserId,
+      examDate,
+      paperStructureSnapshot,
+      setCode,
+      setOrder,
+      totalMarks,
+      questionIds,
+      blueprintId,
+    } = req.body;
 
     const result = await generatorService.approveAndSubmitSet({
       setId,
@@ -90,6 +99,12 @@ async function approveAndSubmit(req, res, next) {
       assignedToUserId,
       examDate,
       role,
+      fallbackSnapshot: paperStructureSnapshot,
+      fallbackSetCode: setCode,
+      fallbackSetOrder: setOrder,
+      fallbackTotalMarks: totalMarks,
+      fallbackQuestionIds: questionIds,
+      fallbackBlueprintId: blueprintId,
     });
 
     return res.status(201).json(result);

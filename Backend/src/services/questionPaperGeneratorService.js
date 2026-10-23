@@ -281,6 +281,10 @@ async function generateExamSets({ blueprintId, teacherId, role = 'TEACHER' }) {
     updated_at: new Date().toISOString(),
   };
 
+  // Always persist generated paper and sets in memory cache immediately
+  memoryGeneratedPapers.set(paperRecord.id, paperRecord);
+  memoryGeneratedSets.set(paperRecord.id, generatedSets);
+
   try {
     const { error: pError } = await supabase.from('generated_exam_papers').insert([paperRecord]);
     if (pError && isTableMissingError(pError)) {
@@ -578,6 +582,12 @@ async function approveAndSubmitSet({
   assignedToUserId,
   examDate,
   role = 'TEACHER',
+  fallbackSnapshot = null,
+  fallbackSetCode = null,
+  fallbackSetOrder = null,
+  fallbackTotalMarks = null,
+  fallbackQuestionIds = null,
+  fallbackBlueprintId = null,
 }) {
   if (!setId) throw new Error('Set ID is required.');
   if (!teacherId) throw new Error('Teacher ID is required.');
@@ -619,8 +629,22 @@ async function approveAndSubmitSet({
     }
   }
 
+  // Resilient fallback from client snapshot in case Render server restarted / cold-started
+  if (!targetSet && fallbackSnapshot) {
+    targetSet = {
+      id: setId,
+      generatedExamPaperId: fallbackBlueprintId || crypto.randomUUID(),
+      setCode: fallbackSetCode || fallbackSnapshot.metadata?.setCode || 'Set A',
+      setOrder: fallbackSetOrder || 1,
+      paperStructureSnapshot: fallbackSnapshot,
+      totalMarks: fallbackTotalMarks || fallbackSnapshot.metadata?.totalMarks || 70,
+      isApproved: false,
+      questionIds: fallbackQuestionIds || [],
+    };
+  }
+
   if (!targetSet) {
-    const err = new Error('Exam set not found.');
+    const err = new Error('Exam set not found. If the server restarted, please regenerate or retry.');
     err.statusCode = 404;
     throw err;
   }
