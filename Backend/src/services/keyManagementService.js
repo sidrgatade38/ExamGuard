@@ -96,7 +96,16 @@ function getWrappingPrivateKey() {
   }
 
   const rawKey = fs.readFileSync(keyPath, 'utf8');
-  cachedWrappingPrivateKey = normalizePemContent(rawKey) || rawKey;
+  const normalized = normalizePemContent(rawKey) || rawKey;
+
+  if (normalized.includes('BEGIN PUBLIC KEY') || normalized.includes('BEGIN RSA PUBLIC KEY')) {
+    console.error('[KeyManagementService] Fatal: question-paper-key-wrapping-private.pem contains a PUBLIC key instead of a PRIVATE key.');
+    throw new Error(
+      'Misconfigured wrapping private key: The key configured for key wrapping is actually an RSA PUBLIC key (starts with "-----BEGIN PUBLIC KEY-----"). Ensure QUESTION_PAPER_KEY_WRAPPING_PRIVATE_KEY_BASE64 in your Render environment variables contains the private key from Backend/keys/question-paper-key-wrapping-private.pem.'
+    );
+  }
+
+  cachedWrappingPrivateKey = normalized;
   return cachedWrappingPrivateKey;
 }
 

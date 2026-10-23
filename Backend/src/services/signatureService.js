@@ -50,7 +50,16 @@ function getSigningPrivateKey() {
     );
   }
   const rawKey = fs.readFileSync(keyPath, 'utf8');
-  cachedPrivateKey = normalizePemContent(rawKey) || rawKey;
+  const normalized = normalizePemContent(rawKey) || rawKey;
+
+  if (normalized.includes('BEGIN PUBLIC KEY') || normalized.includes('BEGIN RSA PUBLIC KEY')) {
+    console.error('[SignatureService] Fatal: question-paper-signing-private.pem contains a PUBLIC key instead of a PRIVATE key.');
+    throw new Error(
+      'Misconfigured signing private key: The key configured for digital signing is actually an RSA PUBLIC key (starts with "-----BEGIN PUBLIC KEY-----"). Ensure QUESTION_PAPER_SIGNING_PRIVATE_KEY_BASE64 in your Render environment variables contains the private key from Backend/keys/question-paper-signing-private.pem.'
+    );
+  }
+
+  cachedPrivateKey = normalized;
   return cachedPrivateKey;
 }
 

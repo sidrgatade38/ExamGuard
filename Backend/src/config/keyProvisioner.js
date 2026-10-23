@@ -50,6 +50,8 @@ function resolveKeyPath(configPath) {
   return localPath;
 }
 
+const crypto = require('crypto');
+
 /**
  * Key definitions and their corresponding environment variables and target paths.
  */
@@ -156,21 +158,37 @@ function syncEnvironmentKeys(cfg) {
   for (const def of KEY_DEFINITIONS) {
     const targetPath = path.resolve(BACKEND_ROOT, def.defaultPath);
 
-    // If file already exists, check and re-normalize if needed
+    // If file already exists, check and verify it is a valid key of the expected type
     if (fs.existsSync(targetPath)) {
       try {
         const existingContent = fs.readFileSync(targetPath, 'utf8');
         const normalized = normalizePemContent(existingContent);
-        if (normalized && normalized.includes('BEGIN') && normalized.includes('END')) {
-          if (existingContent.trim() !== normalized.trim()) {
-            fs.writeFileSync(targetPath, normalized, {
-              encoding: 'utf8',
-              mode: def.isPrivate ? 0o600 : 0o644,
-            });
-            console.log(`[ExamGuard Security] Re-normalized existing ${def.name} on disk.`);
+        if (normalized) {
+          let isValidKey = false;
+          try {
+            if (def.isPrivate) {
+              crypto.createPrivateKey(normalized);
+            } else {
+              crypto.createPublicKey(normalized);
+            }
+            isValidKey = true;
+          } catch {
+            isValidKey = false;
           }
-          existingCount++;
-          continue;
+
+          if (isValidKey) {
+            if (existingContent.trim() !== normalized.trim()) {
+              fs.writeFileSync(targetPath, normalized, {
+                encoding: 'utf8',
+                mode: def.isPrivate ? 0o600 : 0o644,
+              });
+              console.log(`[ExamGuard Security] Re-normalized existing ${def.name} on disk.`);
+            }
+            existingCount++;
+            continue;
+          } else {
+            console.warn(`[ExamGuard Security Warning] Existing file "${def.defaultPath}" is invalid or wrong key type for ${def.name}. Re-provisioning...`);
+          }
         }
       } catch {
         // Proceed to attempt environment provisioning if file unreadable or invalid
@@ -180,8 +198,27 @@ function syncEnvironmentKeys(cfg) {
     // Also check if already mounted at Render Secret Files (/etc/secrets)
     const renderSecretPath = path.join('/etc/secrets', path.basename(def.defaultPath));
     if (fs.existsSync(renderSecretPath)) {
-      existingCount++;
-      continue;
+      try {
+        const secretContent = fs.readFileSync(renderSecretPath, 'utf8');
+        const normalized = normalizePemContent(secretContent);
+        let isValidSecret = false;
+        try {
+          if (def.isPrivate) {
+            crypto.createPrivateKey(normalized);
+          } else {
+            crypto.createPublicKey(normalized);
+          }
+          isValidSecret = true;
+        } catch {
+          isValidSecret = false;
+        }
+        if (isValidSecret) {
+          existingCount++;
+          continue;
+        }
+      } catch {
+        // Ignore
+      }
     }
 
     // Look for key content in defined environment variables
@@ -191,9 +228,18 @@ function syncEnvironmentKeys(cfg) {
       if (envVal && envVal.trim().length > 0) {
         const isBase64 = envVarName.endsWith('_BASE64');
         const parsed = normalizePemContent(envVal, isBase64);
-        if (parsed && (parsed.includes('BEGIN PUBLIC KEY') || parsed.includes('BEGIN PRIVATE KEY') || parsed.includes('BEGIN RSA PRIVATE KEY'))) {
-          keyContent = parsed;
-          break;
+        if (parsed) {
+          try {
+            if (def.isPrivate) {
+              crypto.createPrivateKey(parsed);
+            } else {
+              crypto.createPublicKey(parsed);
+            }
+            keyContent = parsed;
+            break;
+          } catch (keyErr) {
+            console.warn(`[ExamGuard Security Warning] Environment variable "${envVarName}" for ${def.name} failed cryptographic decoding: ${keyErr.message}`);
+          }
         }
       }
     }
@@ -220,8 +266,46 @@ function syncEnvironmentKeys(cfg) {
 
         console.log(`[ExamGuard Security] Provisioned ${def.name} from environment configuration.`);
         provisionedCount++;
+        continue;
       } catch (writeErr) {
         console.error(`[ExamGuard Security Error] Failed to write key file "${targetPath}":`, writeErr.message);
+      }
+    }
+
+    // Self-healing fallback: If no valid key was found from env or disk, generate a matching key pair for private keys
+    if (def.isPrivate) {
+      try {
+        console.warn(`[ExamGuard Security] Generating fresh RSA-2048 key pair on disk for ${def.name} to ensure operational continuity...`);
+        const { publicKey, privateKey } = crypto.generateKeyPairSync('rsa', {
+          modulusLength: 2048,
+          publicKeyEncoding: { type: 'spki', format: 'pem' },
+          privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+        });
+
+        const targetDir = path.dirname(targetPath);
+        if (!fs.existsSync(targetDir)) {
+          fs.mkdirSync(targetDir, { recursive: true, mode: 0o700 });
+        }
+
+        fs.writeFileSync(targetPath, privateKey, {
+          encoding: 'utf8',
+          mode: 0o600,
+        });
+
+        // Also write corresponding public key
+        const pubDef = KEY_DEFINITIONS.find((d) => !d.isPrivate && d.name.includes(def.name.includes('Signing') ? 'Signing' : 'Wrapping'));
+        if (pubDef) {
+          const pubTargetPath = path.resolve(BACKEND_ROOT, pubDef.defaultPath);
+          fs.writeFileSync(pubTargetPath, publicKey, {
+            encoding: 'utf8',
+            mode: 0o644,
+          });
+        }
+
+        console.log(`[ExamGuard Security] Auto-generated RSA-2048 key pair for ${def.name}.`);
+        provisionedCount++;
+      } catch (genErr) {
+        console.error(`[ExamGuard Security Error] Failed to auto-generate key pair:`, genErr.message);
       }
     }
   }
