@@ -24,7 +24,7 @@ const config = require('../config');
 let cachedWrappingPublicKey = null;
 let cachedWrappingPrivateKey = null;
 
-const { resolveKeyPath } = require('../config/keyProvisioner');
+const { resolveKeyPath, normalizePemContent } = require('../config/keyProvisioner');
 
 /**
  * Loads the RSA public key for question paper key wrapping.
@@ -58,7 +58,8 @@ function getWrappingPublicKey() {
     throw err;
   }
 
-  cachedWrappingPublicKey = fs.readFileSync(keyPath, 'utf8');
+  const rawKey = fs.readFileSync(keyPath, 'utf8');
+  cachedWrappingPublicKey = normalizePemContent(rawKey) || rawKey;
   return cachedWrappingPublicKey;
 }
 
@@ -94,7 +95,8 @@ function getWrappingPrivateKey() {
     throw err;
   }
 
-  cachedWrappingPrivateKey = fs.readFileSync(keyPath, 'utf8');
+  const rawKey = fs.readFileSync(keyPath, 'utf8');
+  cachedWrappingPrivateKey = normalizePemContent(rawKey) || rawKey;
   return cachedWrappingPrivateKey;
 }
 

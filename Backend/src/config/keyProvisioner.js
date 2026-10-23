@@ -97,27 +97,50 @@ const KEY_DEFINITIONS = [
 ];
 
 /**
- * Normalizes PEM string from raw environment variable input.
- * Handles base64 encoding or escaped newlines.
+ * Normalizes PEM string from raw environment variable or file input.
+ * Handles base64 encoding, enclosing quotes, or escaped newlines.
  */
 function normalizePemContent(rawVal, isBase64 = false) {
   if (!rawVal || typeof rawVal !== 'string') return null;
 
-  const trimmed = rawVal.trim();
-  if (isBase64 || (!trimmed.includes('BEGIN') && /^[A-Za-z0-9+/=\r\n]+$/.test(trimmed))) {
+  let str = rawVal.trim();
+
+  // Strip enclosing quotes (e.g. "..." or '...')
+  if ((str.startsWith('"') && str.endsWith('"')) || (str.startsWith("'") && str.endsWith("'"))) {
+    str = str.slice(1, -1).trim();
+  }
+
+  // Check if string is base64 encoded
+  if (isBase64 || (!str.includes('-----BEGIN') && /^[A-Za-z0-9+/=\s]+$/.test(str))) {
     try {
-      const decoded = Buffer.from(trimmed, 'base64').toString('utf8');
+      const decoded = Buffer.from(str.replace(/\s+/g, ''), 'base64').toString('utf8');
       if (decoded.includes('BEGIN')) {
-        return decoded.trim();
+        str = decoded.trim();
       }
     } catch {
       // Fall through to raw handling
     }
   }
 
-  // Handle escaped newlines (often produced when pasting multi-line strings into dashboard forms)
-  const unescaped = trimmed.replace(/\\n/g, '\n').replace(/\\r/g, '');
-  return unescaped.trim();
+  // Unescape literal \n or \r\n characters into real newlines
+  str = str.replace(/\\r\\n/g, '\n').replace(/\\n/g, '\n').replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
+
+  // Strip enclosing quotes again if they were nested inside base64
+  if ((str.startsWith('"') && str.endsWith('"')) || (str.startsWith("'") && str.endsWith("'"))) {
+    str = str.slice(1, -1).trim();
+  }
+
+  // Standardize PEM line breaks with exact 64-character payload lines
+  const match = str.match(/(-----BEGIN[^-]+-----)([\s\S]+?)(-----END[^-]+-----)/);
+  if (match) {
+    const header = match[1].trim();
+    const body = match[2].replace(/\s+/g, '');
+    const footer = match[3].trim();
+    const formattedBody = body.match(/.{1,64}/g)?.join('\n') || body;
+    return `${header}\n${formattedBody}\n${footer}\n`;
+  }
+
+  return str.length > 0 ? str + '\n' : null;
 }
 
 /**
@@ -133,16 +156,24 @@ function syncEnvironmentKeys(cfg) {
   for (const def of KEY_DEFINITIONS) {
     const targetPath = path.resolve(BACKEND_ROOT, def.defaultPath);
 
-    // If file already exists and is non-empty, keep existing
+    // If file already exists, check and re-normalize if needed
     if (fs.existsSync(targetPath)) {
       try {
-        const stat = fs.statSync(targetPath);
-        if (stat.size > 100) {
+        const existingContent = fs.readFileSync(targetPath, 'utf8');
+        const normalized = normalizePemContent(existingContent);
+        if (normalized && normalized.includes('BEGIN') && normalized.includes('END')) {
+          if (existingContent.trim() !== normalized.trim()) {
+            fs.writeFileSync(targetPath, normalized, {
+              encoding: 'utf8',
+              mode: def.isPrivate ? 0o600 : 0o644,
+            });
+            console.log(`[ExamGuard Security] Re-normalized existing ${def.name} on disk.`);
+          }
           existingCount++;
           continue;
         }
       } catch {
-        // Proceed to attempt environment provisioning if file unreadable
+        // Proceed to attempt environment provisioning if file unreadable or invalid
       }
     }
 
@@ -175,7 +206,7 @@ function syncEnvironmentKeys(cfg) {
           fs.mkdirSync(targetDir, { recursive: true, mode: 0o700 });
         }
 
-        fs.writeFileSync(targetPath, keyContent + '\n', {
+        fs.writeFileSync(targetPath, keyContent, {
           encoding: 'utf8',
           mode: def.isPrivate ? 0o600 : 0o644,
         });

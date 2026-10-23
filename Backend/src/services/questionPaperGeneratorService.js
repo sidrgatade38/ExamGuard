@@ -285,6 +285,13 @@ async function generateExamSets({ blueprintId, teacherId, role = 'TEACHER' }) {
   memoryGeneratedPapers.set(paperRecord.id, paperRecord);
   memoryGeneratedSets.set(paperRecord.id, generatedSets);
 
+  // If blueprint.id is not a UUID (e.g. built-in reference blueprint 'default-spos'),
+  // skip PostgreSQL insert to prevent invalid UUID syntax error and persist directly to memory
+  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  if (!UUID_REGEX.test(blueprint.id)) {
+    return persistMemoryPaper(paperRecord, generatedSets);
+  }
+
   try {
     const { error: pError } = await supabase.from('generated_exam_papers').insert([paperRecord]);
     if (pError && isTableMissingError(pError)) {
@@ -314,6 +321,7 @@ async function generateExamSets({ blueprintId, teacherId, role = 'TEACHER' }) {
       return persistMemoryPaper(paperRecord, generatedSets);
     }
     console.error('[GeneratorService] DB persistence error:', err.message);
+    return persistMemoryPaper(paperRecord, generatedSets);
   }
 
   await auditLogService.logAuditEvent({

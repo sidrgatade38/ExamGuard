@@ -18,7 +18,7 @@ const config = require('../config');
 let cachedPublicKey = null;
 let cachedPrivateKey = null;
 
-const { resolveKeyPath } = require('../config/keyProvisioner');
+const { resolveKeyPath, normalizePemContent } = require('../config/keyProvisioner');
 
 /**
  * Loads the RSA public key for digital signature verification.
@@ -32,7 +32,8 @@ function getSigningPublicKey() {
       `Question paper digital signing public key not found. Run "node scripts/generateSigningKeys.js" to create signing keys.`
     );
   }
-  cachedPublicKey = fs.readFileSync(keyPath, 'utf8');
+  const rawKey = fs.readFileSync(keyPath, 'utf8');
+  cachedPublicKey = normalizePemContent(rawKey) || rawKey;
   return cachedPublicKey;
 }
 
@@ -48,7 +49,8 @@ function getSigningPrivateKey() {
       `Question paper digital signing private key not found. Run "node scripts/generateSigningKeys.js" to create signing keys.`
     );
   }
-  cachedPrivateKey = fs.readFileSync(keyPath, 'utf8');
+  const rawKey = fs.readFileSync(keyPath, 'utf8');
+  cachedPrivateKey = normalizePemContent(rawKey) || rawKey;
   return cachedPrivateKey;
 }
 
@@ -95,11 +97,19 @@ function signQuestionPaper(encryptedBuffer, customPrivateKeyPem = null) {
   signer.update(encryptedBuffer);
   signer.end();
 
-  const signature = signer.sign({
-    key: privateKey,
-    padding: crypto.constants.RSA_PKCS1_PSS_PADDING,
-    saltLength: crypto.constants.RSA_PSS_SALTLEN_DIGEST,
-  }).toString('base64');
+  let signature;
+  try {
+    signature = signer.sign({
+      key: privateKey,
+      padding: crypto.constants.RSA_PKCS1_PSS_PADDING,
+      saltLength: crypto.constants.RSA_PSS_SALTLEN_DIGEST,
+    }).toString('base64');
+  } catch (signErr) {
+    console.error('[SignatureService] Digital signing error:', signErr.message);
+    const err = new Error(`Digital signing operation failed: ${signErr.message}. Ensure RSA signing private key is valid PEM format.`);
+    err.statusCode = 500;
+    throw err;
+  }
 
   return {
     signature,
