@@ -75,10 +75,10 @@ async function validateRecipientFaculty(recipientUserId) {
     throw inactiveErr;
   }
 
-  // Ensure role is TEACHER
+  // Ensure role is TEACHER or EXAM_COORDINATOR
   const roleName = user.roles?.name?.toUpperCase();
-  if (roleName !== 'TEACHER') {
-    const roleErr = new Error('Question papers can only be assigned to a faculty member with the TEACHER role.');
+  if (roleName !== 'TEACHER' && roleName !== 'EXAM_COORDINATOR') {
+    const roleErr = new Error('Question papers can only be assigned to an active Exam Coordinator or Faculty member.');
     roleErr.statusCode = 400;
     throw roleErr;
   }
@@ -852,13 +852,13 @@ async function verifyQuestionPaperIntegrity(paperId, requesterId, requesterRole)
 }
 
 /**
- * Retrieves eligible active faculty members with role TEACHER for recipient selection.
+ * Retrieves eligible active recipients (EXAM_COORDINATOR and TEACHER) for assignment selection.
  */
 async function getEligibleRecipients(requesterId) {
   const { data: users, error } = await supabase
     .from('users')
     .select('id, name, email, is_active, roles!inner(name)')
-    .eq('roles.name', 'TEACHER')
+    .in('roles.name', ['EXAM_COORDINATOR', 'TEACHER'])
     .eq('is_active', true)
     .order('name', { ascending: true });
 
@@ -873,6 +873,7 @@ async function getEligibleRecipients(requesterId) {
     id: u.id,
     name: u.name,
     email: u.email,
+    role: u.roles?.name || 'TEACHER',
   }));
 }
 

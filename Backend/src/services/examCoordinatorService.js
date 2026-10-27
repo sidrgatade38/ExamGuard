@@ -21,12 +21,13 @@ const auditLogService = require('./auditLogService');
 
 /**
  * Retrieves all question papers legitimately assigned to the authenticated Exam Coordinator.
- * Returns safe metadata only.
+ * Supports searching, filtering, and pagination. Returns safe metadata only.
  *
  * @param {string} coordinatorId - UUID of authenticated Exam Coordinator
- * @returns {Promise<Array<Object>>} List of sanitized question paper objects
+ * @param {Object} [options={}] - Query, filter, and pagination options
+ * @returns {Promise<Array<Object>>} List of sanitized question paper objects (with .pagination metadata)
  */
-async function getAvailableQuestionPapers(coordinatorId) {
+async function getAvailableQuestionPapers(coordinatorId, options = {}) {
   if (!coordinatorId) {
     const err = new Error('Coordinator ID is required.');
     err.statusCode = 400;
@@ -47,7 +48,9 @@ async function getAvailableQuestionPapers(coordinatorId) {
   }
 
   if (!assignments || assignments.length === 0) {
-    return [];
+    const emptyResult = [];
+    emptyResult.pagination = { total: 0, page: 1, limit: 10, totalPages: 1 };
+    return emptyResult;
   }
 
   // Map assignments by paperId for fast lookup
@@ -100,7 +103,36 @@ async function getAvailableQuestionPapers(coordinatorId) {
     throw dbErr;
   }
 
-  // 3. Format safe metadata - strictly omit storage_path and all cryptographic secrets
+  // 3. Query recorded verification history from activity_logs for accurate verification status
+  const verificationMap = new Map();
+  try {
+    const { data: verifLogs } = await supabase
+      .from('activity_logs')
+      .select('resource_id, details, created_at')
+      .eq('action', 'SIGNATURE_VERIFIED')
+      .in('resource_id', paperIds)
+      .order('created_at', { ascending: false });
+
+    if (verifLogs && Array.isArray(verifLogs)) {
+      for (const log of verifLogs) {
+        if (log.resource_id && !verificationMap.has(log.resource_id)) {
+          const outcome = log.details?.outcome || (log.details?.metadata?.verified ? 'SUCCESS' : 'FAILURE');
+          verificationMap.set(log.resource_id, {
+            verified: outcome === 'SUCCESS',
+            tamperDetected: outcome !== 'SUCCESS',
+            verifiedAt: log.created_at,
+            outcome,
+          });
+        }
+      }
+    }
+  } catch (_) {
+    // In-memory or fallback environments without activity_logs
+  }
+
+  const today = new Date().toISOString().split('T')[0];
+
+  // 4. Format safe metadata - strictly omit storage_path and all cryptographic secrets
   const availablePapers = (papers || [])
     .filter((paper) => paper.status !== 'DRAFT')
     .map((paper) => {
@@ -108,6 +140,22 @@ async function getAvailableQuestionPapers(coordinatorId) {
       const signature = Array.isArray(paper.digital_signatures)
         ? paper.digital_signatures[0]
         : paper.digital_signatures;
+
+      const deliveryDate = assignment?.scheduled_delivery_date || paper.scheduled_delivery_date;
+      const isDeliverable = !deliveryDate || today >= deliveryDate;
+      const verif = verificationMap.get(paper.id) || null;
+      const verificationStatus = verif ? (verif.verified ? 'VERIFIED' : 'FAILED') : 'PENDING';
+
+      let effectiveStatus = 'SCHEDULED';
+      if (paper.status === 'ARCHIVED') {
+        effectiveStatus = 'ARCHIVED';
+      } else if (assignment?.delivery_status === 'CANCELLED') {
+        effectiveStatus = 'CANCELLED';
+      } else if (isDeliverable) {
+        effectiveStatus = 'AVAILABLE';
+      } else {
+        effectiveStatus = 'AWAITING_DELIVERY';
+      }
 
       return {
         id: paper.id,
@@ -118,8 +166,12 @@ async function getAvailableQuestionPapers(coordinatorId) {
         examType: paper.exam_type,
         examDate: paper.exam_date,
         status: paper.status,
+        effectiveStatus,
+        isDeliverable,
+        verificationStatus,
+        lastVerification: verif,
         submittedAt: paper.submitted_at,
-        scheduledDeliveryDate: paper.scheduled_delivery_date,
+        scheduledDeliveryDate: deliveryDate,
         fileName: paper.file_name,
         fileSize: paper.file_size,
         mimeType: paper.mime_type,
@@ -151,7 +203,72 @@ async function getAvailableQuestionPapers(coordinatorId) {
       };
     });
 
-  return availablePapers;
+  // 5. Apply filtering & search
+  let filtered = availablePapers;
+  const search = typeof options.search === 'string' ? options.search.trim().toLowerCase() : '';
+  if (search) {
+    filtered = filtered.filter((p) =>
+      (p.title && p.title.toLowerCase().includes(search)) ||
+      (p.subject && p.subject.toLowerCase().includes(search)) ||
+      (p.examType && p.examType.toLowerCase().includes(search)) ||
+      (p.semester && p.semester.toLowerCase().includes(search)) ||
+      (p.academicYear && p.academicYear.toLowerCase().includes(search)) ||
+      (p.teacher?.name && p.teacher.name.toLowerCase().includes(search))
+    );
+  }
+
+  const status = typeof options.status === 'string' ? options.status.trim().toUpperCase() : 'ALL';
+  if (status !== 'ALL') {
+    if (status === 'AWAITING_DELIVERY' || status === 'SCHEDULED') {
+      filtered = filtered.filter((p) => !p.isDeliverable && p.status !== 'ARCHIVED');
+    } else if (status === 'AVAILABLE' || status === 'READY_FOR_ACCESS') {
+      filtered = filtered.filter((p) => p.isDeliverable && p.verificationStatus !== 'FAILED' && p.status !== 'ARCHIVED');
+    } else if (status === 'VERIFIED') {
+      filtered = filtered.filter((p) => p.verificationStatus === 'VERIFIED');
+    } else if (status === 'VERIFICATION_PENDING') {
+      filtered = filtered.filter((p) => p.verificationStatus === 'PENDING');
+    } else if (status === 'VERIFICATION_FAILED') {
+      filtered = filtered.filter((p) => p.verificationStatus === 'FAILED');
+    } else if (status === 'UNAVAILABLE' || status === 'EXPIRED') {
+      filtered = filtered.filter((p) => p.status === 'ARCHIVED' || p.assignment?.deliveryStatus === 'CANCELLED');
+    }
+  }
+
+  if (options.semester && typeof options.semester === 'string' && options.semester !== 'ALL') {
+    filtered = filtered.filter((p) => p.semester && p.semester.toLowerCase().includes(options.semester.toLowerCase()));
+  }
+
+  // Sort by delivery date ascending (nearest first), then by submitted_at descending
+  filtered.sort((a, b) => {
+    const dateA = a.scheduledDeliveryDate || a.examDate || '';
+    const dateB = b.scheduledDeliveryDate || b.examDate || '';
+    return dateA.localeCompare(dateB);
+  });
+
+  const total = filtered.length;
+  let pagedList = filtered;
+
+  if (options.page) {
+    const page = Math.max(1, parseInt(options.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(options.limit, 10) || 10));
+    const offset = (page - 1) * limit;
+    pagedList = filtered.slice(offset, offset + limit);
+    pagedList.pagination = {
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit) || 1,
+    };
+  } else {
+    pagedList.pagination = {
+      total,
+      page: 1,
+      limit: total,
+      totalPages: 1,
+    };
+  }
+
+  return pagedList;
 }
 
 /**
@@ -261,6 +378,44 @@ async function getQuestionPaperById(paperId, coordinatorId) {
     ? paper.digital_signatures[0]
     : paper.digital_signatures;
 
+  const today = new Date().toISOString().split('T')[0];
+  const deliveryDate = assignment.scheduled_delivery_date || paper.scheduled_delivery_date;
+  const isDeliverable = !deliveryDate || today >= deliveryDate;
+
+  let lastVerification = null;
+  try {
+    const { data: verifLog } = await supabase
+      .from('activity_logs')
+      .select('details, created_at')
+      .eq('action', 'SIGNATURE_VERIFIED')
+      .eq('resource_id', paperId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (verifLog) {
+      const outcome = verifLog.details?.outcome || (verifLog.details?.metadata?.verified ? 'SUCCESS' : 'FAILURE');
+      lastVerification = {
+        verified: outcome === 'SUCCESS',
+        tamperDetected: outcome !== 'SUCCESS',
+        verifiedAt: verifLog.created_at,
+        outcome,
+      };
+    }
+  } catch (_) {}
+
+  const verificationStatus = lastVerification ? (lastVerification.verified ? 'VERIFIED' : 'FAILED') : 'PENDING';
+  let effectiveStatus = 'SCHEDULED';
+  if (paper.status === 'ARCHIVED') {
+    effectiveStatus = 'ARCHIVED';
+  } else if (assignment.delivery_status === 'CANCELLED') {
+    effectiveStatus = 'CANCELLED';
+  } else if (isDeliverable) {
+    effectiveStatus = 'AVAILABLE';
+  } else {
+    effectiveStatus = 'AWAITING_DELIVERY';
+  }
+
   // Safe metadata response (storage_path and keys strictly omitted)
   return {
     id: paper.id,
@@ -271,8 +426,12 @@ async function getQuestionPaperById(paperId, coordinatorId) {
     examType: paper.exam_type,
     examDate: paper.exam_date,
     status: paper.status,
+    effectiveStatus,
+    isDeliverable,
+    verificationStatus,
+    lastVerification,
     submittedAt: paper.submitted_at,
-    scheduledDeliveryDate: paper.scheduled_delivery_date,
+    scheduledDeliveryDate: deliveryDate,
     fileName: paper.file_name,
     fileSize: paper.file_size,
     mimeType: paper.mime_type,
@@ -615,9 +774,151 @@ async function verifyQuestionPaperIntegrity(paperId, coordinatorId) {
   return verificationResult;
 }
 
+/**
+ * Computes data-driven operational KPI statistics for the authenticated Exam Coordinator.
+ *
+ * @param {string} coordinatorId - UUID of authenticated Exam Coordinator
+ * @returns {Promise<Object>} KPI statistics and operational metrics
+ */
+async function getDashboardStats(coordinatorId) {
+  if (!coordinatorId) {
+    const err = new Error('Coordinator ID is required.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const allPapers = await getAvailableQuestionPapers(coordinatorId);
+  const totalAssigned = allPapers.length;
+
+  const today = new Date().toISOString().split('T')[0];
+
+  const readyForAccess = allPapers.filter(
+    (p) => p.isDeliverable && p.status !== 'ARCHIVED' && p.assignment?.deliveryStatus !== 'CANCELLED' && p.verificationStatus !== 'FAILED'
+  ).length;
+
+  const awaitingDelivery = allPapers.filter(
+    (p) => !p.isDeliverable && p.status !== 'ARCHIVED' && p.assignment?.deliveryStatus !== 'CANCELLED'
+  ).length;
+
+  // Upcoming deliveries sorted chronologically (earliest delivery date first)
+  const upcomingList = allPapers
+    .filter((p) => !p.isDeliverable && p.status !== 'ARCHIVED' && p.assignment?.deliveryStatus !== 'CANCELLED')
+    .sort((a, b) => {
+      const dateA = a.scheduledDeliveryDate || a.examDate || '';
+      const dateB = b.scheduledDeliveryDate || b.examDate || '';
+      return dateA.localeCompare(dateB);
+    });
+
+  const nextDelivery = upcomingList.length > 0
+    ? {
+        id: upcomingList[0].id,
+        title: upcomingList[0].title,
+        subject: upcomingList[0].subject,
+        semester: upcomingList[0].semester,
+        examDate: upcomingList[0].examDate,
+        scheduledDeliveryDate: upcomingList[0].scheduledDeliveryDate,
+        teacherName: upcomingList[0].teacher?.name,
+      }
+    : null;
+
+  // Real integrity stats recorded in database activity logs
+  const verifiedCount = allPapers.filter((p) => p.verificationStatus === 'VERIFIED').length;
+  const failedCount = allPapers.filter((p) => p.verificationStatus === 'FAILED').length;
+  const pendingCount = allPapers.filter((p) => p.verificationStatus === 'PENDING').length;
+
+  // Workflow status distribution
+  const statusCounts = {
+    submitted: allPapers.filter((p) => p.status === 'SUBMITTED').length,
+    scheduled: awaitingDelivery,
+    available: readyForAccess,
+    archived: allPapers.filter((p) => p.status === 'ARCHIVED').length,
+  };
+
+  return {
+    totalAssigned,
+    readyForAccess,
+    awaitingDelivery,
+    upcomingDeliveriesCount: upcomingList.length,
+    nextDelivery,
+    integrityStats: {
+      verified: verifiedCount,
+      pending: pendingCount,
+      failed: failedCount,
+      total: totalAssigned,
+      verifiedRatePercent: totalAssigned > 0 ? Math.round((verifiedCount / totalAssigned) * 100) : 0,
+    },
+    statusCounts,
+  };
+}
+
+/**
+ * Retrieves recent coordinator security and examination activity from activity_logs.
+ *
+ * @param {string} coordinatorId - UUID of authenticated Exam Coordinator
+ * @param {number} [limit=15] - Maximum events to retrieve
+ * @returns {Promise<Array<Object>>} Sanitized audit activity events
+ */
+async function getRecentActivity(coordinatorId, limit = 15) {
+  if (!coordinatorId) {
+    const err = new Error('Coordinator ID is required.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const safeLimit = Math.min(50, Math.max(1, parseInt(limit, 10) || 15));
+
+  const allPapers = await getAvailableQuestionPapers(coordinatorId);
+  const paperIds = allPapers.map((p) => p.id);
+
+  try {
+    let query = supabase
+      .from('activity_logs')
+      .select('id, action, resource_type, resource_id, details, created_at')
+      .order('created_at', { ascending: false })
+      .limit(safeLimit);
+
+    if (paperIds.length > 0) {
+      query = query.or(`user_id.eq.${coordinatorId},resource_id.in.(${paperIds.join(',')})`);
+    } else {
+      query = query.eq('user_id', coordinatorId);
+    }
+
+    const { data: logs, error } = await query;
+    if (error) {
+      console.warn('[ExamCoordinatorService] Warning fetching recent activity:', error.message);
+      return [];
+    }
+
+    const paperMap = new Map();
+    for (const p of allPapers) {
+      paperMap.set(p.id, p);
+    }
+
+    return (logs || []).map((item) => {
+      const associatedPaper = item.resource_id ? paperMap.get(item.resource_id) : null;
+      return {
+        id: item.id,
+        action: item.action,
+        resourceType: item.resource_type,
+        resourceId: item.resource_id,
+        paperTitle: associatedPaper ? associatedPaper.title : null,
+        subject: associatedPaper ? associatedPaper.subject : null,
+        outcome: item.details?.outcome || 'SUCCESS',
+        summary: item.details?.summary || `Action ${item.action} recorded`,
+        createdAt: item.created_at,
+      };
+    });
+  } catch (err) {
+    console.warn('[ExamCoordinatorService] Fallback handling recent activity error:', err.message);
+    return [];
+  }
+}
+
 module.exports = {
   getAvailableQuestionPapers,
   getQuestionPaperById,
   downloadAndDecryptQuestionPaper,
   verifyQuestionPaperIntegrity,
+  getDashboardStats,
+  getRecentActivity,
 };

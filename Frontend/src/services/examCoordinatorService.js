@@ -10,12 +10,47 @@ import api from './api';
  */
 export const examCoordinatorService = {
   /**
-   * Fetches all question papers assigned to the authenticated exam coordinator
-   * @returns {Promise<Array>} List of question paper objects
+   * Fetches data-driven KPI metrics for the Exam Coordinator dashboard
+   * @returns {Promise<Object>} Statistics including totalAssigned, readyForAccess, awaitingDelivery, upcomingDeliveries, integrityStats
    */
-  async getAssignedQuestionPapers() {
-    const response = await api.get('/exam-coordinator/question-papers');
+  async getDashboardStats() {
+    const response = await api.get('/exam-coordinator/dashboard-stats');
+    return response.data?.data || {
+      totalAssigned: 0,
+      readyForAccess: 0,
+      awaitingDelivery: 0,
+      upcomingDeliveriesCount: 0,
+      nextDelivery: null,
+      integrityStats: { verified: 0, pending: 0, failed: 0, total: 0, verifiedRatePercent: 0 },
+      statusCounts: { submitted: 0, scheduled: 0, available: 0, archived: 0 },
+    };
+  },
+
+  /**
+   * Fetches recent security and operational activity for the coordinator
+   * @param {number} [limit=15]
+   * @returns {Promise<Array>} List of activity items
+   */
+  async getRecentActivity(limit = 15) {
+    const response = await api.get(`/exam-coordinator/recent-activity?limit=${limit}`);
     return response.data?.data || [];
+  },
+
+  /**
+   * Fetches question papers assigned to the authenticated exam coordinator with optional filters
+   * @param {Object} [params={}] - search, status, department, semester, page, limit
+   * @returns {Promise<{ papers: Array, pagination: Object }>} List and pagination metadata
+   */
+  async getAssignedQuestionPapers(params = {}) {
+    const response = await api.get('/exam-coordinator/question-papers', { params });
+    const papers = Array.isArray(response.data?.data) ? response.data.data : [];
+    const pagination = response.data?.pagination || {
+      total: papers.length,
+      page: 1,
+      limit: papers.length,
+      totalPages: 1,
+    };
+    return { papers, pagination };
   },
 
   /**

@@ -3,6 +3,8 @@ const { authenticateToken } = require('../middleware/authMiddleware');
 const { authorizeRoles } = require('../middleware/roleMiddleware');
 const {
   getAssignedPapers,
+  getDashboardStats,
+  getRecentActivity,
   getPaperDetails,
   downloadPaper,
   verifyPaperSignature,
@@ -18,6 +20,12 @@ const router = express.Router();
 // Enforce authentication and EXAM_COORDINATOR role for all routes in this router
 router.use(authenticateToken);
 router.use(authorizeRoles('EXAM_COORDINATOR'));
+
+// GET /api/exam-coordinator/dashboard-stats - Data-driven KPI metrics for coordinator workspace
+router.get('/dashboard-stats', getDashboardStats);
+
+// GET /api/exam-coordinator/recent-activity - Audit log security & delivery activity trail
+router.get('/recent-activity', getRecentActivity);
 
 // GET /api/exam-coordinator/question-papers - List question papers assigned to the authenticated coordinator
 router.get('/question-papers', getAssignedPapers);

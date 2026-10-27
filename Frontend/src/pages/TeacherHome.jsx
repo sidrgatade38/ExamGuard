@@ -1411,7 +1411,7 @@ export default function TeacherHome() {
                     ) : (
                       recipients.map((r) => (
                         <option key={r.id} value={r.id}>
-                          {r.name} ({r.email})
+                          {r.name} {r.role === 'EXAM_COORDINATOR' ? '★ [Exam Coordinator]' : '[Faculty]'} ({r.email})
                         </option>
                       ))
                     )}

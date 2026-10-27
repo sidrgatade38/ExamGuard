@@ -23,11 +23,74 @@ async function getAssignedPapers(req, res, next) {
       });
     }
 
-    const papers = await examCoordinatorService.getAvailableQuestionPapers(coordinatorId);
+    const papers = await examCoordinatorService.getAvailableQuestionPapers(coordinatorId, req.query);
 
     return res.status(200).json({
       success: true,
       data: papers,
+      pagination: papers.pagination || { total: papers.length, page: 1, limit: papers.length, totalPages: 1 },
+    });
+  } catch (err) {
+    if (err.statusCode) {
+      return res.status(err.statusCode).json({
+        success: false,
+        message: err.message,
+      });
+    }
+    return next(err);
+  }
+}
+
+/**
+ * Handles fetching data-driven KPI metrics for the coordinator dashboard
+ * (GET /api/exam-coordinator/dashboard-stats)
+ */
+async function getDashboardStats(req, res, next) {
+  try {
+    const coordinatorId = req.user?.userId;
+    if (!coordinatorId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required',
+      });
+    }
+
+    const stats = await examCoordinatorService.getDashboardStats(coordinatorId);
+
+    return res.status(200).json({
+      success: true,
+      data: stats,
+    });
+  } catch (err) {
+    if (err.statusCode) {
+      return res.status(err.statusCode).json({
+        success: false,
+        message: err.message,
+      });
+    }
+    return next(err);
+  }
+}
+
+/**
+ * Handles fetching recent coordinator security & delivery activity
+ * (GET /api/exam-coordinator/recent-activity)
+ */
+async function getRecentActivity(req, res, next) {
+  try {
+    const coordinatorId = req.user?.userId;
+    if (!coordinatorId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required',
+      });
+    }
+
+    const activities = await examCoordinatorService.getRecentActivity(coordinatorId, req.query?.limit);
+
+    return res.status(200).json({
+      success: true,
+      data: activities,
     });
   } catch (err) {
     if (err.statusCode) {
@@ -147,6 +210,8 @@ async function verifyPaperSignature(req, res, next) {
 
 module.exports = {
   getAssignedPapers,
+  getDashboardStats,
+  getRecentActivity,
   getPaperDetails,
   downloadPaper,
   verifyPaperSignature,
