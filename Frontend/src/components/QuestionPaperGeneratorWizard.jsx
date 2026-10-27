@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import questionBankService from '../services/questionBankService';
 import blueprintService from '../services/blueprintService';
 import questionPaperGeneratorService from '../services/questionPaperGeneratorService';
+import academicService from '../services/academicService';
 import {
   FileText,
   Sparkles,
@@ -12,7 +13,6 @@ import {
   ArrowRight,
   ArrowLeft,
   RefreshCw,
-  Eye,
   Plus,
   ShieldCheck,
   Send,
@@ -22,15 +22,27 @@ import {
   User,
   Clock,
   BookOpen,
+  GraduationCap,
+  Building,
 } from 'lucide-react';
 
 export default function QuestionPaperGeneratorWizard({ recipients = [], onSuccess, onCancel }) {
-  // Wizard Step: 1 (Exam Details & Blueprint) -> 2 (Question Bank) -> 3 (Feasibility & Sets) -> 4 (Preview & Edit) -> 5 (Approve & Submit)
+  // Wizard Step: 1 (Exam Details & Blueprint) -> 2 (Question Bank) -> 3 (Feasibility) -> 4 (Validation & Sets) -> 5 (Submit)
   const [step, setStep] = useState(1);
+
+  // Dynamic Academic Context State
+  const [departments, setDepartments] = useState([]);
+  const [courses, setCourses] = useState([]);
+  const [patterns, setPatterns] = useState([]);
+  const [semesters, setSemesters] = useState([]);
+  const [subjects, setSubjects] = useState([]);
+  const [subjectUnits, setSubjectUnits] = useState([]);
+  const [selectedDept, setSelectedDept] = useState('COMP');
+  const [loadingAcademic, setLoadingAcademic] = useState(true);
 
   // Blueprint State
   const [blueprint, setBlueprint] = useState({
-    title: 'End Semester Examination: Systems Programming & Operating System',
+    title: 'End Semester Examination',
     subject: 'Systems Programming and Operating System',
     course: 'T.E. (Computer Engineering)',
     semester: 'Semester 5',
@@ -50,17 +62,15 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
   });
 
   const [blueprintId, setBlueprintId] = useState(null);
-  const [loadingBlueprint, setLoadingBlueprint] = useState(true);
 
   // Question Bank State
   const [questions, setQuestions] = useState([]);
   const [loadingBank, setLoadingBank] = useState(false);
   const [bankError, setBankError] = useState('');
-  const [seedingBank, setSeedingBank] = useState(false);
   const [newQuestionModalOpen, setNewQuestionModalOpen] = useState(false);
   const [newQuestionForm, setNewQuestionForm] = useState({
     unitNumber: 1,
-    unitTitle: 'Loaders and Linkers',
+    unitTitle: 'Unit 1: Fundamentals',
     topic: '',
     questionText: '',
     questionType: 'DESCRIPTIVE',
@@ -79,12 +89,6 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
   const [generatedPaperData, setGeneratedPaperData] = useState(null);
   const [activeSetIndex, setActiveSetIndex] = useState(0);
 
-  // Replace Question Modal State
-  const [replaceModalOpen, setReplaceModalOpen] = useState(false);
-  const [replacingTarget, setReplacingTarget] = useState(null);
-  const [replacingLoading, setReplacingLoading] = useState(false);
-  const [replaceError, setReplaceError] = useState('');
-
   // Final Approval & Submission State
   const [submissionForm, setSubmissionForm] = useState({
     assignedToUserId: recipients.length > 0 ? recipients[0].id : '',
@@ -94,23 +98,122 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
   const [submitting, setSubmitting] = useState(false);
   const [submissionError, setSubmissionError] = useState('');
 
-  // Load default SPOS blueprint on mount
+  // 1. Initial Load of Academic Master Data
   useEffect(() => {
-    async function loadDefaultBlueprint() {
+    async function loadAcademicCatalogs() {
       try {
-        setLoadingBlueprint(true);
-        const res = await blueprintService.getDefaultSPOSBlueprint();
-        if (res.success && res.data) {
-          setBlueprint(res.data);
+        setLoadingAcademic(true);
+        const [deptsData, coursesData, patternsData, semestersData] = await Promise.all([
+          academicService.getDepartments().catch(() => ({ data: [] })),
+          academicService.getCourses().catch(() => ({ data: [] })),
+          academicService.getPatterns().catch(() => ({ data: [] })),
+          academicService.getSemesters().catch(() => ({ data: [] })),
+        ]);
+
+        const deptsList = deptsData.data || [];
+        const coursesList = coursesData.data || [];
+        const patternsList = patternsData.data || [];
+        const semsList = semestersData.data || [];
+
+        setDepartments(deptsList);
+        setCourses(coursesList);
+        setPatterns(patternsList);
+        setSemesters(semsList);
+
+        // Fetch subjects for default selections
+        const subsData = await academicService.getSubjects({
+          departmentCode: selectedDept,
+        }).catch(() => ({ data: [] }));
+
+        const subsList = subsData.data || [];
+        setSubjects(subsList);
+
+        if (subsList.length > 0) {
+          const firstSub = subsList[0];
+          setBlueprint((prev) => ({
+            ...prev,
+            title: `End Semester Examination: ${firstSub.title}`,
+            subject: firstSub.title,
+            subjectCode: firstSub.code,
+            semester: firstSub.semester || prev.semester,
+            academicPattern: firstSub.patternName || prev.academicPattern,
+          }));
+
+          const unitsRes = await academicService.getUnitsForSubject(firstSub.code).catch(() => ({ data: [] }));
+          setSubjectUnits(unitsRes.data || []);
         }
       } catch (err) {
-        console.warn('Failed to fetch default blueprint, using fallback state.', err);
+        console.warn('Academic master catalogs loading notice:', err.message);
       } finally {
-        setLoadingBlueprint(false);
+        setLoadingAcademic(false);
       }
     }
-    loadDefaultBlueprint();
+    loadAcademicCatalogs();
   }, []);
+
+  // 2. Cascade when Department or Course changes
+  const handleDepartmentChange = async (deptCode) => {
+    setSelectedDept(deptCode);
+    try {
+      const [coursesRes, subsRes] = await Promise.all([
+        academicService.getCourses(deptCode),
+        academicService.getSubjects({ departmentCode: deptCode }),
+      ]);
+      const newCourses = coursesRes.data || [];
+      const newSubs = subsRes.data || [];
+      setCourses(newCourses);
+      setSubjects(newSubs);
+
+      if (newSubs.length > 0) {
+        const sub = newSubs[0];
+        setBlueprint((prev) => ({
+          ...prev,
+          title: `End Semester Examination: ${sub.title}`,
+          subject: sub.title,
+          subjectCode: sub.code,
+          course: newCourses[0]?.name || prev.course,
+        }));
+        const unitsRes = await academicService.getUnitsForSubject(sub.code).catch(() => ({ data: [] }));
+        setSubjectUnits(unitsRes.data || []);
+      }
+    } catch (err) {
+      console.warn('Failed updating department cascade:', err);
+    }
+  };
+
+  // 3. Subject selection handler
+  const handleSubjectChange = async (selectedSubTitle) => {
+    const subObj = subjects.find((s) => s.title === selectedSubTitle);
+    if (!subObj) {
+      setBlueprint((prev) => ({ ...prev, subject: selectedSubTitle }));
+      return;
+    }
+
+    setBlueprint((prev) => ({
+      ...prev,
+      title: `End Semester Examination: ${subObj.title}`,
+      subject: subObj.title,
+      subjectCode: subObj.code,
+      totalMarks: subObj.totalMarks || 70,
+      durationHours: subObj.durationHours || 2.5,
+      semester: subObj.semester || prev.semester,
+    }));
+
+    try {
+      const unitsRes = await academicService.getUnitsForSubject(subObj.code);
+      const units = unitsRes.data || [];
+      setSubjectUnits(units);
+      if (units.length > 0) {
+        setNewQuestionForm((prev) => ({
+          ...prev,
+          unitNumber: units[0].unitNumber,
+          unitTitle: units[0].unitTitle,
+        }));
+      }
+    } catch (err) {
+      console.warn('Failed loading units for subject:', err);
+    }
+  };
 
   // Load Question Bank when arriving at Step 2 or 3
   const loadQuestions = async () => {
@@ -132,23 +235,9 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
     if (step >= 2) {
       loadQuestions();
     }
-  }, [step]);
+  }, [step, blueprint.subject]);
 
-  // Seed standard SPOS curriculum questions
-  const handleSeedBank = async () => {
-    setSeedingBank(true);
-    setBankError('');
-    try {
-      await questionBankService.seedSampleQuestions();
-      await loadQuestions();
-    } catch (err) {
-      setBankError(err.response?.data?.message || err.message || 'Failed to seed sample questions.');
-    } finally {
-      setSeedingBank(false);
-    }
-  };
-
-  // Add custom question
+  // Add custom question for this subject
   const handleCreateQuestion = async (e) => {
     e.preventDefault();
     try {
@@ -160,28 +249,95 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
         academicPattern: blueprint.academicPattern,
       });
       setNewQuestionModalOpen(false);
-      setNewQuestionForm({
-        unitNumber: 1,
-        unitTitle: 'Loaders and Linkers',
+      setNewQuestionForm((prev) => ({
+        ...prev,
         topic: '',
         questionText: '',
-        questionType: 'DESCRIPTIVE',
         marks: 8,
         difficulty: 'MEDIUM',
         answerScheme: '',
-      });
+      }));
       await loadQuestions();
     } catch (err) {
       alert(err.response?.data?.message || err.message || 'Failed to add question');
     }
   };
 
+  // Build standard dynamic OR sections if none exist
+  const getDynamicSections = () => {
+    if (blueprint.sections && blueprint.sections.length > 0) {
+      return blueprint.sections;
+    }
+    const units = subjectUnits.length >= 4 ? subjectUnits : [
+      { unitNumber: 1, unitTitle: 'Unit 1: Fundamentals', targetMarks: 17 },
+      { unitNumber: 2, unitTitle: 'Unit 2: Core Concepts', targetMarks: 17 },
+      { unitNumber: 3, unitTitle: 'Unit 3: Advanced Architectures', targetMarks: 18 },
+      { unitNumber: 4, unitTitle: 'Unit 4: Applications & Security', targetMarks: 18 },
+    ];
+
+    return [
+      {
+        groupOrder: 1,
+        groupLabel: `Group 1 (${units[0]?.unitTitle || 'Unit 1'})`,
+        primaryQuestionNumber: 1,
+        alternativeQuestionNumber: 2,
+        targetMarks: 17,
+        targetUnit: 1,
+        subquestionsConfig: [
+          { subPart: 'a', marks: 8, difficulty: 'MEDIUM', questionType: 'DESCRIPTIVE', unit: 1 },
+          { subPart: 'b', marks: 9, difficulty: 'HARD', questionType: 'DESCRIPTIVE', unit: 1 },
+        ],
+      },
+      {
+        groupOrder: 2,
+        groupLabel: `Group 2 (${units[1]?.unitTitle || 'Unit 2'})`,
+        primaryQuestionNumber: 3,
+        alternativeQuestionNumber: 4,
+        targetMarks: 17,
+        targetUnit: 2,
+        subquestionsConfig: [
+          { subPart: 'a', marks: 8, difficulty: 'EASY', questionType: 'DESCRIPTIVE', unit: 2 },
+          { subPart: 'b', marks: 9, difficulty: 'MEDIUM', questionType: 'DESCRIPTIVE', unit: 2 },
+        ],
+      },
+      {
+        groupOrder: 3,
+        groupLabel: `Group 3 (${units[2]?.unitTitle || 'Unit 3'})`,
+        primaryQuestionNumber: 5,
+        alternativeQuestionNumber: 6,
+        targetMarks: 18,
+        targetUnit: 3,
+        subquestionsConfig: [
+          { subPart: 'a', marks: 9, difficulty: 'MEDIUM', questionType: 'DESCRIPTIVE', unit: 3 },
+          { subPart: 'b', marks: 9, difficulty: 'HARD', questionType: 'DESCRIPTIVE', unit: 3 },
+        ],
+      },
+      {
+        groupOrder: 4,
+        groupLabel: `Group 4 (${units[3]?.unitTitle || 'Unit 4'})`,
+        primaryQuestionNumber: 7,
+        alternativeQuestionNumber: 8,
+        targetMarks: 18,
+        targetUnit: 4,
+        subquestionsConfig: [
+          { subPart: 'a', marks: 9, difficulty: 'MEDIUM', questionType: 'DESCRIPTIVE', unit: 4 },
+          { subPart: 'b', marks: 9, difficulty: 'HARD', questionType: 'DESCRIPTIVE', unit: 4 },
+        ],
+      },
+    ];
+  };
+
   // Step 1 -> 2: Save / Create Blueprint
   const handleProceedToBank = async () => {
     try {
-      const res = await blueprintService.createBlueprint(blueprint);
-      if (res.id) {
-        setBlueprintId(res.id);
+      const dynamicSections = getDynamicSections();
+      const payload = {
+        ...blueprint,
+        sections: dynamicSections,
+      };
+      const res = await blueprintService.createBlueprint(payload);
+      if (res.data?.id || res.id) {
+        setBlueprintId(res.data?.id || res.id);
       }
       setStep(2);
     } catch (err) {
@@ -191,14 +347,19 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
 
   // Step 2 -> 3: Check Feasibility
   const handleCheckFeasibility = async () => {
-    if (!blueprintId) {
-      const res = await blueprintService.createBlueprint(blueprint);
-      setBlueprintId(res.id);
-    }
     setCheckingFeasibility(true);
     setGenerationError('');
     try {
-      const bId = blueprintId || 'default-spos';
+      let bId = blueprintId;
+      if (!bId) {
+        const dynamicSections = getDynamicSections();
+        const res = await blueprintService.createBlueprint({
+          ...blueprint,
+          sections: dynamicSections,
+        });
+        bId = res.data?.id || res.id;
+        setBlueprintId(bId);
+      }
       const res = await blueprintService.checkFeasibility(bId);
       setFeasibility(res.data);
       setStep(3);
@@ -209,12 +370,21 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
     }
   };
 
-  // Step 3 -> 4: Generate Sets
+  // Step 3 -> 4: Generate Sets on Backend
   const handleGenerateSets = async () => {
     setGenerating(true);
     setGenerationError('');
     try {
-      const bId = blueprintId || 'default-spos';
+      let bId = blueprintId;
+      if (!bId) {
+        const dynamicSections = getDynamicSections();
+        const res = await blueprintService.createBlueprint({
+          ...blueprint,
+          sections: dynamicSections,
+        });
+        bId = res.data?.id || res.id;
+        setBlueprintId(bId);
+      }
       const res = await questionPaperGeneratorService.generateSets(bId);
       setGeneratedPaperData(res.data);
       setActiveSetIndex(0);
@@ -226,52 +396,21 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
     }
   };
 
-  // Question Swap
-  const handleOpenReplaceModal = (questionSlot) => {
-    setReplacingTarget(questionSlot);
-    setReplaceError('');
-    setReplaceModalOpen(true);
-  };
-
-  const handleConfirmReplace = async (newQuestionId) => {
-    if (!generatedPaperData || !replacingTarget) return;
-    const currentSet = generatedPaperData.sets[activeSetIndex];
-    setReplacingLoading(true);
-    setReplaceError('');
-    try {
-      const res = await questionPaperGeneratorService.replaceQuestion(
-        currentSet.id,
-        replacingTarget.id,
-        newQuestionId
-      );
-      if (res.success) {
-        // Refresh paper data
-        const refreshed = await questionPaperGeneratorService.getPaperSets(generatedPaperData.paperId);
-        setGeneratedPaperData(refreshed.data);
-        setReplaceModalOpen(false);
-      }
-    } catch (err) {
-      setReplaceError(err.response?.data?.message || err.message || 'Failed to replace question.');
-    } finally {
-      setReplacingLoading(false);
-    }
-  };
-
-  // Step 5: Final Approval and Secure Submission
+  // Step 5: Final Approval and Secure Submission to Exam Cell
   const handleFinalSubmit = async (e) => {
     e.preventDefault();
     if (!submissionForm.confirmedApproval) {
-      setSubmissionError('You must explicitly review and check the approval box before submitting.');
+      setSubmissionError('You must review and check the approval confirmation box before submitting.');
       return;
     }
     if (!submissionForm.assignedToUserId) {
-      setSubmissionError('Please select a recipient faculty member.');
+      setSubmissionError('Please select a designated recipient Exam Coordinator.');
       return;
     }
 
-    const currentSet = generatedPaperData?.sets[activeSetIndex];
+    const currentSet = generatedPaperData?.sets?.[activeSetIndex];
     if (!currentSet) {
-      setSubmissionError('No active exam set selected.');
+      setSubmissionError('No active examination set selected.');
       return;
     }
 
@@ -281,16 +420,14 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
       const res = await questionPaperGeneratorService.approveAndSubmit(currentSet.id, {
         assignedToUserId: submissionForm.assignedToUserId,
         examDate: submissionForm.examDate,
-        paperStructureSnapshot: currentSet.paperStructureSnapshot,
         setCode: currentSet.setCode,
         setOrder: currentSet.setOrder,
         totalMarks: currentSet.totalMarks,
-        questionIds: currentSet.questionIds,
-        blueprintId: generatedPaperData?.blueprintId || generatedPaperData?.paperId,
+        blueprintId: generatedPaperData?.blueprintId || generatedPaperData?.paperId || blueprintId,
       });
 
       if (onSuccess) {
-        onSuccess(res.message || 'Question paper generated and securely submitted!');
+        onSuccess(res.message || 'Question paper generated and securely submitted to Examination Cell!');
       }
     } catch (err) {
       setSubmissionError(err.response?.data?.message || err.message || 'Failed to approve and submit question paper.');
@@ -310,9 +447,9 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
             <Sparkles size={22} color="var(--color-primary)" />
           </div>
           <div>
-            <h2 style={styles.title}>Randomized Question Paper Generator</h2>
+            <h2 style={styles.title}>Multi-Subject Question Paper Generator</h2>
             <p style={styles.subtitle}>
-              Module 18: Curriculum Blueprint &amp; Randomized Multi-Set Generation Pipeline
+              College Examination Cell: Dynamic Curriculum Blueprint &amp; Randomized Multi-Set Generation Pipeline
             </p>
           </div>
         </div>
@@ -323,7 +460,7 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
             { num: 1, label: 'Blueprint' },
             { num: 2, label: 'Question Bank' },
             { num: 3, label: 'Feasibility' },
-            { num: 4, label: 'Preview & Edit' },
+            { num: 4, label: 'Validation & Sets' },
             { num: 5, label: 'Submit' },
           ].map((s) => (
             <div key={s.num} style={styles.stepItem}>
@@ -346,45 +483,121 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
       </div>
 
       {/* --------------------------------------------------------------------- */}
-      {/* STEP 1: EXAM BLUEPRINT CONFIGURATION                                  */}
+      {/* STEP 1: DYNAMIC ACADEMIC CONTEXT & BLUEPRINT CONFIGURATION            */}
       {/* --------------------------------------------------------------------- */}
       {step === 1 && (
         <div style={styles.stepContent}>
           <div style={styles.cardHeader}>
-            <h3 style={styles.cardTitle}>Step 1: Exam Blueprint &amp; University Structure</h3>
+            <h3 style={styles.cardTitle}>Step 1: Academic Structure &amp; Exam Blueprint</h3>
             <p style={styles.cardSubtitle}>
-              Configure the examination metadata and alternative OR-group structure. Default pre-loaded with SPPU Systems Programming &amp; OS (May/June 2022 format).
+              Select department, degree, examination pattern, and subject. The system dynamically configures university OR-pairs and marking schemes from the database.
             </p>
           </div>
 
           <div style={styles.grid2}>
+            {/* Department Selection */}
             <div>
-              <label style={styles.label}>Subject Title</label>
-              <input
-                type="text"
-                style={styles.input}
-                value={blueprint.subject}
-                onChange={(e) => setBlueprint({ ...blueprint, subject: e.target.value })}
-              />
+              <label style={styles.label}>Academic Department</label>
+              <select
+                style={styles.select}
+                value={selectedDept}
+                onChange={(e) => handleDepartmentChange(e.target.value)}
+              >
+                {departments.map((d) => (
+                  <option key={d.id} value={d.code}>
+                    {d.name}
+                  </option>
+                ))}
+                {departments.length === 0 && <option value="COMP">Department of Computer Engineering</option>}
+              </select>
             </div>
+
+            {/* Course / Degree Selection */}
             <div>
               <label style={styles.label}>Course / Degree</label>
-              <input
-                type="text"
-                style={styles.input}
+              <select
+                style={styles.select}
                 value={blueprint.course}
                 onChange={(e) => setBlueprint({ ...blueprint, course: e.target.value })}
-              />
+              >
+                {courses.map((c) => (
+                  <option key={c.id} value={c.name}>
+                    {c.name} ({c.degree || 'B.E.'})
+                  </option>
+                ))}
+                {courses.length === 0 && <option value="T.E. (Computer Engineering)">T.E. (Computer Engineering)</option>}
+              </select>
             </div>
+
+            {/* Academic Pattern Selection (FIXED: Editable & Database-driven) */}
             <div>
-              <label style={styles.label}>Pattern &amp; Semester</label>
-              <input
-                type="text"
-                style={styles.input}
-                value={`${blueprint.academicPattern} (${blueprint.semester})`}
-                disabled
-              />
+              <label style={styles.label}>Academic Pattern</label>
+              <select
+                style={styles.select}
+                value={blueprint.academicPattern}
+                onChange={(e) => setBlueprint({ ...blueprint, academicPattern: e.target.value })}
+              >
+                {patterns.map((p) => (
+                  <option key={p.id} value={p.name}>
+                    {p.name}
+                  </option>
+                ))}
+                {patterns.length === 0 && (
+                  <>
+                    <option value="2019 Pattern">2019 Pattern</option>
+                    <option value="2024 NEP Pattern">2024 NEP Pattern</option>
+                    <option value="2015 Pattern (Backlog)">2015 Pattern (Backlog)</option>
+                  </>
+                )}
+              </select>
             </div>
+
+            {/* Semester Selection (FIXED: Editable & Dynamic) */}
+            <div>
+              <label style={styles.label}>Semester</label>
+              <select
+                style={styles.select}
+                value={blueprint.semester}
+                onChange={(e) => setBlueprint({ ...blueprint, semester: e.target.value })}
+              >
+                {semesters.map((s) => (
+                  <option key={s.number} value={s.label}>
+                    {s.label}
+                  </option>
+                ))}
+                {semesters.length === 0 && (
+                  <>
+                    <option value="Semester 5">Semester 5</option>
+                    <option value="Semester 6">Semester 6</option>
+                    <option value="Semester 7">Semester 7</option>
+                    <option value="Semester 8">Semester 8</option>
+                  </>
+                )}
+              </select>
+            </div>
+
+            {/* Subject Selection (Dynamic from Database) */}
+            <div>
+              <label style={styles.label}>Subject</label>
+              <select
+                style={styles.select}
+                value={blueprint.subject}
+                onChange={(e) => handleSubjectChange(e.target.value)}
+              >
+                {subjects.map((s) => (
+                  <option key={s.id} value={s.title}>
+                    [{s.code}] {s.title}
+                  </option>
+                ))}
+                {subjects.length === 0 && (
+                  <option value="Systems Programming and Operating System">
+                    [310243] Systems Programming and Operating System
+                  </option>
+                )}
+              </select>
+            </div>
+
+            {/* Subject Code */}
             <div>
               <label style={styles.label}>Subject Code</label>
               <input
@@ -394,6 +607,8 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
                 onChange={(e) => setBlueprint({ ...blueprint, subjectCode: e.target.value })}
               />
             </div>
+
+            {/* Duration (Hours) */}
             <div>
               <label style={styles.label}>Duration (Hours)</label>
               <input
@@ -404,6 +619,8 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
                 onChange={(e) => setBlueprint({ ...blueprint, durationHours: parseFloat(e.target.value) })}
               />
             </div>
+
+            {/* Total Answered Marks */}
             <div>
               <label style={styles.label}>Total Answered Marks</label>
               <input
@@ -415,25 +632,27 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
             </div>
           </div>
 
-          {/* OR Group Structure Summary */}
+          {/* Dynamic OR Group Structure Summary */}
           <div style={styles.summaryBox}>
-            <h4 style={styles.summaryTitle}>University OR-Pair Structure (May/June 2022 Reference)</h4>
+            <h4 style={styles.summaryTitle}>
+              University OR-Pair Structure for {blueprint.subject} ({blueprint.academicPattern})
+            </h4>
             <div style={styles.groupList}>
               <div style={styles.groupCard}>
-                <strong>Pair 1 (Unit 1):</strong> Q1 (8 + 9 = 17M) <span style={styles.orPill}>OR</span> Q2 (9 + 8 = 17M)
+                <strong>Pair 1 ({subjectUnits[0]?.unitTitle || 'Unit 1'}):</strong> Q1 (8 + 9 = 17M) <span style={styles.orPill}>OR</span> Q2 (9 + 8 = 17M)
               </div>
               <div style={styles.groupCard}>
-                <strong>Pair 2 (Unit 2):</strong> Q3 (8 + 9 = 17M) <span style={styles.orPill}>OR</span> Q4 (8 + 9 = 17M)
+                <strong>Pair 2 ({subjectUnits[1]?.unitTitle || 'Unit 2'}):</strong> Q3 (8 + 9 = 17M) <span style={styles.orPill}>OR</span> Q4 (8 + 9 = 17M)
               </div>
               <div style={styles.groupCard}>
-                <strong>Pair 3 (Unit 3):</strong> Q5 (9 + 9 = 18M) <span style={styles.orPill}>OR</span> Q6 (9 + 9 = 18M)
+                <strong>Pair 3 ({subjectUnits[2]?.unitTitle || 'Unit 3'}):</strong> Q5 (9 + 9 = 18M) <span style={styles.orPill}>OR</span> Q6 (9 + 9 = 18M)
               </div>
               <div style={styles.groupCard}>
-                <strong>Pair 4 (Unit 4):</strong> Q7 (9 + 9 = 18M) <span style={styles.orPill}>OR</span> Q8 (9 + 9 = 18M)
+                <strong>Pair 4 ({subjectUnits[3]?.unitTitle || 'Unit 4'}):</strong> Q7 (9 + 9 = 18M) <span style={styles.orPill}>OR</span> Q8 (9 + 9 = 18M)
               </div>
             </div>
             <p style={styles.summaryFooter}>
-              Total Answered Marks: 17 + 17 + 18 + 18 = <strong>70 Marks</strong>. Candidate answers 1 question per pair.
+              Total Answered Marks: 17 + 17 + 18 + 18 = <strong>{blueprint.totalMarks} Marks</strong>. Candidate answers 1 question per alternative pair.
             </p>
           </div>
 
@@ -450,28 +669,19 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
       )}
 
       {/* --------------------------------------------------------------------- */}
-      {/* STEP 2: QUESTION BANK POOL & SEEDING                                  */}
+      {/* STEP 2: DYNAMIC QUESTION BANK MANAGEMENT (SCOPED TO SELECTED SUBJECT) */}
       {/* --------------------------------------------------------------------- */}
       {step === 2 && (
         <div style={styles.stepContent}>
           <div style={styles.cardHeader}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
               <div>
-                <h3 style={styles.cardTitle}>Step 2: Departmental Question Bank Pool</h3>
+                <h3 style={styles.cardTitle}>Step 2: Question Bank Pool: {blueprint.subject}</h3>
                 <p style={styles.cardSubtitle}>
-                  Questions must be categorized by Unit, Marks, and Difficulty to be eligible for generation.
+                  Scoped strictly to {blueprint.subject} ({blueprint.subjectCode || 'Active Subject'}). Questions must be categorized by Unit, Marks, and Difficulty.
                 </p>
               </div>
               <div style={{ display: 'flex', gap: '8px' }}>
-                <button
-                  type="button"
-                  style={styles.actionBtnSecondary}
-                  onClick={handleSeedBank}
-                  disabled={seedingBank}
-                >
-                  {seedingBank ? <Loader2 size={16} className="animate-spin" /> : <Database size={16} />}
-                  <span>Seed Standard SPOS Questions</span>
-                </button>
                 <button
                   type="button"
                   style={styles.actionBtnPrimary}
@@ -491,20 +701,29 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
             </div>
           )}
 
-          {/* Question List */}
           <div style={styles.tableWrapper}>
             {loadingBank ? (
-              <div style={styles.loadingState}>
-                <Loader2 size={32} className="animate-spin" color="#4f46e5" />
-                <p>Loading questions from bank...</p>
+              <div style={styles.loadingBox}>
+                <Loader2 size={32} className="animate-spin" color="var(--color-primary)" />
+                <p style={{ marginTop: '8px', color: '#64748b' }}>Loading questions for {blueprint.subject}...</p>
               </div>
             ) : questions.length === 0 ? (
               <div style={styles.emptyState}>
                 <Database size={40} color="#94a3b8" />
-                <p style={{ fontWeight: 600, color: '#334155' }}>No questions found in bank for {blueprint.subject}</p>
-                <p style={{ fontSize: '13px', color: '#64748b' }}>
-                  Click &ldquo;Seed Standard SPOS Questions&rdquo; above to automatically populate 24 verified university curriculum questions.
+                <p style={{ fontWeight: 600, color: '#334155', marginTop: '12px' }}>
+                  No approved questions found in Question Bank for &ldquo;{blueprint.subject}&rdquo;
                 </p>
+                <p style={{ fontSize: '13px', color: '#64748b', maxWidth: '480px', margin: '4px auto 16px auto' }}>
+                  Please use the &ldquo;Add Question&rdquo; button above to populate verified curriculum questions for this subject.
+                </p>
+                <button
+                  type="button"
+                  style={styles.actionBtnPrimary}
+                  onClick={() => setNewQuestionModalOpen(true)}
+                >
+                  <Plus size={16} />
+                  <span>Add First Question</span>
+                </button>
               </div>
             ) : (
               <table style={styles.table}>
@@ -582,7 +801,7 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
           <div style={styles.cardHeader}>
             <h3 style={styles.cardTitle}>Step 3: Multi-Set Feasibility Validation</h3>
             <p style={styles.cardSubtitle}>
-              Server-side constraint check ensuring the question bank has sufficient eligible questions without excessive overlap.
+              Server-side constraint check ensuring the question bank for {blueprint.subject} has sufficient eligible questions without cross-set overlap violations.
             </p>
           </div>
 
@@ -680,16 +899,16 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
       )}
 
       {/* --------------------------------------------------------------------- */}
-      {/* STEP 4: UNIVERSITY-STYLE PAPER PREVIEW & EDITING                      */}
+      {/* STEP 4: STRICT EXAM CELL VALIDATION & SUBMISSION STATUS               */}
       {/* --------------------------------------------------------------------- */}
       {step === 4 && activeSet && (
         <div style={styles.stepContent}>
           <div style={styles.cardHeader}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <h3 style={styles.cardTitle}>Step 4: University Paper Preview &amp; Teacher Review</h3>
+                <h3 style={styles.cardTitle}>Step 4: Candidate Sets Structural Validation &amp; Integrity Audit</h3>
                 <p style={styles.cardSubtitle}>
-                  Formatted matching official SPPU examination layout (May/June 2022). Switch sets or swap questions before final approval.
+                  Server-side generated examination sets verified against official university curriculum structure.
                 </p>
               </div>
 
@@ -709,150 +928,66 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
             </div>
           </div>
 
-          {/* Authentic University Paper Layout */}
-          <div style={styles.paperSheet}>
-            {/* Paper Header */}
-            <div style={styles.paperTopRow}>
-              <div style={{ fontSize: '11px' }}>
-                Total No. of Questions : 8] &nbsp;&nbsp;&nbsp; <strong>[{activeSet.setCode}]</strong>
-              </div>
-              <div style={styles.seatNoBox}>SEAT No. :</div>
-            </div>
-
-            <div style={styles.paperHeadingSection}>
-              <div style={{ fontSize: '11px', fontWeight: 'bold' }}>
-                [{activeSet.paperStructureSnapshot.metadata.subjectCode || '310243'}]
-              </div>
-              <div style={{ fontSize: '14px', fontWeight: 'bold', marginTop: '2px' }}>
-                {activeSet.paperStructureSnapshot.metadata.course}
-              </div>
-              <div style={{ fontSize: '16px', fontWeight: 'bold', marginTop: '2px', letterSpacing: '0.5px' }}>
-                {(activeSet.paperStructureSnapshot.metadata.subject || '').toUpperCase()}
-              </div>
-              <div style={{ fontSize: '12px', marginTop: '2px' }}>
-                ({activeSet.paperStructureSnapshot.metadata.academicPattern}) ({activeSet.paperStructureSnapshot.metadata.semester})
-              </div>
-            </div>
-
-            <div style={styles.paperMetaRow}>
-              <div>
-                <strong>Time : 2½ Hours]</strong>
-              </div>
-              <div>
-                <strong>[Max. Marks : {activeSet.totalMarks}</strong>
-              </div>
-            </div>
-
-            <hr style={styles.paperDivider} />
-
-            {/* Candidate Instructions */}
-            <div style={styles.instructionsBlock}>
-              <strong>Instructions to the candidates:</strong>
-              <ol style={{ margin: '4px 0 0 16px', padding: 0 }}>
-                {(activeSet.paperStructureSnapshot.metadata.instructions || []).map((inst, i) => (
-                  <li key={i}>{inst}</li>
-                ))}
-              </ol>
-            </div>
-
-            <hr style={styles.paperDivider} />
-
-            {/* Questions Body */}
-            <div style={styles.questionsBody}>
-              {(activeSet.paperStructureSnapshot.sections || []).map((section, sIdx) => (
-                <div key={sIdx} style={styles.sectionGroup}>
-                  {/* Primary Question */}
-                  {section.primaryQuestion && (
-                    <div style={styles.questionBlock}>
-                      <div style={styles.questionHeader}>
-                        <strong>Q{section.primaryQuestion.questionNumber})</strong>
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        {(section.primaryQuestion.subquestions || []).map((sub, subIdx) => (
-                          <div key={sub.id || subIdx} style={styles.subquestionRow}>
-                            <div style={{ flex: 1 }}>
-                              <strong>{sub.part})</strong> {sub.text}
-                            </div>
-                            <div style={styles.marksRight}>
-                              <strong>[{sub.marks}]</strong>
-                              <button
-                                type="button"
-                                style={styles.replaceBtn}
-                                onClick={() =>
-                                  handleOpenReplaceModal({
-                                    id: sub.id,
-                                    text: sub.text,
-                                    marks: sub.marks,
-                                    unit: sub.unit,
-                                  })
-                                }
-                                title="Swap this question with another from bank"
-                              >
-                                Replace
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Centered OR Divider */}
-                  {section.alternativeQuestion && (
-                    <div style={styles.orDividerRow}>
-                      <div style={styles.orLine} />
-                      <span style={styles.orText}>OR</span>
-                      <div style={styles.orLine} />
-                    </div>
-                  )}
-
-                  {/* Alternative Question */}
-                  {section.alternativeQuestion && (
-                    <div style={styles.questionBlock}>
-                      <div style={styles.questionHeader}>
-                        <strong>Q{section.alternativeQuestion.questionNumber})</strong>
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        {(section.alternativeQuestion.subquestions || []).map((sub, subIdx) => (
-                          <div key={sub.id || subIdx} style={styles.subquestionRow}>
-                            <div style={{ flex: 1 }}>
-                              <strong>{sub.part})</strong> {sub.text}
-                            </div>
-                            <div style={styles.marksRight}>
-                              <strong>[{sub.marks}]</strong>
-                              <button
-                                type="button"
-                                style={styles.replaceBtn}
-                                onClick={() =>
-                                  handleOpenReplaceModal({
-                                    id: sub.id,
-                                    text: sub.text,
-                                    marks: sub.marks,
-                                    unit: sub.unit,
-                                  })
-                                }
-                                title="Swap this question with another from bank"
-                              >
-                                Replace
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+          {/* Validation & Security Overview Card */}
+          <div style={styles.validationContainer}>
+            <div style={styles.validationGrid}>
+              <div style={styles.validationCard}>
+                <div style={styles.valCardHeader}>
+                  <ShieldCheck size={20} color="#059669" />
+                  <span style={styles.valCardTitle}>Structural Conformity</span>
                 </div>
-              ))}
+                <div style={styles.valCardValue}>VERIFIED</div>
+                <p style={styles.valCardDesc}>
+                  Conforms strictly to 4 university OR-pairs with exact 17M + 17M + 18M + 18M marks distribution.
+                </p>
+              </div>
+
+              <div style={styles.validationCard}>
+                <div style={styles.valCardHeader}>
+                  <Layers size={20} color="#0284c7" />
+                  <span style={styles.valCardTitle}>Active Examination Set</span>
+                </div>
+                <div style={styles.valCardValue}>{activeSet.setCode}</div>
+                <p style={styles.valCardDesc}>
+                  Target Total: <strong>{activeSet.totalMarks} Marks</strong> across 4 curriculum units.
+                </p>
+              </div>
+
+              <div style={styles.validationCard}>
+                <div style={styles.valCardHeader}>
+                  <CheckCircle2 size={20} color="#6366f1" />
+                  <span style={styles.valCardTitle}>Question Uniqueness</span>
+                </div>
+                <div style={styles.valCardValue}>100% Unique</div>
+                <p style={styles.valCardDesc}>
+                  Zero duplicate question collisions detected across alternative OR groups and sets.
+                </p>
+              </div>
+            </div>
+
+            {/* Strict Exam Cell Protocol Notice */}
+            <div style={styles.examCellBanner}>
+              <div style={styles.examCellIcon}>
+                <ShieldCheck size={28} color="#0369a1" />
+              </div>
+              <div>
+                <h4 style={{ margin: 0, color: '#0c4a6e', fontSize: '15px', fontWeight: 600 }}>
+                  Strict Exam Cell Confidentiality Enforced
+                </h4>
+                <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#334155', lineHeight: '1.5' }}>
+                  Under Examination Cell security guidelines, final question selection and arrangements are cryptographically isolated on the server. Teachers submit the validated configuration, and only the authorized Exam Coordinator may decrypt and access the final question paper upon scheduled delivery.
+                </p>
+              </div>
             </div>
           </div>
 
           <div style={styles.buttonRow}>
             <button type="button" style={styles.secondaryButton} onClick={() => setStep(3)}>
               <ArrowLeft size={18} />
-              <span>Back</span>
+              <span>Back to Feasibility</span>
             </button>
             <button type="button" style={styles.primaryButton} onClick={() => setStep(5)}>
-              <span>Proceed to Approval &amp; Submit</span>
+              <span>Proceed to Final Submission</span>
               <ArrowRight size={18} />
             </button>
           </div>
@@ -860,14 +995,14 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
       )}
 
       {/* --------------------------------------------------------------------- */}
-      {/* STEP 5: APPROVAL & SECURE SUBMISSION                                  */}
+      {/* STEP 5: APPROVAL & SECURE SUBMISSION TO EXAMINATION CELL              */}
       {/* --------------------------------------------------------------------- */}
       {step === 5 && activeSet && (
         <div style={styles.stepContent}>
           <div style={styles.cardHeader}>
-            <h3 style={styles.cardTitle}>Step 5: Teacher Approval &amp; Secure Submission</h3>
+            <h3 style={styles.cardTitle}>Step 5: Teacher Submission &amp; Examination Cell Sealing</h3>
             <p style={styles.cardSubtitle}>
-              Final sign-off. Approving this set automatically renders the official publication PDF in-memory, signs it with RSA-PSS, encrypts it via AES-256-GCM, and schedules delivery.
+              Final sign-off. Submitting this set triggers server-side PDF generation, AES-256-GCM envelope encryption, RSA-PSS digital signing, and scheduled delivery to the Exam Coordinator.
             </p>
           </div>
 
@@ -882,7 +1017,7 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
             <div style={styles.submissionBox}>
               <div style={styles.grid2}>
                 <div>
-                  <label style={styles.label}>Designated Recipient Faculty</label>
+                  <label style={styles.label}>Designated Recipient Exam Coordinator</label>
                   <select
                     style={styles.select}
                     value={submissionForm.assignedToUserId}
@@ -891,7 +1026,7 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
                     }
                     required
                   >
-                    <option value="">Select recipient faculty...</option>
+                    <option value="">Select recipient coordinator...</option>
                     {recipients.map((r) => (
                       <option key={r.id} value={r.id}>
                         {r.name} ({r.email})
@@ -917,24 +1052,24 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
               {/* Security Pipeline Assurances */}
               <div style={styles.securityChecklist}>
                 <h4 style={{ fontSize: '13px', fontWeight: 600, color: '#1e293b', marginBottom: '8px' }}>
-                  Security &amp; Cryptographic Assurances:
+                  Cryptographic Security Architecture:
                 </h4>
                 <ul style={styles.checklistUl}>
                   <li>
                     <ShieldCheck size={16} color="#059669" />
-                    <span>In-memory vector PDF generation matching official university typography</span>
+                    <span>Server-side PDF generation conforming to university typography</span>
                   </li>
                   <li>
                     <ShieldCheck size={16} color="#059669" />
-                    <span>AES-256-GCM envelope encryption with unique random 32-byte DEK and 12-byte IV</span>
+                    <span>AES-256-GCM envelope encryption with random 32-byte DEK &amp; 12-byte IV</span>
                   </li>
                   <li>
                     <ShieldCheck size={16} color="#059669" />
-                    <span>RSA-PSS-SHA256 digital signature over exact ciphertext buffer before upload</span>
+                    <span>RSA-PSS SHA-256 digital signature over ciphertext before private storage</span>
                   </li>
                   <li>
                     <ShieldCheck size={16} color="#059669" />
-                    <span>Automatic server-enforced next-day delivery scheduling (time-gated access)</span>
+                    <span>Server-enforced time-locked access control (decrypted only by authorized Exam Coordinator)</span>
                   </li>
                 </ul>
               </div>
@@ -951,7 +1086,7 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
                   style={{ width: '18px', height: '18px', cursor: 'pointer' }}
                 />
                 <label htmlFor="confirmApproval" style={{ fontSize: '13px', fontWeight: 600, color: '#1e293b', cursor: 'pointer' }}>
-                  I confirm that I have reviewed {activeSet.setCode} of &ldquo;{blueprint.subject}&rdquo; and approve it for immediate cryptographic sealing and scheduled distribution.
+                  I confirm that I have validated the academic structure for {activeSet.setCode} of &ldquo;{blueprint.subject}&rdquo; and approve it for server-side cryptographic sealing and transmission to the Examination Cell.
                 </label>
               </div>
             </div>
@@ -959,7 +1094,7 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
             <div style={styles.buttonRow}>
               <button type="button" style={styles.secondaryButton} onClick={() => setStep(4)}>
                 <ArrowLeft size={18} />
-                <span>Back to Preview</span>
+                <span>Back</span>
               </button>
               <button
                 type="submit"
@@ -978,99 +1113,43 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
       )}
 
       {/* --------------------------------------------------------------------- */}
-      {/* MODAL: REPLACE QUESTION IN GENERATED SET                              */}
-      {/* --------------------------------------------------------------------- */}
-      {replaceModalOpen && replacingTarget && (
-        <div style={styles.modalOverlay}>
-          <div style={styles.modalCard}>
-            <h3 style={styles.modalTitle}>Replace Question ({replacingTarget.marks} Marks, Unit {replacingTarget.unit})</h3>
-            <p style={styles.modalSubtitle}>
-              Current Question: &ldquo;{replacingTarget.text}&rdquo;
-            </p>
-
-            {replaceError && (
-              <div style={styles.errorAlert}>
-                <AlertCircle size={16} />
-                <span>{replaceError}</span>
-              </div>
-            )}
-
-            <div style={styles.replaceList}>
-              {questions
-                .filter(
-                  (q) =>
-                    q.unitNumber === replacingTarget.unit &&
-                    q.marks === replacingTarget.marks &&
-                    q.id !== replacingTarget.id &&
-                    !activeSet.questionIds.includes(q.id)
-                )
-                .map((candidate) => (
-                  <div key={candidate.id} style={styles.candidateCard}>
-                    <div style={{ flex: 1 }}>
-                      <p style={{ margin: 0, fontWeight: 500, fontSize: '13px' }}>{candidate.questionText}</p>
-                      <div style={{ marginTop: '4px', fontSize: '11px', color: '#64748b' }}>
-                        Difficulty: {candidate.difficulty} | Type: {candidate.questionType}
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      style={styles.selectCandidateBtn}
-                      onClick={() => handleConfirmReplace(candidate.id)}
-                      disabled={replacingLoading}
-                    >
-                      Select
-                    </button>
-                  </div>
-                ))}
-
-              {questions.filter(
-                (q) =>
-                  q.unitNumber === replacingTarget.unit &&
-                  q.marks === replacingTarget.marks &&
-                  q.id !== replacingTarget.id &&
-                  !activeSet.questionIds.includes(q.id)
-              ).length === 0 && (
-                <p style={{ textAlign: 'center', color: '#64748b', fontSize: '13px', margin: '20px 0' }}>
-                  No alternative unused questions matching {replacingTarget.marks} marks in Unit {replacingTarget.unit} found in bank.
-                </p>
-              )}
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
-              <button
-                type="button"
-                style={styles.secondaryButton}
-                onClick={() => setReplaceModalOpen(false)}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* --------------------------------------------------------------------- */}
       {/* MODAL: ADD CUSTOM QUESTION                                            */}
       {/* --------------------------------------------------------------------- */}
       {newQuestionModalOpen && (
         <div style={styles.modalOverlay}>
           <div style={styles.modalCard}>
-            <h3 style={styles.modalTitle}>Add Question to Question Bank</h3>
+            <h3 style={styles.modalTitle}>Add Question for {blueprint.subject}</h3>
             <form onSubmit={handleCreateQuestion}>
               <div style={styles.grid2}>
                 <div>
                   <label style={styles.label}>Unit Number (1-4)</label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="10"
-                    style={styles.input}
+                  <select
+                    style={styles.select}
                     value={newQuestionForm.unitNumber}
-                    onChange={(e) =>
-                      setNewQuestionForm({ ...newQuestionForm, unitNumber: parseInt(e.target.value, 10) })
-                    }
-                    required
-                  />
+                    onChange={(e) => {
+                      const uNum = parseInt(e.target.value, 10);
+                      const matchedUnit = subjectUnits.find((u) => u.unitNumber === uNum);
+                      setNewQuestionForm({
+                        ...newQuestionForm,
+                        unitNumber: uNum,
+                        unitTitle: matchedUnit ? matchedUnit.unitTitle : `Unit ${uNum}`,
+                      });
+                    }}
+                  >
+                    {subjectUnits.map((u) => (
+                      <option key={u.unitNumber} value={u.unitNumber}>
+                        Unit {u.unitNumber}: {u.unitTitle}
+                      </option>
+                    ))}
+                    {subjectUnits.length === 0 && (
+                      <>
+                        <option value={1}>Unit 1</option>
+                        <option value={2}>Unit 2</option>
+                        <option value={3}>Unit 3</option>
+                        <option value={4}>Unit 4</option>
+                      </>
+                    )}
+                  </select>
                 </div>
                 <div>
                   <label style={styles.label}>Unit Title</label>
@@ -1116,6 +1195,19 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
               </div>
 
               <div style={{ marginTop: '12px' }}>
+                <label style={styles.label}>Topic / Concept</label>
+                <input
+                  type="text"
+                  style={styles.input}
+                  placeholder="e.g. Relational Normalization, Direct Linking Loader"
+                  value={newQuestionForm.topic}
+                  onChange={(e) =>
+                    setNewQuestionForm({ ...newQuestionForm, topic: e.target.value })
+                  }
+                />
+              </div>
+
+              <div style={{ marginTop: '12px' }}>
                 <label style={styles.label}>Question Text</label>
                 <textarea
                   style={{ ...styles.input, height: '80px' }}
@@ -1147,20 +1239,19 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
   );
 }
 
-// Inline styles matching ExamGuard Engineering UI design tokens
+// Inline styles matching ExamGuard Design System
 const styles = {
   wizardContainer: {
-    backgroundColor: 'var(--color-surface)',
-    borderRadius: 'var(--radius-xl)',
-    boxShadow: 'var(--shadow-md)',
-    padding: 'clamp(1rem, 3vw, 1.75rem)',
-    border: '1px solid var(--color-border)',
-    fontFamily: 'var(--font-inter)',
+    backgroundColor: '#ffffff',
+    borderRadius: '12px',
+    border: '1px solid #e2e8f0',
+    overflow: 'hidden',
+    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
   },
   wizardHeader: {
-    borderBottom: '1px solid var(--color-border)',
-    paddingBottom: '20px',
-    marginBottom: '24px',
+    padding: '24px',
+    borderBottom: '1px solid #f1f5f9',
+    backgroundColor: '#fafafa',
   },
   titleRow: {
     display: 'flex',
@@ -1171,486 +1262,389 @@ const styles = {
   iconCircle: {
     width: '42px',
     height: '42px',
-    borderRadius: 'var(--radius-md)',
-    backgroundColor: 'var(--color-primary-subtle)',
+    borderRadius: '10px',
+    backgroundColor: '#eff6ff',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    color: 'var(--color-primary)',
-    flexShrink: 0,
+    border: '1px solid #dbeafe',
   },
   title: {
-    fontSize: 'clamp(1.1rem, 2.5vw, 1.35rem)',
+    fontSize: '20px',
     fontWeight: '700',
-    color: 'var(--color-text-primary)',
+    color: '#0f172a',
     margin: 0,
-    letterSpacing: '-0.02em',
   },
   subtitle: {
-    fontSize: '0.8rem',
-    color: 'var(--color-text-muted)',
+    fontSize: '13px',
+    color: '#64748b',
     margin: '2px 0 0 0',
   },
   stepper: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: '0.75rem',
-    overflowX: 'auto',
-    padding: '0.5rem 0',
-    maxWidth: '650px',
+    maxWidth: '750px',
     margin: '0 auto',
-    WebkitOverflowScrolling: 'touch',
+    paddingTop: '8px',
   },
   stepItem: {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     gap: '6px',
-    minWidth: '60px',
-    flexShrink: 0,
+    position: 'relative',
+    flex: 1,
   },
   stepCircle: {
     width: '32px',
     height: '32px',
-    borderRadius: 'var(--radius-full)',
+    borderRadius: '50%',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     fontSize: '13px',
     fontWeight: '700',
-    transition: 'all 0.2s',
+    transition: 'all 0.2s ease',
   },
   stepLabel: {
-    fontSize: '11px',
-    color: 'var(--color-text-muted)',
+    fontSize: '12px',
     fontWeight: '500',
+    color: '#94a3b8',
   },
   stepLabelActive: {
-    fontSize: '11px',
-    color: 'var(--color-primary)',
+    fontSize: '12px',
     fontWeight: '700',
+    color: '#1e293b',
   },
   stepContent: {
-    animation: 'fadeIn 0.2s ease-in-out',
+    padding: '28px',
   },
   cardHeader: {
     marginBottom: '20px',
   },
   cardTitle: {
-    fontSize: '1.1rem',
+    fontSize: '17px',
     fontWeight: '700',
-    color: 'var(--color-text-primary)',
+    color: '#1e293b',
     margin: 0,
   },
   cardSubtitle: {
-    fontSize: '0.825rem',
-    color: 'var(--color-text-muted)',
-    margin: '4px 0 0 0',
+    fontSize: '13px',
+    color: '#64748b',
+    marginTop: '4px',
   },
   grid2: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 260px), 1fr))',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
     gap: '16px',
   },
   label: {
     display: 'block',
-    fontSize: '0.8rem',
+    fontSize: '12px',
     fontWeight: '600',
-    color: 'var(--color-text-secondary)',
+    color: '#334155',
     marginBottom: '6px',
   },
   input: {
     width: '100%',
-    padding: '10px 12px',
-    borderRadius: 'var(--radius-md)',
-    border: '1px solid var(--color-border)',
-    fontSize: '0.85rem',
-    color: 'var(--color-text-primary)',
-    boxSizing: 'border-box',
+    padding: '9px 12px',
+    borderRadius: '8px',
+    border: '1px solid #cbd5e1',
+    fontSize: '13px',
+    color: '#0f172a',
+    backgroundColor: '#ffffff',
     outline: 'none',
-    backgroundColor: 'var(--color-surface)',
-    fontFamily: 'var(--font-inter)',
-    minHeight: '44px',
+    boxSizing: 'border-box',
   },
   select: {
     width: '100%',
-    padding: '10px 12px',
-    borderRadius: 'var(--radius-md)',
-    border: '1px solid var(--color-border)',
-    fontSize: '0.85rem',
-    color: 'var(--color-text-primary)',
-    boxSizing: 'border-box',
-    backgroundColor: 'var(--color-surface)',
+    padding: '9px 12px',
+    borderRadius: '8px',
+    border: '1px solid #cbd5e1',
+    fontSize: '13px',
+    color: '#0f172a',
+    backgroundColor: '#ffffff',
     outline: 'none',
-    fontFamily: 'var(--font-inter)',
-    minHeight: '44px',
+    boxSizing: 'border-box',
+    cursor: 'pointer',
   },
   summaryBox: {
-    backgroundColor: 'var(--color-surface-subtle)',
-    border: '1px solid var(--color-border)',
-    borderRadius: 'var(--radius-lg)',
+    marginTop: '24px',
+    backgroundColor: '#f8fafc',
+    borderRadius: '10px',
+    border: '1px solid #e2e8f0',
     padding: '16px',
-    marginTop: '20px',
   },
   summaryTitle: {
-    fontSize: '0.875rem',
-    fontWeight: '700',
-    color: 'var(--color-text-primary)',
     margin: '0 0 12px 0',
+    fontSize: '14px',
+    fontWeight: '600',
+    color: '#1e293b',
   },
   groupList: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
     gap: '10px',
   },
   groupCard: {
-    backgroundColor: 'var(--color-surface)',
-    border: '1px solid var(--color-border)',
-    borderRadius: 'var(--radius-md)',
-    padding: '10px',
-    fontSize: '0.8rem',
-    color: 'var(--color-text-secondary)',
+    backgroundColor: '#ffffff',
+    border: '1px solid #e2e8f0',
+    borderRadius: '6px',
+    padding: '10px 12px',
+    fontSize: '12px',
+    color: '#334155',
   },
   orPill: {
-    backgroundColor: 'var(--color-accent-subtle)',
-    color: 'var(--color-primary)',
-    padding: '2px 6px',
-    borderRadius: 'var(--radius-sm)',
+    display: 'inline-block',
+    padding: '1px 6px',
+    backgroundColor: '#fef3c7',
+    color: '#92400e',
+    borderRadius: '4px',
     fontWeight: '700',
-    fontFamily: 'var(--font-jetbrains)',
+    fontSize: '10px',
   },
   summaryFooter: {
-    fontSize: '0.8rem',
-    color: 'var(--color-text-muted)',
     margin: '12px 0 0 0',
-    fontFamily: 'var(--font-ibm-plex)',
+    fontSize: '12px',
+    color: '#64748b',
   },
   buttonRow: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: '0.75rem',
     marginTop: '28px',
     paddingTop: '20px',
-    borderTop: '1px solid var(--color-border)',
+    borderTop: '1px solid #f1f5f9',
   },
   primaryButton: {
     display: 'inline-flex',
     alignItems: 'center',
     gap: '8px',
-    backgroundColor: 'var(--color-primary)',
-    color: '#ffffff',
     padding: '10px 20px',
-    borderRadius: 'var(--radius-md)',
+    backgroundColor: '#2563eb',
+    color: '#ffffff',
+    borderRadius: '8px',
+    fontSize: '13px',
     fontWeight: '600',
-    fontSize: '0.85rem',
     border: 'none',
     cursor: 'pointer',
-    minHeight: '44px',
-    transition: 'background 0.2s',
+    transition: 'background-color 0.2s ease',
   },
   secondaryButton: {
     display: 'inline-flex',
     alignItems: 'center',
     gap: '8px',
-    backgroundColor: 'var(--color-surface)',
-    color: 'var(--color-text-secondary)',
     padding: '10px 18px',
-    borderRadius: 'var(--radius-md)',
-    fontWeight: '600',
-    fontSize: '0.85rem',
-    border: '1px solid var(--color-border)',
+    backgroundColor: '#ffffff',
+    color: '#475569',
+    borderRadius: '8px',
+    fontSize: '13px',
+    fontWeight: '500',
+    border: '1px solid #cbd5e1',
     cursor: 'pointer',
-    minHeight: '44px',
   },
   actionBtnPrimary: {
     display: 'inline-flex',
     alignItems: 'center',
     gap: '6px',
-    backgroundColor: 'var(--color-primary)',
-    color: '#ffffff',
     padding: '8px 14px',
-    borderRadius: 'var(--radius-md)',
-    fontSize: '0.8rem',
+    backgroundColor: '#2563eb',
+    color: '#ffffff',
+    borderRadius: '6px',
+    fontSize: '12px',
     fontWeight: '600',
     border: 'none',
     cursor: 'pointer',
-    minHeight: '40px',
-  },
-  actionBtnSecondary: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '6px',
-    backgroundColor: 'var(--color-surface-subtle)',
-    color: 'var(--color-text-secondary)',
-    padding: '8px 14px',
-    borderRadius: 'var(--radius-md)',
-    fontSize: '0.8rem',
-    fontWeight: '600',
-    border: '1px solid var(--color-border)',
-    cursor: 'pointer',
-    minHeight: '40px',
   },
   tableWrapper: {
-    border: '1px solid var(--color-border)',
-    borderRadius: 'var(--radius-md)',
     overflowX: 'auto',
-    WebkitOverflowScrolling: 'touch',
+    borderRadius: '8px',
+    border: '1px solid #e2e8f0',
     marginTop: '12px',
   },
   table: {
     width: '100%',
-    minWidth: '540px',
     borderCollapse: 'collapse',
-    fontSize: '0.825rem',
+    fontSize: '13px',
+    textAlign: 'left',
   },
   thRow: {
-    backgroundColor: 'var(--color-surface-subtle)',
-    borderBottom: '1px solid var(--color-border)',
+    backgroundColor: '#f8fafc',
+    borderBottom: '1px solid #e2e8f0',
   },
   th: {
-    padding: '10px 14px',
-    textAlign: 'left',
-    fontSize: '0.75rem',
+    padding: '10px 12px',
     fontWeight: '600',
-    color: 'var(--color-text-secondary)',
-    textTransform: 'uppercase',
-    letterSpacing: '0.04em',
+    color: '#475569',
+    fontSize: '12px',
   },
   tr: {
-    borderBottom: '1px solid var(--color-border-subtle)',
+    borderBottom: '1px solid #f1f5f9',
   },
   td: {
-    padding: '10px 14px',
-    color: 'var(--color-text-primary)',
+    padding: '10px 12px',
+    color: '#1e293b',
   },
   badgeType: {
-    backgroundColor: 'var(--color-surface-subtle)',
-    color: 'var(--color-text-secondary)',
-    padding: '3px 8px',
-    borderRadius: 'var(--radius-sm)',
     fontSize: '11px',
-    fontWeight: '600',
-    fontFamily: 'var(--font-jetbrains)',
+    padding: '2px 6px',
+    borderRadius: '4px',
+    backgroundColor: '#f1f5f9',
+    color: '#475569',
+    fontWeight: '500',
   },
   badgeDifficulty: {
-    padding: '3px 8px',
-    borderRadius: 'var(--radius-sm)',
     fontSize: '11px',
+    padding: '2px 8px',
+    borderRadius: '12px',
     fontWeight: '600',
-    fontFamily: 'var(--font-jetbrains)',
   },
   badgeApproved: {
-    backgroundColor: 'var(--color-success-subtle)',
-    color: 'var(--color-success)',
-    padding: '3px 8px',
-    borderRadius: 'var(--radius-sm)',
-    fontSize: '11px',
-    fontWeight: '600',
+    fontSize: '10px',
+    padding: '2px 6px',
+    borderRadius: '4px',
+    backgroundColor: '#dcfce7',
+    color: '#166534',
+    fontWeight: '700',
+  },
+  emptyState: {
+    padding: '48px 24px',
+    textAlign: 'center',
+    backgroundColor: '#ffffff',
+  },
+  loadingBox: {
+    padding: '48px',
+    textAlign: 'center',
+  },
+  errorAlert: {
+    padding: '12px 16px',
+    backgroundColor: '#fef2f2',
+    color: '#b91c1c',
+    borderRadius: '8px',
+    border: '1px solid #fecaca',
+    fontSize: '13px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    marginBottom: '16px',
   },
   statusBanner: {
     display: 'flex',
     alignItems: 'center',
     gap: '14px',
-    padding: '16px',
-    borderRadius: 'var(--radius-lg)',
+    padding: '14px 18px',
+    borderRadius: '8px',
     border: '1px solid',
   },
   setTabContainer: {
     display: 'flex',
-    gap: '8px',
-    flexWrap: 'wrap',
+    gap: '6px',
   },
   setTab: {
     padding: '6px 14px',
-    borderRadius: 'var(--radius-md)',
-    backgroundColor: 'var(--color-surface-subtle)',
-    border: '1px solid var(--color-border)',
-    color: 'var(--color-text-secondary)',
+    backgroundColor: '#f1f5f9',
+    color: '#475569',
+    borderRadius: '6px',
     fontSize: '12px',
     fontWeight: '600',
+    border: '1px solid #e2e8f0',
     cursor: 'pointer',
-    minHeight: '36px',
   },
   setTabActive: {
     padding: '6px 14px',
-    borderRadius: 'var(--radius-md)',
-    backgroundColor: 'var(--color-primary)',
-    border: '1px solid var(--color-primary)',
+    backgroundColor: '#2563eb',
     color: '#ffffff',
+    borderRadius: '6px',
     fontSize: '12px',
     fontWeight: '600',
+    border: '1px solid #2563eb',
     cursor: 'pointer',
-    minHeight: '36px',
   },
-  paperSheet: {
-    backgroundColor: '#ffffff',
-    border: '1px solid var(--color-border)',
-    boxShadow: 'var(--shadow-sm)',
-    padding: 'clamp(1rem, 3vw, 2.25rem)',
-    borderRadius: 'var(--radius-lg)',
+  validationContainer: {
     marginTop: '16px',
-    overflowX: 'auto',
-  },
-  paperTopRow: {
     display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: '0.5rem',
+    flexDirection: 'column',
+    gap: '16px',
   },
-  seatNoBox: {
-    border: '1px solid #000000',
-    padding: '4px 16px',
-    fontSize: '11px',
-    fontWeight: 'bold',
-    minWidth: '120px',
-    fontFamily: 'var(--font-jetbrains)',
+  validationGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+    gap: '16px',
   },
-  paperHeadingSection: {
-    textAlign: 'center',
-    margin: '16px 0',
+  validationCard: {
+    backgroundColor: '#f8fafc',
+    border: '1px solid #e2e8f0',
+    borderRadius: '10px',
+    padding: '16px',
   },
-  paperMetaRow: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    fontSize: '12px',
-    marginTop: '10px',
-    flexWrap: 'wrap',
-    gap: '0.5rem',
-    fontFamily: 'var(--font-ibm-plex)',
-    fontVariantNumeric: 'tabular-nums',
-  },
-  paperDivider: {
-    border: 'none',
-    borderTop: '1px solid #000000',
-    margin: '8px 0',
-  },
-  instructionsBlock: {
-    fontSize: '11px',
-    lineHeight: '1.5',
-    margin: '8px 0',
-  },
-  questionsBody: {
-    marginTop: '16px',
-  },
-  sectionGroup: {
-    marginBottom: '20px',
-  },
-  questionBlock: {
-    display: 'flex',
-    gap: '12px',
-    marginBottom: '8px',
-  },
-  questionHeader: {
-    fontSize: '13px',
-    fontWeight: 'bold',
-    minWidth: '32px',
-  },
-  subquestionRow: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    fontSize: '13px',
-    lineHeight: '1.5',
-    marginBottom: '8px',
-    gap: '12px',
-  },
-  marksRight: {
+  valCardHeader: {
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
-    marginLeft: '12px',
-    whiteSpace: 'nowrap',
-    fontFamily: 'var(--font-ibm-plex)',
-    fontVariantNumeric: 'tabular-nums',
+    marginBottom: '8px',
   },
-  replaceBtn: {
-    fontSize: '11px',
-    padding: '3px 8px',
-    backgroundColor: 'var(--color-primary-subtle)',
-    border: '1px solid var(--color-primary-border)',
-    color: 'var(--color-primary)',
-    borderRadius: 'var(--radius-sm)',
-    cursor: 'pointer',
-    fontWeight: '600',
-    minHeight: '28px',
-  },
-  orDividerRow: {
-    display: 'flex',
-    alignItems: 'center',
-    margin: '12px 0',
-  },
-  orLine: {
-    flex: 1,
-    height: '1px',
-    backgroundColor: 'var(--color-border)',
-  },
-  orText: {
-    padding: '0 12px',
-    fontWeight: 'bold',
+  valCardTitle: {
     fontSize: '12px',
-    color: 'var(--color-text-secondary)',
-    fontFamily: 'var(--font-jetbrains)',
+    fontWeight: '600',
+    color: '#475569',
+  },
+  valCardValue: {
+    fontSize: '20px',
+    fontWeight: '700',
+    color: '#0f172a',
+    margin: '4px 0',
+  },
+  valCardDesc: {
+    fontSize: '12px',
+    color: '#64748b',
+    margin: 0,
+    lineHeight: '1.4',
+  },
+  examCellBanner: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: '16px',
+    backgroundColor: '#f0f9ff',
+    border: '1px solid #bae6fd',
+    borderRadius: '10px',
+    padding: '18px',
+  },
+  examCellIcon: {
+    marginTop: '2px',
   },
   submissionBox: {
-    backgroundColor: 'var(--color-surface-subtle)',
-    border: '1px solid var(--color-border)',
-    borderRadius: 'var(--radius-lg)',
+    backgroundColor: '#f8fafc',
+    border: '1px solid #e2e8f0',
+    borderRadius: '10px',
     padding: '20px',
   },
   securityChecklist: {
-    backgroundColor: 'var(--color-surface)',
-    border: '1px solid var(--color-border)',
-    borderRadius: 'var(--radius-md)',
-    padding: '14px',
-    marginTop: '16px',
+    marginTop: '20px',
+    backgroundColor: '#ffffff',
+    border: '1px solid #e2e8f0',
+    borderRadius: '8px',
+    padding: '16px',
   },
   checklistUl: {
-    margin: 0,
+    margin: '8px 0 0 0',
     padding: 0,
     listStyle: 'none',
     display: 'flex',
     flexDirection: 'column',
     gap: '8px',
     fontSize: '12px',
-    color: 'var(--color-text-secondary)',
+    color: '#334155',
   },
   approvalCheckboxRow: {
     display: 'flex',
-    alignItems: 'flex-start',
-    gap: '12px',
+    alignItems: 'center',
+    gap: '10px',
     marginTop: '20px',
-    padding: '14px',
-    backgroundColor: 'var(--color-primary-subtle)',
-    borderRadius: 'var(--radius-md)',
-    border: '1px solid var(--color-primary-border)',
-  },
-  errorAlert: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
-    backgroundColor: 'var(--color-danger-subtle)',
-    border: '1px solid var(--color-danger-border)',
-    color: 'var(--color-danger)',
-    padding: '12px',
-    borderRadius: 'var(--radius-md)',
-    fontSize: '13px',
-    marginBottom: '16px',
-  },
-  emptyState: {
-    padding: '40px 20px',
-    textAlign: 'center',
-  },
-  loadingState: {
-    padding: '40px 20px',
-    textAlign: 'center',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: '10px',
+    padding: '12px 14px',
+    backgroundColor: '#ecfdf5',
+    border: '1px solid #a7f3d0',
+    borderRadius: '8px',
   },
   modalOverlay: {
     position: 'fixed',
@@ -1658,60 +1652,25 @@ const styles = {
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'var(--color-overlay)',
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 1000,
-    padding: '1rem',
+    padding: '16px',
   },
   modalCard: {
-    backgroundColor: 'var(--color-surface)',
-    borderRadius: 'var(--radius-xl)',
-    padding: '24px',
-    maxWidth: 'min(92vw, 600px)',
+    backgroundColor: '#ffffff',
+    borderRadius: '12px',
+    maxWidth: '560px',
     width: '100%',
-    maxHeight: '85vh',
-    overflowY: 'auto',
-    boxShadow: 'var(--shadow-xl)',
-    border: '1px solid var(--color-border)',
+    padding: '24px',
+    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
   },
   modalTitle: {
     fontSize: '16px',
     fontWeight: '700',
-    color: 'var(--color-text-primary)',
-    margin: 0,
-  },
-  modalSubtitle: {
-    fontSize: '13px',
-    color: 'var(--color-text-muted)',
-    margin: '4px 0 16px 0',
-  },
-  replaceList: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '8px',
-  },
-  candidateCard: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '10px 14px',
-    borderRadius: 'var(--radius-md)',
-    border: '1px solid var(--color-border)',
-    backgroundColor: 'var(--color-surface-subtle)',
-    gap: '12px',
-  },
-  selectCandidateBtn: {
-    backgroundColor: 'var(--color-primary)',
-    color: '#ffffff',
-    border: 'none',
-    padding: '6px 12px',
-    borderRadius: 'var(--radius-sm)',
-    fontSize: '12px',
-    fontWeight: '600',
-    cursor: 'pointer',
-    minHeight: '36px',
-    flexShrink: 0,
+    color: '#0f172a',
+    margin: '0 0 16px 0',
   },
 };

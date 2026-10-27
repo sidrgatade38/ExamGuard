@@ -126,9 +126,14 @@ async function getPaperDetails(req, res, next) {
       requesterRole
     );
 
+    const safePaper = { ...paper };
+    if (requesterRole === 'TEACHER') {
+      delete safePaper.storage_path;
+    }
+
     return res.status(200).json({
       success: true,
-      data: paper,
+      data: safePaper,
     });
   } catch (err) {
     if (err.statusCode) {

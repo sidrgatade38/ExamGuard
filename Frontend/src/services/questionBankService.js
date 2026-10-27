@@ -16,8 +16,8 @@ const questionBankService = {
     return res.data;
   },
 
-  seedSampleQuestions: async () => {
-    const res = await api.post('/question-bank/seed-sample');
+  seedSampleQuestions: async (subject) => {
+    const res = await api.post('/question-bank/seed-sample', subject ? { subject } : {});
     return res.data;
   },
 };

@@ -138,12 +138,6 @@ export default function Login() {
             )}
           </button>
         </form>
-
-        <div style={styles.footer}>
-          <p style={styles.footerText}>
-            Protected by bcrypt password hashing &amp; signed JWT access tokens.
-          </p>
-        </div>
       </div>
     </div>
   );
@@ -298,17 +292,5 @@ const styles = {
   },
   spinner: {
     animation: 'spin 1s linear infinite',
-  },
-  footer: {
-    marginTop: '1.75rem',
-    textAlign: 'center',
-    borderTop: '1px solid var(--color-border)',
-    paddingTop: '1rem',
-  },
-  footerText: {
-    fontSize: '0.75rem',
-    color: 'var(--color-text-muted)',
-    margin: 0,
-    fontFamily: 'var(--font-jetbrains)',
   },
 };

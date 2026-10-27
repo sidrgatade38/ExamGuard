@@ -1,8 +1,13 @@
 import api from './api';
 
 const blueprintService = {
-  getDefaultSPOSBlueprint: async () => {
-    const res = await api.get('/exam-blueprints/default-spos');
+  getDefaultSPOSBlueprint: async (params = {}) => {
+    const res = await api.get('/exam-blueprints/default-spos', { params });
+    return res.data;
+  },
+
+  getStandardBlueprint: async (params = {}) => {
+    const res = await api.get('/exam-blueprints/default-spos', { params });
     return res.data;
   },
 

@@ -666,10 +666,10 @@ async function runTestSuite() {
     assert(res9.body.message.toLowerCase().includes('forbidden') || res9.body.message.toLowerCase().includes('own'), 'Message indicates unauthorized ownership');
 
     // -------------------------------------------------------------
-    // Scenario 10: Teacher cannot download another teacher's paper (403 Forbidden)
+    // Scenario 10: Teacher cannot download question papers (403 Forbidden - Exam Cell Security)
     // -------------------------------------------------------------
-    console.log('\n--- 10. Cross-Teacher Paper Download Forbidden ---');
-    // Teacher 2 attempts to generate download URL for Teacher 1's paper
+    console.log('\n--- 10. Teacher Paper Download Forbidden (Strict Exam Cell Security) ---');
+    // Teacher 2 attempts to download Teacher 1's paper
     const res10 = await sendJsonRequest(
       'GET',
       `/api/question-papers/${createdPaperId}/download`,
@@ -677,16 +677,16 @@ async function runTestSuite() {
     );
     assert(res10.status === 403, `Teacher 2 downloading Teacher 1 paper returns 403 (got ${res10.status})`);
 
-    // Authoring teacher (Teacher 1) CAN download their own paper (200 OK)
+    // Authoring teacher (Teacher 1) is ALSO strictly forbidden from downloading final question paper
     const res10Owner = await sendJsonRequest(
       'GET',
       `/api/question-papers/${createdPaperId}/download`,
       teacher1Token
     );
-    assert(res10Owner.status === 200, `Authoring Teacher 1 download returns 200 OK (got ${res10Owner.status})`);
+    assert(res10Owner.status === 403, `Authoring Teacher 1 download is strictly blocked with 403 Forbidden (got ${res10Owner.status})`);
     assert(
-      Boolean(res10Owner.body?.raw && res10Owner.body.raw.startsWith('%PDF-')),
-      'Decrypted PDF document stream returned to authorized owner'
+      !res10Owner.body?.raw || !res10Owner.body.raw.startsWith('%PDF-'),
+      'Plaintext PDF document is strictly withheld from authoring teacher'
     );
 
     // -------------------------------------------------------------

@@ -323,6 +323,9 @@ supabaseClient.from = function (tableName) {
                 digital_signatures: Array.from(inMemorySigs.values()).filter((s) => s.question_paper_id === p.id),
               }));
             return {
+              neq: () => ({
+                order: () => Promise.resolve({ data: papers, error: null }),
+              }),
               order: () => Promise.resolve({ data: papers, error: null }),
             };
           }
@@ -892,24 +895,32 @@ async function runSystemValidationSuite() {
     });
     assert(unassignedDownloadRes.statusCode === 403, 'Unassigned faculty blocked with 403 Forbidden on download');
 
-    // Assigned recipient downloading BEFORE delivery date blocked
+    // Assigned recipient downloading paper is blocked with 403 Forbidden under Exam Cell security policy
     const preDeliveryDownloadRes = await httpRequest({
       method: 'GET',
       path: `/api/question-papers/${createdPaperId}/download`,
       headers: { Authorization: `Bearer ${teacherRecipientToken}` },
     });
-    assert(preDeliveryDownloadRes.statusCode === 403, 'Assigned recipient downloading before delivery date receives 403 Forbidden');
-    assert(preDeliveryDownloadRes.body?.message?.includes('scheduled for delivery'), 'Rejection clearly explains delivery date requirement');
+    assert(preDeliveryDownloadRes.statusCode === 403, 'Assigned recipient downloading paper receives 403 Forbidden under Exam Cell policy');
+    assert(preDeliveryDownloadRes.body?.message?.toLowerCase().includes('forbidden') || preDeliveryDownloadRes.body?.message?.toLowerCase().includes('permitted'), 'Rejection clearly explains access prohibition');
 
-    // Authoring teacher is EXEMPT from delivery date gating and can download immediately
+    // Authoring teacher is strictly blocked from downloading final question paper under Exam Cell policy
     const authorDownloadRes = await httpRequest({
       method: 'GET',
       path: `/api/question-papers/${createdPaperId}/download`,
       headers: { Authorization: `Bearer ${teacherAuthorToken}` },
     });
-    assert(authorDownloadRes.statusCode === 200, 'Authoring teacher download succeeds immediately with 200 OK');
-    assert(authorDownloadRes.headers['content-type'] === 'application/pdf', 'Downloaded file is application/pdf');
-    assert(authorDownloadRes.rawBuffer.toString('utf8').includes('%PDF-1.4'), 'Decrypted content matches valid original PDF');
+    assert(authorDownloadRes.statusCode === 403, 'Authoring teacher download is strictly blocked with 403 under Exam Cell policy');
+
+    // Authorized Exam Coordinator download succeeds with 200 OK
+    const coordDownloadRes = await httpRequest({
+      method: 'GET',
+      path: `/api/question-papers/${createdPaperId}/download`,
+      headers: { Authorization: `Bearer ${coordinatorToken}` },
+    });
+    assert(coordDownloadRes.statusCode === 200, 'Authorized coordinator download succeeds with 200 OK');
+    assert(coordDownloadRes.headers['content-type'] === 'application/pdf', 'Downloaded file is application/pdf');
+    assert(coordDownloadRes.rawBuffer.toString('utf8').includes('%PDF-1.4'), 'Decrypted content matches valid original PDF');
 
     // -------------------------------------------------------------
     // Section 5: Verify-Before-Decrypt Pipeline & Tamper Defense
@@ -947,7 +958,7 @@ async function runSystemValidationSuite() {
     const tamperedDownloadRes = await httpRequest({
       method: 'GET',
       path: `/api/question-papers/${createdPaperId}/download`,
-      headers: { Authorization: `Bearer ${teacherAuthorToken}` },
+      headers: { Authorization: `Bearer ${coordinatorToken}` },
     });
     assert(tamperedDownloadRes.statusCode === 400, 'Download halts closed with 400 Bad Request on tamper');
     assert(!tamperedDownloadRes.rawText.includes('%PDF-1.4'), 'No plaintext PDF bytes leaked on tamper failure');

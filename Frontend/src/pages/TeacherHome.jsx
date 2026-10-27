@@ -830,28 +830,13 @@ export default function TeacherHome() {
                             <span>Details</span>
                           </button>
 
-                          <button
-                            onClick={() => handleDownload(paper.id, paper.file_name)}
-                            disabled={downloadingId === paper.id || verificationResults[paper.id]?.tamperDetected}
-                            style={{
-                              ...styles.downloadBtn,
-                              ...(verificationResults[paper.id]?.tamperDetected
-                                ? { backgroundColor: '#475569', opacity: 0.5, cursor: 'not-allowed' }
-                                : {}),
-                            }}
-                            title={
-                              verificationResults[paper.id]?.tamperDetected
-                                ? 'Integrity check failed: download blocked'
-                                : 'Download Decrypted PDF'
-                            }
+                          <span
+                            style={styles.cellSecuredBadge}
+                            title="Under strict Exam Cell policy, final examination papers can only be downloaded and decrypted by the authorized Exam Coordinator."
                           >
-                            {downloadingId === paper.id ? (
-                              <Loader2 size={15} style={{ animation: 'spin 1s linear infinite' }} />
-                            ) : (
-                              <Download size={15} />
-                            )}
-                            <span>Download</span>
-                          </button>
+                            <ShieldCheck size={13} color="#0284c7" />
+                            <span>Exam Cell Locked</span>
+                          </span>
 
                           {paper.status !== 'DELIVERED' && paper.status !== 'ARCHIVED' && paper.status !== 'DELETED' && (
                             <button
@@ -1660,46 +1645,17 @@ export default function TeacherHome() {
             </div>
 
             <div style={styles.modalFooter}>
-              {(() => {
-                const isDeliverable = selectedPaper.isDeliverable !== undefined ? selectedPaper.isDeliverable : true;
-                const isTampered = verificationResults[selectedPaper.id]?.tamperDetected;
-                const isDisabled = downloadingId === selectedPaper.id || isTampered || !isDeliverable;
-
-                return (
-                  <button
-                    onClick={() => handleDownload(selectedPaper.id, selectedPaper.file_name || selectedPaper.fileName)}
-                    disabled={isDisabled}
-                    style={{
-                      ...styles.modalDownloadBtn,
-                      ...(!isDeliverable
-                        ? { backgroundColor: '#334155', opacity: 0.5, cursor: 'not-allowed' }
-                        : isTampered
-                        ? { backgroundColor: '#475569', opacity: 0.5, cursor: 'not-allowed' }
-                        : {}),
-                    }}
-                    title={
-                      !isDeliverable
-                        ? `Delivery Gated: Access restricted until ${selectedPaper.scheduled_delivery_date || selectedPaper.scheduledDeliveryDate}`
-                        : isTampered
-                        ? 'Integrity check failed: download blocked'
-                        : 'Download Secure PDF'
-                    }
-                  >
-                    {downloadingId === selectedPaper.id ? (
-                      <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
-                    ) : (
-                      <Download size={16} />
-                    )}
-                    <span>
-                      {!isDeliverable
-                        ? `Delivery Gated • Unlocks ${selectedPaper.scheduled_delivery_date || selectedPaper.scheduledDeliveryDate}`
-                        : isTampered
-                        ? 'Verification Failed • Download Disabled'
-                        : 'Download Secure PDF'}
-                    </span>
-                  </button>
-                );
-              })()}
+              <div style={styles.modalSecurityNotice}>
+                <ShieldCheck size={20} color="#0284c7" />
+                <div>
+                  <div style={{ fontWeight: 600, color: '#0369a1', fontSize: '13px' }}>
+                    Exam Cell Confidentiality Enforced
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
+                    Final paper decryption and PDF download is restricted exclusively to the authorized Exam Coordinator upon scheduled delivery.
+                  </div>
+                </div>
+              </div>
 
               {/* Delete Button in Details Modal (Module 20) */}
               {selectedPaper.status !== 'DELIVERED' && selectedPaper.status !== 'ARCHIVED' && selectedPaper.status !== 'DELETED' && (
@@ -2468,6 +2424,30 @@ const styles = {
     fontWeight: '500',
     cursor: 'pointer',
     minHeight: '36px',
+  },
+  cellSecuredBadge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '0.35rem',
+    backgroundColor: 'var(--color-primary-subtle)',
+    color: 'var(--color-primary)',
+    border: '1px solid var(--color-primary-border)',
+    padding: '0.35rem 0.65rem',
+    borderRadius: 'var(--radius-sm)',
+    fontSize: '0.75rem',
+    fontWeight: '600',
+    minHeight: '36px',
+  },
+  modalSecurityNotice: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.75rem',
+    backgroundColor: '#f0f9ff',
+    border: '1px solid #bae6fd',
+    borderRadius: 'var(--radius-md)',
+    padding: '0.75rem 1rem',
+    flex: 1,
+    textAlign: 'left',
   },
   downloadBtn: {
     display: 'inline-flex',

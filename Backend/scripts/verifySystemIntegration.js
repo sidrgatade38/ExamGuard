@@ -778,27 +778,34 @@ async function runSystemIntegrationSuite() {
     assert(assignedPaper?.isDeliverable === false, 'isDeliverable evaluates to false when current date < scheduledDeliveryDate');
     assert(assignedPaper?.deliveryStatus === 'SCHEDULED', 'deliveryStatus reflects SCHEDULED when gated');
 
-    // Verify next-day delivery gating: Assigned recipient attempting to download gated paper returns 403 Forbidden
+    // Verify Exam Cell Security: Teachers attempting to download paper returns 403 Forbidden
     const gatedDownloadRes = await httpRequest({
       method: 'GET',
       path: `/api/question-papers/${createdPaperId}/download`,
       headers: { Authorization: `Bearer ${teacherRecipientToken}` },
     });
 
-    assert(gatedDownloadRes.statusCode === 403, 'Assigned recipient downloading before delivery date receives 403 Forbidden');
-    assert(gatedDownloadRes.body?.success === false, 'Gated download response contains success: false');
-    assert(gatedDownloadRes.body?.message?.includes('scheduled for delivery'), 'Gated response explains delivery date restriction clearly');
+    assert(gatedDownloadRes.statusCode === 403, 'Assigned recipient downloading paper receives 403 Forbidden under Exam Cell policy');
 
-    // Authoring teacher is exempt from delivery date gating and can download immediately
+    // Authoring teacher is also strictly blocked from downloading final question paper
     const authorDownloadRes = await httpRequest({
       method: 'GET',
       path: `/api/question-papers/${createdPaperId}/download`,
       headers: { Authorization: `Bearer ${teacherAuthorToken}` },
     });
 
-    assert(authorDownloadRes.statusCode === 200, 'Authoring teacher downloading paper returns 200 OK');
-    assert(authorDownloadRes.headers['content-type'] === 'application/pdf', 'Download returns application/pdf content type');
-    assert(authorDownloadRes.rawBuffer.toString('utf8').includes('%PDF-1.4'), 'Decrypted stream matches original PDF binary');
+    assert(authorDownloadRes.statusCode === 403, 'Authoring teacher downloading paper is strictly blocked with 403 under Exam Cell policy');
+
+    // Authorized Exam Coordinator downloads the final decrypted question paper
+    const coordDownloadRes = await httpRequest({
+      method: 'GET',
+      path: `/api/question-papers/${createdPaperId}/download`,
+      headers: { Authorization: `Bearer ${coordToken}` },
+    });
+
+    assert(coordDownloadRes.statusCode === 200, 'Authorized coordinator downloading paper returns 200 OK');
+    assert(coordDownloadRes.headers['content-type'] === 'application/pdf', 'Download returns application/pdf content type');
+    assert(coordDownloadRes.rawBuffer.toString('utf8').includes('%PDF-1.4'), 'Decrypted stream matches original PDF binary');
 
     // -------------------------------------------------------------
     // Section 4: Verify-Before-Decrypt Pipeline & Tamper Defense
@@ -839,7 +846,7 @@ async function runSystemIntegrationSuite() {
     const tamperedDownloadRes = await httpRequest({
       method: 'GET',
       path: `/api/question-papers/${createdPaperId}/download`,
-      headers: { Authorization: `Bearer ${teacherAuthorToken}` },
+      headers: { Authorization: `Bearer ${coordToken}` },
     });
 
     assert(tamperedDownloadRes.statusCode === 400, 'Tampered download halts with 400 Bad Request');

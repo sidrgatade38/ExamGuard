@@ -94,9 +94,17 @@ async function checkFeasibility(req, res, next) {
 }
 
 function getDefaultBlueprint(req, res) {
+  const { subject, course, semester, academicPattern, subjectCode } = req.query;
+  const data = blueprintService.getStandardCurriculumBlueprint({
+    subject,
+    course,
+    semester,
+    academicPattern,
+    subjectCode,
+  });
   return res.status(200).json({
     success: true,
-    data: blueprintService.DEFAULT_SPOS_BLUEPRINT,
+    data,
   });
 }
 

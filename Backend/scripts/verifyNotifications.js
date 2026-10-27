@@ -853,16 +853,13 @@ async function runTestSuite() {
       `Scenario 17: Assigned recipient details view blocked BEFORE delivery date (got ${resBeforeDetails.status})`
     );
 
-    // Authoring teacher can ALWAYS access their own paper anytime
-    const resAuthorDownload = await sendBinaryGetRequest(
+    // Authoring teacher is strictly blocked from downloading final question paper under Exam Cell policy
+    const resAuthorDownload = await sendJsonRequest(
+      'GET',
       `/api/question-papers/${submittedPaperId}/download`,
       authorToken
     );
-    assert(resAuthorDownload.status === 200, 'Authoring teacher can download own paper at any time');
-    assert(
-      resAuthorDownload.buffer.equals(SAMPLE_PLAINTEXT_PDF),
-      'Authoring teacher downloaded PDF matches original plaintext'
-    );
+    assert(resAuthorDownload.status === 403, 'Authoring teacher download is strictly blocked with 403 under Exam Cell policy');
 
     // Scenario 18: Delivery-date bypass attempt rejected
     const resBypassAttempt = await sendJsonRequest(
@@ -892,14 +889,14 @@ async function runTestSuite() {
     const storedAssignment = inMemoryAssignments.get(submittedPaperId);
     storedAssignment.scheduled_delivery_date = todayStr;
 
-    // Now assigned recipient attempts download ON delivery date
+    // Authorized Exam Coordinator attempts download ON delivery date
     const resOnDeliveryDownload = await sendBinaryGetRequest(
       `/api/question-papers/${submittedPaperId}/download`,
-      recipientToken
+      coordToken
     );
     assert(
       resOnDeliveryDownload.status === 200,
-      `Scenario 16: Assigned recipient can download ON delivery date (200 OK)`
+      `Scenario 16: Authorized coordinator can download ON delivery date (200 OK)`
     );
     assert(
       resOnDeliveryDownload.buffer.equals(SAMPLE_PLAINTEXT_PDF),
@@ -915,11 +912,11 @@ async function runTestSuite() {
 
     const resAfterDeliveryDownload = await sendBinaryGetRequest(
       `/api/question-papers/${submittedPaperId}/download`,
-      recipientToken
+      coordToken
     );
     assert(
       resAfterDeliveryDownload.status === 200,
-      `Scenario 17: Assigned recipient can download AFTER delivery date (200 OK)`
+      `Scenario 17: Authorized coordinator can download AFTER delivery date (200 OK)`
     );
     assert(
       resAfterDeliveryDownload.buffer.equals(SAMPLE_PLAINTEXT_PDF),
@@ -935,7 +932,7 @@ async function runTestSuite() {
     const resTamperedDownload = await sendJsonRequest(
       'GET',
       `/api/question-papers/${submittedPaperId}/download`,
-      recipientToken
+      coordToken
     );
     assert(
       resTamperedDownload.status === 400,
@@ -973,7 +970,7 @@ async function runTestSuite() {
     assert(resMalformedNotif.status === 400, 'Scenario 23: Malformed notification ID returns 400 Bad Request');
 
     // Non-existent Question Paper UUID
-    const resNonExistentPaper = await sendJsonRequest('GET', `/api/question-papers/${randomUuid}/download`, recipientToken);
+    const resNonExistentPaper = await sendJsonRequest('GET', `/api/question-papers/${randomUuid}/download`, coordToken);
     assert(resNonExistentPaper.status === 404, 'Scenario 21: Non-existent Question Paper UUID returns 404 Not Found');
 
     // Secret leakage audit on notification responses

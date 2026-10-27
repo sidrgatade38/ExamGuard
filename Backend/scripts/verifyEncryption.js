@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Comprehensive Automated Verification Test Suite for Module 6:
  * Question Paper Encryption & Secure Key Management
  * 
@@ -688,19 +688,19 @@ async function runTestSuite() {
     // -------------------------------------------------------------
     console.log('\n--- Authenticated Download & Ownership Decryption Tests ---');
 
-    // 20. Teacher ownership remains enforced (Author can download and decrypt)
+    // 20. Strict Exam Cell Security: Authoring teacher CANNOT download or decrypt final question paper
     const downloadOwnerRes = await sendDownloadRequest(
       `/api/question-papers/${paperId}/download`,
       teacher1Token
     );
-    assert(downloadOwnerRes.status === 200, `20. Authoring teacher download returns 200 OK (got ${downloadOwnerRes.status})`);
+    assert(downloadOwnerRes.status === 403, `20. Authoring teacher download strictly blocked with 403 Forbidden (got ${downloadOwnerRes.status})`);
     assert(
-      downloadOwnerRes.contentType.includes('application/pdf'),
-      `20b. Content-Type is application/pdf (got "${downloadOwnerRes.contentType}")`
+      !downloadOwnerRes.contentType.includes('application/pdf'),
+      `20b. Content-Type is not application/pdf (got "${downloadOwnerRes.contentType}")`
     );
     assert(
-      ORIGINAL_PDF_CONTENT.equals(downloadOwnerRes.buffer),
-      '20c. Decrypted downloaded buffer exactly matches original plaintext PDF!'
+      !downloadOwnerRes.buffer || !downloadOwnerRes.buffer.toString().startsWith('%PDF-'),
+      '20c. Plaintext PDF is strictly withheld from authoring teacher'
     );
 
     // 21. Teacher cannot download another teacher's paper
@@ -738,8 +738,8 @@ async function runTestSuite() {
       coordToken
     );
     assert(
-      downloadCoordRes.status === 403,
-      `23b. EXAM_COORDINATOR role downloading teacher paper returns 403 Forbidden (got ${downloadCoordRes.status})`
+      downloadCoordRes.status === 200,
+      `23b. Authorized EXAM_COORDINATOR role downloads decrypted question paper with 200 OK (got ${downloadCoordRes.status})`
     );
 
     // -------------------------------------------------------------

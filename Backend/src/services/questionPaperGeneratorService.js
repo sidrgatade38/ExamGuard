@@ -289,13 +289,13 @@ async function generateExamSets({ blueprintId, teacherId, role = 'TEACHER' }) {
   // skip PostgreSQL insert to prevent invalid UUID syntax error and persist directly to memory
   const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   if (!UUID_REGEX.test(blueprint.id)) {
-    return persistMemoryPaper(paperRecord, generatedSets);
+    return persistMemoryPaper(paperRecord, generatedSets, role);
   }
 
   try {
     const { error: pError } = await supabase.from('generated_exam_papers').insert([paperRecord]);
     if (pError && isTableMissingError(pError)) {
-      return persistMemoryPaper(paperRecord, generatedSets);
+      return persistMemoryPaper(paperRecord, generatedSets, role);
     }
     if (pError) throw pError;
 
@@ -313,15 +313,15 @@ async function generateExamSets({ blueprintId, teacherId, role = 'TEACHER' }) {
 
     const { error: sError } = await supabase.from('generated_exam_sets').insert(setRows);
     if (sError && isTableMissingError(sError)) {
-      return persistMemoryPaper(paperRecord, generatedSets);
+      return persistMemoryPaper(paperRecord, generatedSets, role);
     }
     if (sError) throw sError;
   } catch (err) {
     if (isTableMissingError(err)) {
-      return persistMemoryPaper(paperRecord, generatedSets);
+      return persistMemoryPaper(paperRecord, generatedSets, role);
     }
     console.error('[GeneratorService] DB persistence error:', err.message);
-    return persistMemoryPaper(paperRecord, generatedSets);
+    return persistMemoryPaper(paperRecord, generatedSets, role);
   }
 
   await auditLogService.logAuditEvent({
@@ -376,6 +376,7 @@ async function getGeneratedPaper(paperId, teacherId, role) {
           err.statusCode = 403;
           throw err;
         }
+        const rawSets = memoryGeneratedSets.get(paperId) || [];
         return {
           paper: memPaper,
           sets: memoryGeneratedSets.get(paperId) || [],

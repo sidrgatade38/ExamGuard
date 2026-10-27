@@ -115,11 +115,12 @@ async function updateQuestion(req, res, next) {
 async function seedQuestions(req, res, next) {
   try {
     const authorId = req.user?.userId;
-    const seeded = await questionBankService.seedSampleQuestions(authorId);
+    const subject = req.body?.subject || req.query?.subject || 'Systems Programming and Operating System';
+    const seeded = await questionBankService.seedSampleQuestions(authorId, subject);
 
     return res.status(201).json({
       success: true,
-      message: `Successfully seeded ${seeded.length} standard SPOS curriculum questions into Question Bank`,
+      message: `Successfully seeded ${seeded.length} standard curriculum questions for "${subject}" into Question Bank`,
       count: seeded.length,
       data: seeded,
     });

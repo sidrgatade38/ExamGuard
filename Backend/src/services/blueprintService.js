@@ -472,8 +472,86 @@ async function validateFeasibility(blueprintId, authorId, role) {
   };
 }
 
+function getStandardCurriculumBlueprint(params = {}) {
+  const subject = params.subject || 'Systems Programming and Operating System';
+  const course = params.course || 'T.E. (Computer Engineering)';
+  const semester = params.semester || 'Semester 5';
+  const academicPattern = params.academicPattern || '2019 Pattern';
+  const subjectCode = params.subjectCode || '310243';
+
+  return {
+    title: `End Semester Examination: ${subject}`,
+    subject,
+    course,
+    semester,
+    academicPattern,
+    subjectCode,
+    durationHours: 2.5,
+    totalMarks: 70,
+    instructions: [
+      'Answer Q1 or Q2, Q3 or Q4, Q5 or Q6, Q7 or Q8.',
+      'Neat diagrams must be drawn wherever necessary.',
+      'Figures to the right indicate full marks.',
+      'Assume suitable data if necessary.',
+    ],
+    numSets: 2,
+    maxOverlapPercentage: 40,
+    sections: [
+      {
+        groupOrder: 1,
+        groupLabel: 'Group 1 (Unit 1)',
+        primaryQuestionNumber: 1,
+        alternativeQuestionNumber: 2,
+        targetMarks: 17,
+        targetUnit: 1,
+        subquestionsConfig: [
+          { subPart: 'a', marks: 8, difficulty: 'MEDIUM', questionType: 'DESCRIPTIVE', unit: 1 },
+          { subPart: 'b', marks: 9, difficulty: 'HARD', questionType: 'DESCRIPTIVE', unit: 1 },
+        ],
+      },
+      {
+        groupOrder: 2,
+        groupLabel: 'Group 2 (Unit 2)',
+        primaryQuestionNumber: 3,
+        alternativeQuestionNumber: 4,
+        targetMarks: 17,
+        targetUnit: 2,
+        subquestionsConfig: [
+          { subPart: 'a', marks: 8, difficulty: 'EASY', questionType: 'DESCRIPTIVE', unit: 2 },
+          { subPart: 'b', marks: 9, difficulty: 'MEDIUM', questionType: 'DESCRIPTIVE', unit: 2 },
+        ],
+      },
+      {
+        groupOrder: 3,
+        groupLabel: 'Group 3 (Unit 3)',
+        primaryQuestionNumber: 5,
+        alternativeQuestionNumber: 6,
+        targetMarks: 18,
+        targetUnit: 3,
+        subquestionsConfig: [
+          { subPart: 'a', marks: 9, difficulty: 'MEDIUM', questionType: 'DESCRIPTIVE', unit: 3 },
+          { subPart: 'b', marks: 9, difficulty: 'HARD', questionType: 'DESCRIPTIVE', unit: 3 },
+        ],
+      },
+      {
+        groupOrder: 4,
+        groupLabel: 'Group 4 (Unit 4)',
+        primaryQuestionNumber: 7,
+        alternativeQuestionNumber: 8,
+        targetMarks: 18,
+        targetUnit: 4,
+        subquestionsConfig: [
+          { subPart: 'a', marks: 9, difficulty: 'MEDIUM', questionType: 'DESCRIPTIVE', unit: 4 },
+          { subPart: 'b', marks: 9, difficulty: 'HARD', questionType: 'DESCRIPTIVE', unit: 4 },
+        ],
+      },
+    ],
+  };
+}
+
 module.exports = {
   DEFAULT_SPOS_BLUEPRINT,
+  getStandardCurriculumBlueprint,
   validateBlueprintStructure,
   createBlueprint,
   getBlueprintById,

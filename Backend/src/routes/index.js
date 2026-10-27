@@ -11,6 +11,7 @@ const adminRoutes = require('./adminRoutes');
 const questionBankRoutes = require('./questionBankRoutes');
 const blueprintRoutes = require('./blueprintRoutes');
 const questionPaperGeneratorRoutes = require('./questionPaperGeneratorRoutes');
+const academicMasterRoutes = require('./academicMasterRoutes');
 
 const router = express.Router();
 
@@ -27,5 +28,6 @@ router.use('/admin', adminRoutes);
 router.use('/question-bank', questionBankRoutes);
 router.use('/exam-blueprints', blueprintRoutes);
 router.use('/question-paper-generator', questionPaperGeneratorRoutes);
+router.use('/academic', academicMasterRoutes);
 
 module.exports = router;

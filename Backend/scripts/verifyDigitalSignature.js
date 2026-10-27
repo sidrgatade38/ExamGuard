@@ -644,20 +644,30 @@ async function runTests() {
     // ==============================================================
     console.log('\n--- Download Flow: Verify-Before-Decrypt & Tamper Prevention ---');
 
-    // 17. Download verifies signature before decryption (Valid case)
-    const validDownloadRes = await makeRequest(
+    // 17a. Teacher download is strictly blocked under Exam Cell policy (403)
+    const teacherDownloadRes = await makeRequest(
       'GET',
       `/api/question-papers/${createdPaperId}/download`,
       {
         Authorization: `Bearer ${teacher1Token}`,
       }
     );
+    assert(teacherDownloadRes.status === 403, `17a. Authoring teacher download strictly blocked with 403 under Exam Cell policy (got ${teacherDownloadRes.status})`);
 
-    assert(validDownloadRes.status === 200, `17. Authoring teacher download succeeds with 200 OK (got ${validDownloadRes.status})`);
-    assert(validDownloadRes.headers['content-type'] === 'application/pdf', '17b. Content-Type is application/pdf');
+    // 17b. Coordinator download verifies signature before decryption (Valid case)
+    const validDownloadRes = await makeRequest(
+      'GET',
+      `/api/question-papers/${createdPaperId}/download`,
+      {
+        Authorization: `Bearer ${coordToken}`,
+      }
+    );
+
+    assert(validDownloadRes.status === 200, `17b. Authorized coordinator download succeeds with 200 OK (got ${validDownloadRes.status})`);
+    assert(validDownloadRes.headers['content-type'] === 'application/pdf', '17c. Content-Type is application/pdf');
     assert(
       validDownloadRes.rawBody.toString('utf8') === samplePdfBuffer.toString('utf8'),
-      '17c. Decrypted buffer matches original PDF after passing signature verification'
+      '17d. Decrypted buffer matches original PDF after passing signature verification'
     );
 
     // 18. Tampered ciphertext in storage prevents PDF delivery (400 rejection)
@@ -666,7 +676,7 @@ async function runTests() {
       'GET',
       `/api/question-papers/${createdPaperId}/download`,
       {
-        Authorization: `Bearer ${teacher1Token}`,
+        Authorization: `Bearer ${coordToken}`,
       }
     );
     simulateTamperedStorageCiphertext = false;
@@ -688,7 +698,7 @@ async function runTests() {
       'GET',
       `/api/question-papers/${createdPaperId}/download`,
       {
-        Authorization: `Bearer ${teacher1Token}`,
+        Authorization: `Bearer ${coordToken}`,
       }
     );
     storedSigRecord.signature = realSig; // restore

@@ -729,13 +729,13 @@ async function runVerificationDecryptionTestSuite() {
     assert(coordVerifyQP.body?.data?.verified === true, 'Coordinator verify reports verified: true');
     assert(coordVerifyQP.body?.data?.tamperDetected === false, 'Coordinator verify reports tamperDetected: false');
 
-    // Author teacher downloads decrypted Question Paper via API
+    // Author teacher downloading Question Paper is strictly blocked with 403 under Exam Cell policy
     const teacherDownloadQP = await makeRequest({
       path: `/api/question-papers/${PAPER_ID}/download`,
       headers: { Authorization: `Bearer ${authorToken}` },
     });
-    assert(teacherDownloadQP.statusCode === 200, 'Author teacher downloads decrypted Question Paper (200 OK)');
-    assert(teacherDownloadQP.rawBuffer.equals(QP_PLAINTEXT_PDF), 'Teacher downloaded PDF matches original plaintext byte-for-byte');
+    assert(teacherDownloadQP.statusCode === 403, 'Author teacher downloading Question Paper is strictly blocked with 403 under Exam Cell policy');
+    assert(!teacherDownloadQP.rawBuffer.includes(QP_PLAINTEXT_PDF), 'Teacher download strictly does NOT receive plaintext PDF bytes');
 
     // Coordinator downloads decrypted Question Paper via API
     const coordDownloadQP = await makeRequest({
@@ -787,7 +787,7 @@ async function runVerificationDecryptionTestSuite() {
 
     const tamperedDownloadRes = await makeRequest({
       path: `/api/question-papers/${PAPER_ID}/download`,
-      headers: { Authorization: `Bearer ${authorToken}` },
+      headers: { Authorization: `Bearer ${assignedCoordToken}` },
     });
     assert(tamperedDownloadRes.statusCode === 400, 'Tampered Question Paper download returns 400 Bad Request');
     assert(!tamperedDownloadRes.rawBuffer.includes(QP_PLAINTEXT_PDF), 'Tampered Question Paper API returns NO plaintext');

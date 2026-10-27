@@ -260,6 +260,177 @@ const SAMPLE_SPOS_QUESTIONS = [
   },
 ];
 
+// Standard curriculum question bank seed for Database Management Systems (310241)
+const SAMPLE_DBMS_QUESTIONS = [
+  // Unit 1: ER Modeling and Relational Database Design
+  {
+    unit_number: 1,
+    unit_title: 'ER Modeling and Relational Database Design',
+    topic: 'ER Modeling',
+    question_text: 'Explain ER Modeling concepts: Entity, Attributes, Relationships, and Extended ER features with a University schema.',
+    question_type: 'DESCRIPTIVE',
+    marks: 8,
+    difficulty: 'MEDIUM',
+    answer_scheme: 'Entities, weak entities, generalization, specialization, aggregation, ER-to-relational mapping.',
+  },
+  {
+    unit_number: 1,
+    unit_title: 'ER Modeling and Relational Database Design',
+    topic: 'Relational Integrity',
+    question_text: 'What are integrity constraints in relational databases? Explain Domain, Key, Entity, and Referential Integrity with SQL examples.',
+    question_type: 'DESCRIPTIVE',
+    marks: 9,
+    difficulty: 'HARD',
+    answer_scheme: 'Primary key, foreign key, ON DELETE CASCADE, CHECK constraints, schema validation.',
+  },
+  {
+    unit_number: 1,
+    unit_title: 'ER Modeling and Relational Database Design',
+    topic: 'Relational Algebra',
+    question_text: 'Explain fundamental operations in Relational Algebra: Select, Project, Union, Set Difference, Cartesian Product, and Rename with examples.',
+    question_type: 'DESCRIPTIVE',
+    marks: 8,
+    difficulty: 'EASY',
+    answer_scheme: 'Syntax, mathematical formulation, relational algebra expressions on Employee-Department tables.',
+  },
+  {
+    unit_number: 1,
+    unit_title: 'ER Modeling and Relational Database Design',
+    topic: 'Join Operations',
+    question_text: 'Compare Theta Join, Equi Join, Natural Join, and Outer Joins (Left, Right, Full) with queries and visual Venn diagrams.',
+    question_type: 'DESCRIPTIVE',
+    marks: 9,
+    difficulty: 'HARD',
+    answer_scheme: 'Inner vs Outer join semantics, NULL handling, query plans.',
+  },
+
+  // Unit 2: SQL, Relational Algebra, and Normalization
+  {
+    unit_number: 2,
+    unit_title: 'SQL, Relational Algebra, and Normalization',
+    topic: 'Functional Dependency',
+    question_text: 'What is Functional Dependency? Explain Armstrong\'s Axioms and attribute closure computation with an example relation.',
+    question_type: 'DESCRIPTIVE',
+    marks: 8,
+    difficulty: 'MEDIUM',
+    answer_scheme: 'Reflexivity, Augmentation, Transitivity, attribute closure algorithm X+.',
+  },
+  {
+    unit_number: 2,
+    unit_title: 'SQL, Relational Algebra, and Normalization',
+    topic: 'Normalization 1NF to BCNF',
+    question_text: 'Explain Normalization from 1NF to BCNF with a real-world unnormalized student enrollment relation.',
+    question_type: 'DESCRIPTIVE',
+    marks: 9,
+    difficulty: 'HARD',
+    answer_scheme: 'Anomalies in unnormalized relations, 1NF atomic values, 2NF full dependency, 3NF transitive dependency, BCNF superkey condition.',
+  },
+  {
+    unit_number: 2,
+    unit_title: 'SQL, Relational Algebra, and Normalization',
+    topic: 'Lossless Decomposition',
+    question_text: 'Explain the conditions for Lossless Join Decomposition and Dependency Preservation with a step-by-step example.',
+    question_type: 'DESCRIPTIVE',
+    marks: 8,
+    difficulty: 'EASY',
+    answer_scheme: 'R1 ∩ R2 -> R1 or R2, intersection is superkey, dependency preservation testing.',
+  },
+  {
+    unit_number: 2,
+    unit_title: 'SQL, Relational Algebra, and Normalization',
+    topic: 'Multivalued Dependencies & 4NF',
+    question_text: 'What is Multivalued Dependency (MVD)? Explain 4th Normal Form (4NF) with an example relation violating 4NF.',
+    question_type: 'DESCRIPTIVE',
+    marks: 9,
+    difficulty: 'HARD',
+    answer_scheme: 'Definition of alpha ->-> beta, trivial MVD, 4NF definition, decomposition into 4NF.',
+  },
+
+  // Unit 3: Transaction Processing, Concurrency, and ACID
+  {
+    unit_number: 3,
+    unit_title: 'Transaction Processing, Concurrency, and ACID',
+    topic: 'ACID Properties',
+    question_text: 'Explain ACID properties of transactions in detail and show how the DBMS ensures Atomicity and Durability using Write-Ahead Logging (WAL).',
+    question_type: 'DESCRIPTIVE',
+    marks: 9,
+    difficulty: 'MEDIUM',
+    answer_scheme: 'Atomicity, Consistency, Isolation, Durability, recovery manager, commit protocol.',
+  },
+  {
+    unit_number: 3,
+    unit_title: 'Transaction Processing, Concurrency, and ACID',
+    topic: 'Serializability',
+    question_text: 'What is Serializability? Explain Conflict Serializability and precedence graph (cycle detection) testing with two concurrent schedules.',
+    question_type: 'DESCRIPTIVE',
+    marks: 9,
+    difficulty: 'HARD',
+    answer_scheme: 'Conflicting instructions (read-write, write-write), precedence graph construction, cycle detection theorem.',
+  },
+  {
+    unit_number: 3,
+    unit_title: 'Transaction Processing, Concurrency, and ACID',
+    topic: 'Two-Phase Locking (2PL)',
+    question_text: 'Explain Two-Phase Locking (2PL) protocol: Growing phase, Shrinking phase, Strict 2PL, and Rigorous 2PL with lock conversion.',
+    question_type: 'DESCRIPTIVE',
+    marks: 9,
+    difficulty: 'MEDIUM',
+    answer_scheme: 'Shared vs Exclusive locks, phase transitions, cascading rollback prevention in Strict 2PL.',
+  },
+  {
+    unit_number: 3,
+    unit_title: 'Transaction Processing, Concurrency, and ACID',
+    topic: 'Deadlock Handling',
+    question_text: 'Explain Deadlock detection, prevention (Wait-Die and Wound-Wait schemes), and recovery in database transaction management.',
+    question_type: 'DESCRIPTIVE',
+    marks: 9,
+    difficulty: 'HARD',
+    answer_scheme: 'Wait-for graph, timestamp-based deadlock prevention, victim selection, rollback.',
+  },
+
+  // Unit 4: Query Processing, Indexing, and NoSQL
+  {
+    unit_number: 4,
+    unit_title: 'Query Processing, Indexing, and NoSQL',
+    topic: 'B+ Tree Indexing',
+    question_text: 'Explain structure and properties of B+ Tree Index. Perform step-by-step insertion of keys into a B+ tree of order 4.',
+    question_type: 'DESCRIPTIVE',
+    marks: 9,
+    difficulty: 'HARD',
+    answer_scheme: 'Leaf vs non-leaf node layout, linked leaf pointers, split algorithms, search complexity O(log N).',
+  },
+  {
+    unit_number: 4,
+    unit_title: 'Query Processing, Indexing, and NoSQL',
+    topic: 'Query Optimization',
+    question_text: 'Explain the phases of Query Processing: Parsing, Translation, Optimization (Cost-based & Heuristic), and Evaluation.',
+    question_type: 'DESCRIPTIVE',
+    marks: 9,
+    difficulty: 'MEDIUM',
+    answer_scheme: 'Relational algebra tree, equivalence rules, push selection down, cost estimation formulas.',
+  },
+  {
+    unit_number: 4,
+    unit_title: 'Query Processing, Indexing, and NoSQL',
+    topic: 'Hashing Techniques',
+    question_text: 'Compare Static Hashing and Dynamic Hashing (Extendible Hashing). Explain directory and bucket splitting in Extendible Hashing.',
+    question_type: 'DESCRIPTIVE',
+    marks: 9,
+    difficulty: 'MEDIUM',
+    answer_scheme: 'Global depth, local depth, directory doubling, overflow handling.',
+  },
+  {
+    unit_number: 4,
+    unit_title: 'Query Processing, Indexing, and NoSQL',
+    topic: 'CAP Theorem & NoSQL',
+    question_text: 'Explain CAP Theorem (Consistency, Availability, Partition Tolerance) and BASE properties. Compare SQL vs Document, Key-Value, and Columnar NoSQL stores.',
+    question_type: 'DESCRIPTIVE',
+    marks: 9,
+    difficulty: 'HARD',
+    answer_scheme: 'Brewer\'s CAP theorem trade-offs, network partition reality, eventual consistency, schema-less advantages.',
+  },
+];
+
 // Fallback in-memory cache if database migration has not been run yet
 const memoryQuestionBank = new Map();
 
@@ -579,15 +750,19 @@ async function updateQuestion(id, updates, authorId, role) {
 }
 
 /**
- * Seeds sample university curriculum questions (SPOS 2019 Pattern)
+ * Seeds sample university curriculum questions
  * for rapid testing and demonstration.
  */
-async function seedSampleQuestions(authorId) {
+async function seedSampleQuestions(authorId, subject = 'Systems Programming and Operating System') {
+  const isDBMS = subject.toLowerCase().includes('database') || subject.toLowerCase().includes('dbms');
+  const sourceQuestions = isDBMS ? SAMPLE_DBMS_QUESTIONS : SAMPLE_SPOS_QUESTIONS;
+  const targetSubject = isDBMS ? 'Database Management Systems' : 'Systems Programming and Operating System';
+
   const seeded = [];
-  for (const q of SAMPLE_SPOS_QUESTIONS) {
+  for (const q of sourceQuestions) {
     const created = await createQuestion({
       authorId,
-      subject: 'Systems Programming and Operating System',
+      subject: targetSubject,
       course: 'T.E. (Computer Engineering)',
       semester: 'Semester 5',
       academicPattern: '2019 Pattern',
@@ -611,7 +786,7 @@ async function seedSampleQuestions(authorId) {
     action: 'QUESTION_PAPER_CREATED',
     resourceType: 'QUESTION_BANK',
     outcome: 'SUCCESS',
-    summary: `Seeded ${seeded.length} standard SPOS curriculum questions into Question Bank.`,
+    summary: `Seeded ${seeded.length} standard curriculum questions for "${targetSubject}" into Question Bank.`,
   });
 
   return seeded;
@@ -624,4 +799,5 @@ module.exports = {
   seedSampleQuestions,
   normalizeQuestion,
   SAMPLE_SPOS_QUESTIONS,
+  SAMPLE_DBMS_QUESTIONS,
 };

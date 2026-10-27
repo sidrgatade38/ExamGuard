@@ -731,25 +731,31 @@ async function runTests() {
     // -------------------------------------------------------------
     console.log('\n[Group 6: Authenticated Download, Verify-Before-Decrypt & Tamper Prevention]');
 
-    // Authoring teacher download: Decrypts only after successful signature & integrity verification
-    const downloadRes = await makeRequest('GET', `/api/question-papers/${createdPaperId}/download`, null, {
+    // Authoring teacher download is blocked under Exam Cell strict security policy (403 Forbidden)
+    const teacherDownloadRes = await makeRequest('GET', `/api/question-papers/${createdPaperId}/download`, null, {
       Authorization: `Bearer ${teacher1Token}`,
     });
+    assert(teacherDownloadRes.status === 403, '22a. Authoring teacher download blocked under Exam Cell policy (403 Forbidden)', `Status: ${teacherDownloadRes.status}`);
 
-    assert(downloadRes.status === 200, '22a. Authoring teacher download succeeds (200 OK)', `Status: ${downloadRes.status}`);
-    assert(downloadRes.headers['content-type'] === 'application/pdf', '22b. Content-Type is application/pdf');
-    assert(downloadRes.buffer.equals(samplePdfBuffer), '22c. Decrypted buffer exactly matches original PDF');
+    // Authorized Exam Coordinator download: Decrypts only after successful signature & integrity verification
+    const downloadRes = await makeRequest('GET', `/api/question-papers/${createdPaperId}/download`, null, {
+      Authorization: `Bearer ${coordToken}`,
+    });
+
+    assert(downloadRes.status === 200, '22b. Authorized coordinator download succeeds (200 OK)', `Status: ${downloadRes.status}`);
+    assert(downloadRes.headers['content-type'] === 'application/pdf', '22c. Content-Type is application/pdf');
+    assert(downloadRes.buffer.equals(samplePdfBuffer), '22d. Decrypted buffer exactly matches original PDF');
 
     // Download URL endpoint: generates short-lived signed URL
     const urlRes = await makeRequest('GET', `/api/question-papers/${createdPaperId}/download`, null, {
-      Authorization: `Bearer ${teacher1Token}`,
+      Authorization: `Bearer ${coordToken}`,
     });
-    assert(urlRes.status === 200, '23. Download request authorized');
+    assert(urlRes.status === 200, '23. Coordinator download request authorized');
 
     // Negative: Ciphertext tampering triggers Verify-Before-Decrypt failure
     simulateTamperedStorageCiphertext = true;
     const tamperedRes = await makeRequest('GET', `/api/question-papers/${createdPaperId}/download`, null, {
-      Authorization: `Bearer ${teacher1Token}`,
+      Authorization: `Bearer ${coordToken}`,
     });
     assert(tamperedRes.status === 400, '24a. Tampered ciphertext strictly rejected with 400 Bad Request', `Status: ${tamperedRes.status}`);
     assert(tamperedRes.data?.message?.toLowerCase().includes('integrity') || tamperedRes.data?.message?.toLowerCase().includes('signature'), '24b. Error message specifies integrity verification failure');
@@ -763,7 +769,7 @@ async function runTests() {
     storedKeyRecord.auth_tag = corruptedTagBuffer.toString('base64');
 
     const tagTamperedRes = await makeRequest('GET', `/api/question-papers/${createdPaperId}/download`, null, {
-      Authorization: `Bearer ${teacher1Token}`,
+      Authorization: `Bearer ${coordToken}`,
     });
     assert(tagTamperedRes.status === 400, '25. Corrupted auth tag strictly fails AES-GCM decryption with 400 Bad Request', `Status: ${tagTamperedRes.status}`);
     storedKeyRecord.auth_tag = originalAuthTag; // Restore
@@ -772,7 +778,7 @@ async function runTests() {
     const originalEncryptedAesKey = storedKeyRecord.encrypted_aes_key;
     storedKeyRecord.encrypted_aes_key = 'corrupted_invalid_base64_wrapped_key==';
     const keyTamperedRes = await makeRequest('GET', `/api/question-papers/${createdPaperId}/download`, null, {
-      Authorization: `Bearer ${teacher1Token}`,
+      Authorization: `Bearer ${coordToken}`,
     });
     assert(keyTamperedRes.status === 400, '26. Corrupted wrapped AES key fails closed with 400 Bad Request', `Status: ${keyTamperedRes.status}`);
     storedKeyRecord.encrypted_aes_key = originalEncryptedAesKey; // Restore
@@ -798,11 +804,8 @@ async function runTests() {
     });
     assert(adminRes.status === 403, '29. ADMIN role cannot download question paper (403 Forbidden)', `Status: ${adminRes.status}`);
 
-    // EXAM_COORDINATOR role attempting download
-    const coordRes = await makeRequest('GET', `/api/question-papers/${createdPaperId}/download`, null, {
-      Authorization: `Bearer ${coordToken}`,
-    });
-    assert(coordRes.status === 403, '30. EXAM_COORDINATOR role cannot download question paper (403 Forbidden)', `Status: ${coordRes.status}`);
+    // Confirm teacher cannot download even own paper
+    assert(teacherDownloadRes.status === 403, '30. Teacher role strictly blocked from downloading final question paper under Exam Cell policy');
 
     // Confirm no standalone key retrieval API endpoint exists
     const keyEndpointRes = await makeRequest('GET', `/api/question-papers/${createdPaperId}/key`, null, {

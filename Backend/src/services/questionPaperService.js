@@ -422,7 +422,6 @@ async function getMyQuestionPapers(teacherId) {
       exam_date,
       teacher_id,
       file_name,
-      storage_path,
       file_size,
       mime_type,
       status,
@@ -486,7 +485,6 @@ async function getQuestionPaperById(paperId, requesterId, requesterRole) {
       exam_date,
       teacher_id,
       file_name,
-      storage_path,
       file_size,
       mime_type,
       status,
@@ -536,40 +534,15 @@ async function getQuestionPaperById(paperId, requesterId, requesterRole) {
   }
 
   // Ownership & Authorization verification (Module 4, 5 & 12)
-  if (requesterRole !== 'TEACHER') {
-    const forbiddenErr = new Error('Access forbidden. You do not own this question paper.');
-    forbiddenErr.statusCode = 403;
-    throw forbiddenErr;
-  }
+  if (requesterRole === 'TEACHER') {
+    const isAuthor = paper.teacher_id === requesterId;
+    const assignments = Array.isArray(paper.question_paper_assignments)
+      ? paper.question_paper_assignments
+      : (paper.question_paper_assignments ? [paper.question_paper_assignments] : []);
+    const assignment = assignments.find((a) => a.assigned_to_user_id === requesterId);
+    const isAssigned = !!assignment;
 
-  const isAuthor = paper.teacher_id === requesterId;
-  const assignments = Array.isArray(paper.question_paper_assignments)
-    ? paper.question_paper_assignments
-    : (paper.question_paper_assignments ? [paper.question_paper_assignments] : []);
-  const assignment = assignments.find((a) => a.assigned_to_user_id === requesterId);
-  const isAssigned = !!assignment;
-
-  if (!isAuthor && !isAssigned) {
-    await auditLogService.logAuditEvent({
-      userId: requesterId,
-      role: requesterRole,
-      action: 'UNAUTHORIZED_ACCESS',
-      resourceType: 'QUESTION_PAPER',
-      resourceId: paperId,
-      outcome: 'DENIED',
-      summary: `Unauthorized attempt to access question paper ${paperId}`,
-      metadata: { requesterId, paperId },
-    });
-    const forbiddenErr = new Error('Access forbidden. You do not own this question paper.');
-    forbiddenErr.statusCode = 403;
-    throw forbiddenErr;
-  }
-
-  // Delivery date gating for assigned faculty (Module 12)
-  if (!isAuthor && isAssigned) {
-    const today = new Date().toISOString().split('T')[0];
-    const deliveryDate = assignment.scheduled_delivery_date || paper.scheduled_delivery_date;
-    if (deliveryDate && today < deliveryDate) {
+    if (!isAuthor && !isAssigned) {
       await auditLogService.logAuditEvent({
         userId: requesterId,
         role: requesterRole,
@@ -577,13 +550,38 @@ async function getQuestionPaperById(paperId, requesterId, requesterRole) {
         resourceType: 'QUESTION_PAPER',
         resourceId: paperId,
         outcome: 'DENIED',
-        summary: `Access blocked before delivery date (${deliveryDate}) for question paper ${paperId}`,
-        metadata: { scheduledDeliveryDate: deliveryDate, paperId },
+        summary: `Unauthorized attempt to access question paper ${paperId}`,
+        metadata: { requesterId, paperId },
       });
-      const deliveryErr = new Error(`Access forbidden. Question paper is scheduled for delivery on ${deliveryDate} and is not accessible yet.`);
-      deliveryErr.statusCode = 403;
-      throw deliveryErr;
+      const forbiddenErr = new Error('Access forbidden. You do not own this question paper.');
+      forbiddenErr.statusCode = 403;
+      throw forbiddenErr;
     }
+
+    // Delivery date gating for assigned faculty (Module 12)
+    if (!isAuthor && isAssigned) {
+      const today = new Date().toISOString().split('T')[0];
+      const deliveryDate = assignment.scheduled_delivery_date || paper.scheduled_delivery_date;
+      if (deliveryDate && today < deliveryDate) {
+        await auditLogService.logAuditEvent({
+          userId: requesterId,
+          role: requesterRole,
+          action: 'UNAUTHORIZED_ACCESS',
+          resourceType: 'QUESTION_PAPER',
+          resourceId: paperId,
+          outcome: 'DENIED',
+          summary: `Access blocked before delivery date (${deliveryDate}) for question paper ${paperId}`,
+          metadata: { scheduledDeliveryDate: deliveryDate, paperId },
+        });
+        const deliveryErr = new Error(`Access forbidden. Question paper is scheduled for delivery on ${deliveryDate} and is not accessible yet.`);
+        deliveryErr.statusCode = 403;
+        throw deliveryErr;
+      }
+    }
+  } else if (requesterRole !== 'ADMIN' && requesterRole !== 'EXAM_COORDINATOR') {
+    const forbiddenErr = new Error('Access forbidden. You do not own this question paper.');
+    forbiddenErr.statusCode = 403;
+    throw forbiddenErr;
   }
 
   return paper;
@@ -594,6 +592,11 @@ async function getQuestionPaperById(paperId, requesterId, requesterRole) {
  * Enforces ownership check before issuing download access.
  */
 async function getQuestionPaperDownloadUrl(paperId, requesterId, requesterRole) {
+  if (requesterRole === 'TEACHER') {
+    const forbiddenErr = new Error('Access forbidden: Teachers cannot request question paper download links.');
+    forbiddenErr.statusCode = 403;
+    throw forbiddenErr;
+  }
   const paper = await getQuestionPaperById(paperId, requesterId, requesterRole);
 
   // Storage path security check (Module 8): prevent directory traversal or foreign object access
@@ -636,7 +639,26 @@ async function getQuestionPaperDownloadUrl(paperId, requesterId, requesterRole) 
  * @returns {Promise<{ decryptedBuffer: Buffer, fileName: string, mimeType: string }>}
  */
 async function downloadAndDecryptQuestionPaper(paperId, requesterId, requesterRole) {
-  // 1. Verify paper exists and requester is authorized authoring TEACHER
+  // Strict Exam Cell Security: Teachers must NEVER download or view final examination question papers
+  if (requesterRole === 'TEACHER') {
+    await auditLogService.logAuditEvent({
+      userId: requesterId,
+      role: requesterRole,
+      action: 'UNAUTHORIZED_ACCESS',
+      resourceType: 'QUESTION_PAPER',
+      resourceId: paperId,
+      outcome: 'DENIED',
+      summary: `Teacher attempt to download final examination paper ${paperId} was blocked by strict Exam Cell policy.`,
+      metadata: { requesterId, paperId },
+    });
+    const forbiddenErr = new Error(
+      'Access forbidden: Teachers are strictly not permitted to download or view final examination question papers. Final paper decryption and download is exclusively reserved for authorized Exam Coordinators.'
+    );
+    forbiddenErr.statusCode = 403;
+    throw forbiddenErr;
+  }
+
+  // 1. Verify paper exists and requester is authorized
   const paper = await getQuestionPaperById(paperId, requesterId, requesterRole);
 
   // Storage path security check (Module 8): prevent directory traversal or foreign object access

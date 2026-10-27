@@ -62,11 +62,11 @@ router.get(
   getPaperDetails
 );
 
-// GET /api/question-papers/:id/download - Secure private download & decrypt (Ownership verified in service)
+// GET /api/question-papers/:id/download - Secure private download & decrypt (Authorized EXAM_COORDINATOR only; TEACHER strictly blocked)
 router.get(
   '/:id/download',
   authenticateToken,
-  authorizeRoles('TEACHER'),
+  authorizeRoles('EXAM_COORDINATOR'),
   downloadPaper
 );
 
