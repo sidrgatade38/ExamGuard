@@ -24,11 +24,15 @@ import {
   BookOpen,
   GraduationCap,
   Building,
+  Eye,
+  Save,
+  Check,
+  X,
 } from 'lucide-react';
 
-export default function QuestionPaperGeneratorWizard({ recipients = [], onSuccess, onCancel }) {
+export default function QuestionPaperGeneratorWizard({ initialDraft = null, recipients = [], onSuccess, onCancel }) {
   // Wizard Step: 1 (Exam Details & Blueprint) -> 2 (Question Bank) -> 3 (Feasibility) -> 4 (Validation & Sets) -> 5 (Submit)
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(initialDraft?.step || 1);
 
   // Dynamic Academic Context State
   const [departments, setDepartments] = useState([]);
@@ -37,31 +41,50 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
   const [semesters, setSemesters] = useState([]);
   const [subjects, setSubjects] = useState([]);
   const [subjectUnits, setSubjectUnits] = useState([]);
-  const [selectedDept, setSelectedDept] = useState('COMP');
+  const [selectedDept, setSelectedDept] = useState(initialDraft?.blueprint?.department || 'COMP');
   const [loadingAcademic, setLoadingAcademic] = useState(true);
 
+  // Draft persistence state
+  const [draftId, setDraftId] = useState(initialDraft?.id || null);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [draftSavedNotice, setDraftSavedNotice] = useState('');
+
   // Blueprint State
-  const [blueprint, setBlueprint] = useState({
-    title: 'End Semester Examination',
-    subject: 'Systems Programming and Operating System',
-    course: 'T.E. (Computer Engineering)',
-    semester: 'Semester 5',
-    academicPattern: '2019 Pattern',
-    subjectCode: '310243',
-    durationHours: 2.5,
-    totalMarks: 70,
-    instructions: [
-      'Answer Q1 or Q2, Q3 or Q4, Q5 or Q6, Q7 or Q8.',
-      'Neat diagrams must be drawn wherever necessary.',
-      'Figures to the right indicate full marks.',
-      'Assume suitable data if necessary.',
-    ],
-    numSets: 2,
-    maxOverlapPercentage: 40,
-    sections: [],
+  const [blueprint, setBlueprint] = useState(() => {
+    if (initialDraft?.blueprint) {
+      return {
+        title: '',
+        classYear: 'TE',
+        totalMarks: 70,
+        ...initialDraft.blueprint,
+      };
+    }
+    return {
+      title: '', // Empty input for teacher to enter; no fixed title prefilled
+      subject: 'Systems Programming and Operating System',
+      course: 'T.E. (Computer Engineering)',
+      classYear: 'TE',
+      semester: 'Semester 5',
+      academicPattern: '2019 Pattern',
+      subjectCode: '310243',
+      durationHours: 2.5,
+      totalMarks: 70,
+      instructions: [
+        'Answer Q1 or Q2, Q3 or Q4, Q5 or Q6, Q7 or Q8.',
+        'Neat diagrams must be drawn wherever necessary.',
+        'Figures to the right indicate full marks.',
+        'Assume suitable data if necessary.',
+      ],
+      numSets: 2,
+      maxOverlapPercentage: 40,
+      sections: [],
+    };
   });
 
-  const [blueprintId, setBlueprintId] = useState(null);
+  const [blueprintId, setBlueprintId] = useState(initialDraft?.blueprintId || null);
+
+  // Permitted Preview state in Step 4
+  const [previewModalOpen, setPreviewModalOpen] = useState(false);
 
   // Question Bank State
   const MAX_QUESTIONS_LIMIT = 30;
@@ -108,7 +131,7 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
 
   const [newQuestionForm, setNewQuestionForm] = useState({
     unitNumber: 1,
-    unitTitle: 'Unit 1: Fundamentals',
+    unitTitle: 'Unit 1',
     topic: '',
     questionText: '',
     questionType: 'DESCRIPTIVE',
@@ -127,17 +150,54 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
   const [generationError, setGenerationError] = useState('');
 
   // Generated Sets State
-  const [generatedPaperData, setGeneratedPaperData] = useState(null);
+  const [generatedPaperData, setGeneratedPaperData] = useState(() => initialDraft?.generatedPaperData || null);
   const [activeSetIndex, setActiveSetIndex] = useState(0);
 
   // Final Approval & Submission State
+  const defaultCoord = recipients.find((r) => r.role === 'EXAM_COORDINATOR') || recipients[0];
   const [submissionForm, setSubmissionForm] = useState({
-    assignedToUserId: recipients.length > 0 ? recipients[0].id : '',
+    assignedToUserId: defaultCoord ? defaultCoord.id : '',
     examDate: new Date(Date.now() + 86400000 * 7).toISOString().split('T')[0],
     confirmedApproval: false,
   });
   const [submitting, setSubmitting] = useState(false);
   const [submissionError, setSubmissionError] = useState('');
+
+  useEffect(() => {
+    if (!submissionForm.assignedToUserId && recipients.length > 0) {
+      const coord = recipients.find((r) => r.role === 'EXAM_COORDINATOR') || recipients[0];
+      setSubmissionForm((prev) => ({ ...prev, assignedToUserId: coord.id }));
+    }
+  }, [recipients]);
+
+  const handleSaveDraft = async () => {
+    setSavingDraft(true);
+    setDraftSavedNotice('');
+    try {
+      const dynamicSections = getDynamicSections();
+      const draftPayload = {
+        id: draftId,
+        title: blueprint.title || `Draft: ${blueprint.subject} (${blueprint.totalMarks}M)`,
+        subject: blueprint.subject,
+        step,
+        blueprint: {
+          ...blueprint,
+          sections: dynamicSections,
+        },
+        blueprintId,
+        generatedPaperData,
+      };
+      const res = await blueprintService.saveDraft(draftPayload);
+      const savedId = res.data?.id || res.id || draftId;
+      if (savedId) setDraftId(savedId);
+      setDraftSavedNotice(`Draft saved successfully (ID: ${savedId ? String(savedId).slice(0, 8) : 'saved'}) at ${new Date().toLocaleTimeString()}`);
+      setTimeout(() => setDraftSavedNotice(''), 6000);
+    } catch (err) {
+      alert(err.response?.data?.message || err.message || 'Failed to save draft');
+    } finally {
+      setSavingDraft(false);
+    }
+  };
 
   // 1. Initial Load of Academic Master Data
   useEffect(() => {
@@ -187,11 +247,11 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
           const firstSub = subsList[0];
           setBlueprint((prev) => ({
             ...prev,
-            title: `End Semester Examination: ${firstSub.title}`,
-            subject: firstSub.title,
-            subjectCode: firstSub.code,
-            semester: firstSub.semester || prev.semester,
-            academicPattern: firstSub.patternName || prev.academicPattern,
+            title: prev.title || '',
+            subject: prev.subject || firstSub.title,
+            subjectCode: prev.subjectCode || firstSub.code,
+            semester: prev.semester || firstSub.semester || 'Semester 5',
+            academicPattern: prev.academicPattern || firstSub.patternName || '2019 Pattern',
           }));
 
           const unitsRes = await academicService.getUnitsForSubject(firstSub.code).catch(() => ({ data: [] }));
@@ -223,7 +283,7 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
         const sub = newSubs[0];
         setBlueprint((prev) => ({
           ...prev,
-          title: `End Semester Examination: ${sub.title}`,
+          title: prev.title || '',
           subject: sub.title,
           subjectCode: sub.code,
           course: newCourses[0]?.name || prev.course,
@@ -252,11 +312,11 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
 
     setBlueprint((prev) => ({
       ...prev,
-      title: `End Semester Examination: ${subObj.title}`,
+      title: prev.title || '',
       subject: subObj.title,
       subjectCode: subObj.code,
-      totalMarks: subObj.totalMarks || 70,
-      durationHours: subObj.durationHours || 2.5,
+      totalMarks: prev.totalMarks || subObj.totalMarks || 70,
+      durationHours: subObj.durationHours || prev.durationHours || 2.5,
       semester: subObj.semester || prev.semester,
       academicPattern: subObj.patternName || prev.academicPattern,
     }));
@@ -269,7 +329,7 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
         setNewQuestionForm((prev) => ({
           ...prev,
           unitNumber: units[0].unitNumber,
-          unitTitle: units[0].unitTitle,
+          unitTitle: `Unit ${units[0].unitNumber}`,
         }));
       }
     } catch (err) {
@@ -309,6 +369,7 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
     try {
       await questionBankService.createQuestion({
         ...newQuestionForm,
+        unitTitle: `Unit ${newQuestionForm.unitNumber}`,
         subject: blueprint.subject,
         course: blueprint.course,
         semester: blueprint.semester,
@@ -332,18 +393,131 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
     }
   };
 
-  // Build standard dynamic OR sections if none exist
+  // Build standard dynamic university OR sections based on total marks
   const getDynamicSections = () => {
     if (blueprint.sections && blueprint.sections.length > 0) {
       return blueprint.sections;
     }
+    const tm = blueprint.totalMarks || 70;
     const units = subjectUnits.length >= 4 ? subjectUnits : [
-      { unitNumber: 1, unitTitle: 'Unit 1: Fundamentals', targetMarks: 17 },
-      { unitNumber: 2, unitTitle: 'Unit 2: Core Concepts', targetMarks: 17 },
-      { unitNumber: 3, unitTitle: 'Unit 3: Advanced Architectures', targetMarks: 18 },
-      { unitNumber: 4, unitTitle: 'Unit 4: Applications & Security', targetMarks: 18 },
+      { unitNumber: 1, unitTitle: 'Unit 1: Fundamentals', targetMarks: tm === 70 ? 17 : tm === 60 ? 15 : tm === 30 ? 15 : 10 },
+      { unitNumber: 2, unitTitle: 'Unit 2: Core Concepts', targetMarks: tm === 70 ? 17 : tm === 60 ? 15 : tm === 30 ? 15 : 10 },
+      { unitNumber: 3, unitTitle: 'Unit 3: Advanced Architectures', targetMarks: tm === 70 ? 18 : 15 },
+      { unitNumber: 4, unitTitle: 'Unit 4: Applications & Security', targetMarks: tm === 70 ? 18 : 15 },
     ];
 
+    if (tm === 20) {
+      return [
+        {
+          groupOrder: 1,
+          groupLabel: `Group 1 (${units[0]?.unitTitle || 'Unit 1'})`,
+          primaryQuestionNumber: 1,
+          alternativeQuestionNumber: 2,
+          targetMarks: 10,
+          targetUnit: 1,
+          subquestionsConfig: [
+            { subPart: 'a', marks: 5, difficulty: 'MEDIUM', questionType: 'DESCRIPTIVE', unit: 1 },
+            { subPart: 'b', marks: 5, difficulty: 'MEDIUM', questionType: 'DESCRIPTIVE', unit: 1 },
+          ],
+        },
+        {
+          groupOrder: 2,
+          groupLabel: `Group 2 (${units[1]?.unitTitle || 'Unit 2'})`,
+          primaryQuestionNumber: 3,
+          alternativeQuestionNumber: 4,
+          targetMarks: 10,
+          targetUnit: 2,
+          subquestionsConfig: [
+            { subPart: 'a', marks: 5, difficulty: 'MEDIUM', questionType: 'DESCRIPTIVE', unit: 2 },
+            { subPart: 'b', marks: 5, difficulty: 'HARD', questionType: 'DESCRIPTIVE', unit: 2 },
+          ],
+        },
+      ];
+    }
+
+    if (tm === 30) {
+      return [
+        {
+          groupOrder: 1,
+          groupLabel: `Group 1 (${units[0]?.unitTitle || 'Unit 1'})`,
+          primaryQuestionNumber: 1,
+          alternativeQuestionNumber: 2,
+          targetMarks: 15,
+          targetUnit: 1,
+          subquestionsConfig: [
+            { subPart: 'a', marks: 7, difficulty: 'MEDIUM', questionType: 'DESCRIPTIVE', unit: 1 },
+            { subPart: 'b', marks: 8, difficulty: 'MEDIUM', questionType: 'DESCRIPTIVE', unit: 1 },
+          ],
+        },
+        {
+          groupOrder: 2,
+          groupLabel: `Group 2 (${units[1]?.unitTitle || 'Unit 2'})`,
+          primaryQuestionNumber: 3,
+          alternativeQuestionNumber: 4,
+          targetMarks: 15,
+          targetUnit: 2,
+          subquestionsConfig: [
+            { subPart: 'a', marks: 7, difficulty: 'MEDIUM', questionType: 'DESCRIPTIVE', unit: 2 },
+            { subPart: 'b', marks: 8, difficulty: 'HARD', questionType: 'DESCRIPTIVE', unit: 2 },
+          ],
+        },
+      ];
+    }
+
+    if (tm === 60) {
+      return [
+        {
+          groupOrder: 1,
+          groupLabel: `Group 1 (${units[0]?.unitTitle || 'Unit 1'})`,
+          primaryQuestionNumber: 1,
+          alternativeQuestionNumber: 2,
+          targetMarks: 15,
+          targetUnit: 1,
+          subquestionsConfig: [
+            { subPart: 'a', marks: 7, difficulty: 'MEDIUM', questionType: 'DESCRIPTIVE', unit: 1 },
+            { subPart: 'b', marks: 8, difficulty: 'MEDIUM', questionType: 'DESCRIPTIVE', unit: 1 },
+          ],
+        },
+        {
+          groupOrder: 2,
+          groupLabel: `Group 2 (${units[1]?.unitTitle || 'Unit 2'})`,
+          primaryQuestionNumber: 3,
+          alternativeQuestionNumber: 4,
+          targetMarks: 15,
+          targetUnit: 2,
+          subquestionsConfig: [
+            { subPart: 'a', marks: 7, difficulty: 'MEDIUM', questionType: 'DESCRIPTIVE', unit: 2 },
+            { subPart: 'b', marks: 8, difficulty: 'HARD', questionType: 'DESCRIPTIVE', unit: 2 },
+          ],
+        },
+        {
+          groupOrder: 3,
+          groupLabel: `Group 3 (${units[2]?.unitTitle || 'Unit 3'})`,
+          primaryQuestionNumber: 5,
+          alternativeQuestionNumber: 6,
+          targetMarks: 15,
+          targetUnit: 3,
+          subquestionsConfig: [
+            { subPart: 'a', marks: 7, difficulty: 'MEDIUM', questionType: 'DESCRIPTIVE', unit: 3 },
+            { subPart: 'b', marks: 8, difficulty: 'MEDIUM', questionType: 'DESCRIPTIVE', unit: 3 },
+          ],
+        },
+        {
+          groupOrder: 4,
+          groupLabel: `Group 4 (${units[3]?.unitTitle || 'Unit 4'})`,
+          primaryQuestionNumber: 7,
+          alternativeQuestionNumber: 8,
+          targetMarks: 15,
+          targetUnit: 4,
+          subquestionsConfig: [
+            { subPart: 'a', marks: 7, difficulty: 'MEDIUM', questionType: 'DESCRIPTIVE', unit: 4 },
+            { subPart: 'b', marks: 8, difficulty: 'HARD', questionType: 'DESCRIPTIVE', unit: 4 },
+          ],
+        },
+      ];
+    }
+
+    // Default: 70 Marks (4 units, 17+17+18+18)
     return [
       {
         groupOrder: 1,
@@ -522,15 +696,48 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
     <div style={styles.wizardContainer}>
       {/* Wizard Header */}
       <div style={styles.wizardHeader}>
-        <div style={styles.titleRow}>
-          <div style={styles.iconCircle}>
-            <Sparkles size={22} color="var(--color-primary)" />
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+          <div style={styles.titleRow}>
+            <div style={styles.iconCircle}>
+              <Sparkles size={22} color="var(--color-primary)" />
+            </div>
+            <div>
+              <h2 style={styles.title}>Multi-Subject Question Paper Generator</h2>
+              <p style={styles.subtitle}>
+                College Examination Cell: Dynamic Curriculum Blueprint &amp; Randomized Multi-Set Generation Pipeline
+              </p>
+            </div>
           </div>
-          <div>
-            <h2 style={styles.title}>Multi-Subject Question Paper Generator</h2>
-            <p style={styles.subtitle}>
-              College Examination Cell: Dynamic Curriculum Blueprint &amp; Randomized Multi-Set Generation Pipeline
-            </p>
+
+          {/* Draft Persistence Status & Action */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {draftSavedNotice && (
+              <span style={{ fontSize: '12px', color: '#15803d', backgroundColor: '#dcfce7', padding: '4px 8px', borderRadius: '6px', fontWeight: 600 }}>
+                {draftSavedNotice}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={handleSaveDraft}
+              disabled={savingDraft}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 12px',
+                borderRadius: '8px',
+                border: '1px solid #cbd5e1',
+                backgroundColor: '#ffffff',
+                fontSize: '12px',
+                fontWeight: 600,
+                color: '#334155',
+                cursor: 'pointer',
+              }}
+              title="Save current progress as a draft to resume anytime"
+            >
+              {savingDraft ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+              <span>{draftId ? 'Save Draft' : 'Save as Draft'}</span>
+            </button>
           </div>
         </div>
 
@@ -570,11 +777,25 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
           <div style={styles.cardHeader}>
             <h3 style={styles.cardTitle}>Step 1: Academic Structure &amp; Exam Blueprint</h3>
             <p style={styles.cardSubtitle}>
-              Select department, degree, examination pattern, and subject. The system dynamically configures university OR-pairs and marking schemes from the database.
+              Select department, course, class/year, examination pattern, subject, and total marks. The system dynamically adapts the university marks structure from database templates.
             </p>
           </div>
 
           <div style={styles.grid2}>
+            {/* Paper Title (Clean, flexible, empty by default without prefilled fixed title) */}
+            <div style={{ gridColumn: 'span 2' }}>
+              <label style={styles.label}>
+                Paper Title (Optional custom title)
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. End Semester Examination - May 2026 (Leave empty to use course & subject title)"
+                style={styles.input}
+                value={blueprint.title || ''}
+                onChange={(e) => setBlueprint({ ...blueprint, title: e.target.value })}
+              />
+            </div>
+
             {/* Department Selection */}
             <div>
               <label style={styles.label}>Academic Department</label>
@@ -609,7 +830,23 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
               </select>
             </div>
 
-            {/* Academic Pattern Selection (FIXED: Editable & Database-driven) */}
+            {/* Class / Year Selection (FE, SE, TE, BE, ME) */}
+            <div>
+              <label style={styles.label}>Class / Year</label>
+              <select
+                style={styles.select}
+                value={blueprint.classYear || 'TE'}
+                onChange={(e) => setBlueprint({ ...blueprint, classYear: e.target.value })}
+              >
+                <option value="FE">FE — First Year Engineering</option>
+                <option value="SE">SE — Second Year Engineering</option>
+                <option value="TE">TE — Third Year Engineering</option>
+                <option value="BE">BE — Final Year Engineering</option>
+                <option value="ME">ME — Master of Engineering (Post-Graduate)</option>
+              </select>
+            </div>
+
+            {/* Academic Pattern Selection */}
             <div>
               <label style={styles.label}>Academic Pattern</label>
               <select
@@ -632,7 +869,7 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
               </select>
             </div>
 
-            {/* Semester Selection (FIXED: Editable & Dynamic) */}
+            {/* Semester Selection */}
             <div>
               <label style={styles.label}>Semester</label>
               <select
@@ -656,11 +893,34 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
               </select>
             </div>
 
-            {/* Subject Selection (Searchable & Dynamic from Database) */}
+            {/* Total Marks (Offers 20, 30, 60, and 70 dynamically) */}
+            <div>
+              <label style={styles.label}>Total Marks</label>
+              <select
+                style={styles.select}
+                value={blueprint.totalMarks || 70}
+                onChange={(e) => {
+                  const tm = parseInt(e.target.value, 10);
+                  const autoDuration = tm <= 30 ? 1.0 : tm === 60 ? 2.0 : 2.5;
+                  setBlueprint((prev) => ({
+                    ...prev,
+                    totalMarks: tm,
+                    durationHours: autoDuration,
+                  }));
+                }}
+              >
+                <option value={20}>20 Marks (Internal Assessment / Unit Test)</option>
+                <option value={30}>30 Marks (In-Semester Examination)</option>
+                <option value={60}>60 Marks (End-Semester 60M Pattern)</option>
+                <option value={70}>70 Marks (Standard End-Semester 70M Pattern)</option>
+              </select>
+            </div>
+
+            {/* Subject Selection (Searchable & Scoped) */}
             <div style={{ gridColumn: 'span 2' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                 <label style={styles.label}>
-                  Subject (Fast Search by Code, Full Title, or Short Name e.g. DAA, SPOS, DBMS, CNS)
+                  Subject (Fast Search by Code, Full Title, or Short Name e.g. DAA, SPOS, DBMS, CNS, WT, OSSA)
                 </label>
                 {teacherProfile?.name && (
                   <span style={{ fontSize: '11px', color: '#0369a1', background: '#e0f2fe', padding: '2px 8px', borderRadius: '4px' }}>
@@ -671,7 +931,7 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
               <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
                 <input
                   type="text"
-                  placeholder="Type to filter subjects: e.g. DAA, 410241, Algorithms, SPOS, DBMS..."
+                  placeholder="Type to filter subjects: e.g. DAA, 410241, Algorithms, SPOS, DBMS, WT..."
                   value={subjectSearch}
                   onChange={(e) => setSubjectSearch(e.target.value)}
                   style={{ ...styles.input, flex: 1 }}
@@ -726,47 +986,107 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
                 onChange={(e) => setBlueprint({ ...blueprint, durationHours: parseFloat(e.target.value) })}
               />
             </div>
-
-            {/* Total Answered Marks */}
-            <div>
-              <label style={styles.label}>Total Answered Marks</label>
-              <input
-                type="number"
-                style={styles.input}
-                value={blueprint.totalMarks}
-                onChange={(e) => setBlueprint({ ...blueprint, totalMarks: parseInt(e.target.value, 10) })}
-              />
-            </div>
           </div>
 
-          {/* Dynamic OR Group Structure Summary */}
+          {/* Dynamic University Marks Structure Summary */}
           <div style={styles.summaryBox}>
-            <h4 style={styles.summaryTitle}>
-              University OR-Pair Structure for {blueprint.subject} ({blueprint.academicPattern})
-            </h4>
-            <div style={styles.groupList}>
-              <div style={styles.groupCard}>
-                <strong>Pair 1 ({subjectUnits[0]?.unitTitle || 'Unit 1'}):</strong> Q1 (8 + 9 = 17M) <span style={styles.orPill}>OR</span> Q2 (9 + 8 = 17M)
-              </div>
-              <div style={styles.groupCard}>
-                <strong>Pair 2 ({subjectUnits[1]?.unitTitle || 'Unit 2'}):</strong> Q3 (8 + 9 = 17M) <span style={styles.orPill}>OR</span> Q4 (8 + 9 = 17M)
-              </div>
-              <div style={styles.groupCard}>
-                <strong>Pair 3 ({subjectUnits[2]?.unitTitle || 'Unit 3'}):</strong> Q5 (9 + 9 = 18M) <span style={styles.orPill}>OR</span> Q6 (9 + 9 = 18M)
-              </div>
-              <div style={styles.groupCard}>
-                <strong>Pair 4 ({subjectUnits[3]?.unitTitle || 'Unit 4'}):</strong> Q7 (9 + 9 = 18M) <span style={styles.orPill}>OR</span> Q8 (9 + 9 = 18M)
-              </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <h4 style={styles.summaryTitle}>
+                University Marks Structure ({blueprint.totalMarks} Marks Pattern)
+              </h4>
+              <span style={{ fontSize: '11px', fontWeight: 600, color: '#0369a1', backgroundColor: '#e0f2fe', padding: '3px 8px', borderRadius: '4px' }}>
+                Configurable Academic Template
+              </span>
             </div>
+
+            {/* Dynamic Card Breakdown for 20M, 30M, 60M, and 70M */}
+            <div style={styles.groupList}>
+              {blueprint.totalMarks === 20 && (
+                <>
+                  <div style={styles.groupCard}>
+                    <strong>Pair 1 ({subjectUnits[0]?.unitTitle || 'Unit 1'}):</strong> Q1 (5 + 5 = 10M) <span style={styles.orPill}>OR</span> Q2 (5 + 5 = 10M)
+                  </div>
+                  <div style={styles.groupCard}>
+                    <strong>Pair 2 ({subjectUnits[1]?.unitTitle || 'Unit 2'}):</strong> Q3 (5 + 5 = 10M) <span style={styles.orPill}>OR</span> Q4 (5 + 5 = 10M)
+                  </div>
+                </>
+              )}
+
+              {blueprint.totalMarks === 30 && (
+                <>
+                  <div style={styles.groupCard}>
+                    <strong>Pair 1 ({subjectUnits[0]?.unitTitle || 'Unit 1'}):</strong> Q1 (7 + 8 = 15M) <span style={styles.orPill}>OR</span> Q2 (8 + 7 = 15M)
+                  </div>
+                  <div style={styles.groupCard}>
+                    <strong>Pair 2 ({subjectUnits[1]?.unitTitle || 'Unit 2'}):</strong> Q3 (7 + 8 = 15M) <span style={styles.orPill}>OR</span> Q4 (8 + 7 = 15M)
+                  </div>
+                </>
+              )}
+
+              {blueprint.totalMarks === 60 && (
+                <>
+                  <div style={styles.groupCard}>
+                    <strong>Pair 1 ({subjectUnits[0]?.unitTitle || 'Unit 1'}):</strong> Q1 (7 + 8 = 15M) <span style={styles.orPill}>OR</span> Q2 (8 + 7 = 15M)
+                  </div>
+                  <div style={styles.groupCard}>
+                    <strong>Pair 2 ({subjectUnits[1]?.unitTitle || 'Unit 2'}):</strong> Q3 (7 + 8 = 15M) <span style={styles.orPill}>OR</span> Q4 (8 + 7 = 15M)
+                  </div>
+                  <div style={styles.groupCard}>
+                    <strong>Pair 3 ({subjectUnits[2]?.unitTitle || 'Unit 3'}):</strong> Q5 (7 + 8 = 15M) <span style={styles.orPill}>OR</span> Q6 (8 + 7 = 15M)
+                  </div>
+                  <div style={styles.groupCard}>
+                    <strong>Pair 4 ({subjectUnits[3]?.unitTitle || 'Unit 4'}):</strong> Q7 (7 + 8 = 15M) <span style={styles.orPill}>OR</span> Q8 (8 + 7 = 15M)
+                  </div>
+                </>
+              )}
+
+              {(blueprint.totalMarks === 70 || (blueprint.totalMarks !== 20 && blueprint.totalMarks !== 30 && blueprint.totalMarks !== 60)) && (
+                <>
+                  <div style={styles.groupCard}>
+                    <strong>Pair 1 ({subjectUnits[0]?.unitTitle || 'Unit 1'}):</strong> Q1 (8 + 9 = 17M) <span style={styles.orPill}>OR</span> Q2 (9 + 8 = 17M)
+                  </div>
+                  <div style={styles.groupCard}>
+                    <strong>Pair 2 ({subjectUnits[1]?.unitTitle || 'Unit 2'}):</strong> Q3 (8 + 9 = 17M) <span style={styles.orPill}>OR</span> Q4 (9 + 8 = 17M)
+                  </div>
+                  <div style={styles.groupCard}>
+                    <strong>Pair 3 ({subjectUnits[2]?.unitTitle || 'Unit 3'}):</strong> Q5 (9 + 9 = 18M) <span style={styles.orPill}>OR</span> Q6 (9 + 9 = 18M)
+                  </div>
+                  <div style={styles.groupCard}>
+                    <strong>Pair 4 ({subjectUnits[3]?.unitTitle || 'Unit 4'}):</strong> Q7 (9 + 9 = 18M) <span style={styles.orPill}>OR</span> Q8 (9 + 9 = 18M)
+                  </div>
+                </>
+              )}
+            </div>
+
             <p style={styles.summaryFooter}>
-              Total Answered Marks: 17 + 17 + 18 + 18 = <strong>{blueprint.totalMarks} Marks</strong>. Candidate answers 1 question per alternative pair.
+              {blueprint.totalMarks === 20 && 'Total Answered Marks: 10 + 10 = 20 Marks. Candidate answers 2 compulsory questions with internal OR alternatives across 2 units.'}
+              {blueprint.totalMarks === 30 && 'Total Answered Marks: 15 + 15 = 30 Marks. Candidate answers 2 compulsory questions with internal OR alternatives across 2 units.'}
+              {blueprint.totalMarks === 60 && 'Total Answered Marks: 15 + 15 + 15 + 15 = 60 Marks. Candidate answers 4 compulsory questions, choosing one question from each alternative OR pair.'}
+              {(blueprint.totalMarks === 70 || (blueprint.totalMarks !== 20 && blueprint.totalMarks !== 30 && blueprint.totalMarks !== 60)) &&
+                `Total Answered Marks: 17 + 17 + 18 + 18 = ${blueprint.totalMarks} Marks. Candidate answers 4 compulsory questions, choosing 1 question from each alternative OR pair.`}
             </p>
           </div>
 
           <div style={styles.buttonRow}>
-            <button type="button" style={styles.secondaryButton} onClick={onCancel}>
-              Cancel
-            </button>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button type="button" style={styles.secondaryButton} onClick={onCancel}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                style={{
+                  ...styles.secondaryButton,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+                onClick={handleSaveDraft}
+                disabled={savingDraft}
+              >
+                {savingDraft ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                <span>Save Draft</span>
+              </button>
+            </div>
             <button type="button" style={styles.primaryButton} onClick={handleProceedToBank}>
               <span>Proceed to Question Bank</span>
               <ArrowRight size={18} />
@@ -1053,10 +1373,86 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
       )}
 
       {/* --------------------------------------------------------------------- */}
-      {/* STEP 4: STRICT EXAM CELL VALIDATION & SUBMISSION STATUS               */}
+      {/* STEP 4: STRICT EXAM CELL VALIDATION & PERMITTED PREVIEW               */}
       {/* --------------------------------------------------------------------- */}
       {step === 4 && activeSet && (
         <div style={styles.stepContent}>
+          {/* Generation Success & Stable Record ID Banner */}
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              backgroundColor: '#f0fdf4',
+              border: '1px solid #bbf7d0',
+              borderRadius: '10px',
+              padding: '14px 18px',
+              marginBottom: '20px',
+              flexWrap: 'wrap',
+              gap: '12px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <CheckCircle2 size={24} color="#16a34a" />
+              <div>
+                <div style={{ fontSize: '15px', fontWeight: '700', color: '#15803d' }}>
+                  Question Paper Generated Successfully
+                </div>
+                <div style={{ fontSize: '12px', color: '#374151', marginTop: '2px' }}>
+                  Record ID: <strong style={{ fontFamily: 'monospace', color: '#0f172a' }}>{generatedPaperData?.paperId || generatedPaperData?.id || activeSet.id}</strong> • Status:{' '}
+                  <span style={{ backgroundColor: '#dbeafe', color: '#1e40af', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>
+                    GENERATED
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                type="button"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '8px 14px',
+                  borderRadius: '8px',
+                  backgroundColor: '#0284c7',
+                  color: '#ffffff',
+                  border: 'none',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+                onClick={() => setPreviewModalOpen(true)}
+              >
+                <Eye size={16} />
+                <span>Permitted Preview</span>
+              </button>
+
+              <button
+                type="button"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '8px 14px',
+                  borderRadius: '8px',
+                  backgroundColor: '#ffffff',
+                  color: '#334155',
+                  border: '1px solid #cbd5e1',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+                onClick={handleSaveDraft}
+                disabled={savingDraft}
+              >
+                {savingDraft ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                <span>Save Draft</span>
+              </button>
+            </div>
+          </div>
+
           <div style={styles.cardHeader}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
@@ -1092,7 +1488,7 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
                 </div>
                 <div style={styles.valCardValue}>VERIFIED</div>
                 <p style={styles.valCardDesc}>
-                  Conforms strictly to 4 university OR-pairs with exact 17M + 17M + 18M + 18M marks distribution.
+                  Conforms strictly to university OR-pairs with exact {activeSet.totalMarks} Marks distribution across curriculum units.
                 </p>
               </div>
 
@@ -1103,7 +1499,7 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
                 </div>
                 <div style={styles.valCardValue}>{activeSet.setCode}</div>
                 <p style={styles.valCardDesc}>
-                  Target Total: <strong>{activeSet.totalMarks} Marks</strong> across 4 curriculum units.
+                  Target Total: <strong>{activeSet.totalMarks} Marks</strong> across academic syllabus units.
                 </p>
               </div>
 
@@ -1114,7 +1510,7 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
                 </div>
                 <div style={styles.valCardValue}>100% Unique</div>
                 <p style={styles.valCardDesc}>
-                  Zero duplicate question collisions detected across alternative OR groups and sets.
+                  Zero duplicate question collisions detected across alternative OR groups and candidate sets.
                 </p>
               </div>
             </div>
@@ -1129,17 +1525,137 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
                   Strict Exam Cell Confidentiality Enforced
                 </h4>
                 <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#334155', lineHeight: '1.5' }}>
-                  Under Examination Cell security guidelines, final question selection and arrangements are cryptographically isolated on the server. Teachers submit the validated configuration, and only the authorized Exam Coordinator may decrypt and access the final question paper upon scheduled delivery.
+                  Under Examination Cell security guidelines, final question selection and arrangements are cryptographically isolated on the server. Teachers can review questions via the Permitted Preview before submission. Once submitted, only the designated Exam Coordinator may decrypt and access the final question paper upon scheduled delivery.
                 </p>
               </div>
             </div>
           </div>
 
+          {/* Permitted Preview Modal */}
+          {previewModalOpen && (
+            <div style={styles.modalOverlay}>
+              <div style={{ ...styles.modalCard, maxWidth: '850px', maxHeight: '90vh', overflowY: 'auto' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px', marginBottom: '16px' }}>
+                  <div>
+                    <span style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.05em', color: '#0284c7', textTransform: 'uppercase' }}>
+                      Official University Examination Preview • {activeSet.setCode}
+                    </span>
+                    <h3 style={{ margin: '4px 0 0 0', fontSize: '18px', fontWeight: 700, color: '#0f172a' }}>
+                      {blueprint.title || `${blueprint.subject} Examination`}
+                    </h3>
+                    <p style={{ margin: '2px 0 0 0', fontSize: '13px', color: '#64748b' }}>
+                      {blueprint.course} • Class: {blueprint.classYear || 'TE'} • {blueprint.academicPattern} • {blueprint.semester}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewModalOpen(false)}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: '4px' }}
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+
+                <div style={{ backgroundColor: '#f8fafc', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '18px', display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#334155', flexWrap: 'wrap', gap: '8px' }}>
+                  <div><strong>Subject Code:</strong> {blueprint.subjectCode}</div>
+                  <div><strong>Duration:</strong> {blueprint.durationHours} Hours</div>
+                  <div><strong>Total Marks:</strong> {blueprint.totalMarks} Marks</div>
+                  <div><strong>Active Set:</strong> {activeSet.setCode}</div>
+                </div>
+
+                <div style={{ marginBottom: '18px', fontSize: '12px', color: '#475569' }}>
+                  <strong>Instructions to Candidates:</strong>
+                  <ol style={{ margin: '4px 0 0 0', paddingLeft: '20px' }}>
+                    {(blueprint.instructions || [
+                      'Answer Q1 or Q2, Q3 or Q4, Q5 or Q6, Q7 or Q8.',
+                      'Neat diagrams must be drawn wherever necessary.',
+                      'Figures to the right indicate full marks.',
+                      'Assume suitable data if necessary.',
+                    ]).map((ins, i) => (
+                      <li key={i}>{ins}</li>
+                    ))}
+                  </ol>
+                </div>
+
+                <div style={{ borderTop: '1px dashed #cbd5e1', paddingTop: '16px' }}>
+                  {(activeSet.paperStructureSnapshot?.sections || []).map((sec, idx) => (
+                    <div key={idx} style={{ marginBottom: '16px', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '14px', backgroundColor: '#ffffff' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                        <span style={{ fontSize: '13px', fontWeight: 700, color: '#1e293b' }}>
+                          Group {sec.groupOrder || idx + 1}: {sec.groupLabel || `Unit ${sec.targetUnit || idx + 1}`}
+                        </span>
+                        <span style={{ fontSize: '12px', fontWeight: 600, color: '#0369a1', backgroundColor: '#e0f2fe', padding: '2px 8px', borderRadius: '4px' }}>
+                          {sec.targetMarks} Marks
+                        </span>
+                      </div>
+
+                      {/* Primary Question */}
+                      <div style={{ backgroundColor: '#f8fafc', padding: '10px 12px', borderRadius: '6px', marginBottom: '8px' }}>
+                        <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                          Q{sec.primaryQuestionNumber || (idx * 2 + 1)}
+                        </div>
+                        {(sec.primaryQuestion?.subquestions || sec.subquestionsConfig || []).map((sq, sqIdx) => (
+                          <div key={sqIdx} style={{ fontSize: '12px', color: '#334155', marginBottom: '4px', display: 'flex', justifyContent: 'space-between' }}>
+                            <span><strong>({sq.subPart || String.fromCharCode(97 + sqIdx)})</strong> {sq.questionText || `Evaluation question for ${blueprint.subject}`}</span>
+                            <span style={{ fontWeight: 600, color: '#0f172a', whiteSpace: 'nowrap', marginLeft: '12px' }}>[{sq.marks}M]</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div style={{ textAlign: 'center', margin: '6px 0', fontSize: '12px', fontWeight: 700, color: '#64748b' }}>
+                        — OR —
+                      </div>
+
+                      {/* Alternative Question */}
+                      <div style={{ backgroundColor: '#f8fafc', padding: '10px 12px', borderRadius: '6px' }}>
+                        <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', marginBottom: '6px' }}>
+                          Q{sec.alternativeQuestionNumber || (idx * 2 + 2)}
+                        </div>
+                        {(sec.alternativeQuestion?.subquestions || sec.subquestionsConfig || []).map((sq, sqIdx) => (
+                          <div key={sqIdx} style={{ fontSize: '12px', color: '#334155', marginBottom: '4px', display: 'flex', justifyContent: 'space-between' }}>
+                            <span><strong>({sq.subPart || String.fromCharCode(97 + sqIdx)})</strong> {sq.questionText || `Alternative curriculum question for ${blueprint.subject}`}</span>
+                            <span style={{ fontWeight: 600, color: '#0f172a', whiteSpace: 'nowrap', marginLeft: '12px' }}>[{sq.marks}M]</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
+                  <button
+                    type="button"
+                    style={styles.secondaryButton}
+                    onClick={() => setPreviewModalOpen(false)}
+                  >
+                    Close Preview
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div style={styles.buttonRow}>
-            <button type="button" style={styles.secondaryButton} onClick={() => setStep(3)}>
-              <ArrowLeft size={18} />
-              <span>Back to Feasibility</span>
-            </button>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button type="button" style={styles.secondaryButton} onClick={() => setStep(3)}>
+                <ArrowLeft size={18} />
+                <span>Back to Feasibility</span>
+              </button>
+              <button
+                type="button"
+                style={{
+                  ...styles.secondaryButton,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+                onClick={handleSaveDraft}
+                disabled={savingDraft}
+              >
+                {savingDraft ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                <span>Save Draft</span>
+              </button>
+            </div>
             <button type="button" style={styles.primaryButton} onClick={() => setStep(5)}>
               <span>Proceed to Final Submission</span>
               <ArrowRight size={18} />
@@ -1276,46 +1792,24 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
             <form onSubmit={handleCreateQuestion}>
               <div style={styles.grid2}>
                 <div>
-                  <label style={styles.label}>Unit Number (1-4)</label>
+                  <label style={styles.label}>Unit Selector</label>
                   <select
                     style={styles.select}
                     value={newQuestionForm.unitNumber}
                     onChange={(e) => {
                       const uNum = parseInt(e.target.value, 10);
-                      const matchedUnit = subjectUnits.find((u) => u.unitNumber === uNum);
                       setNewQuestionForm({
                         ...newQuestionForm,
                         unitNumber: uNum,
-                        unitTitle: matchedUnit ? matchedUnit.unitTitle : `Unit ${uNum}`,
+                        unitTitle: `Unit ${uNum}`,
                       });
                     }}
                   >
-                    {subjectUnits.map((u) => (
-                      <option key={u.unitNumber} value={u.unitNumber}>
-                        Unit {u.unitNumber}: {u.unitTitle}
-                      </option>
-                    ))}
-                    {subjectUnits.length === 0 && (
-                      <>
-                        <option value={1}>Unit 1</option>
-                        <option value={2}>Unit 2</option>
-                        <option value={3}>Unit 3</option>
-                        <option value={4}>Unit 4</option>
-                      </>
-                    )}
+                    <option value={1}>Unit 1</option>
+                    <option value={2}>Unit 2</option>
+                    <option value={3}>Unit 3</option>
+                    <option value={4}>Unit 4</option>
                   </select>
-                </div>
-                <div>
-                  <label style={styles.label}>Unit Title</label>
-                  <input
-                    type="text"
-                    style={styles.input}
-                    value={newQuestionForm.unitTitle}
-                    onChange={(e) =>
-                      setNewQuestionForm({ ...newQuestionForm, unitTitle: e.target.value })
-                    }
-                    required
-                  />
                 </div>
                 <div>
                   <label style={styles.label}>Marks</label>
@@ -1326,8 +1820,12 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
                       setNewQuestionForm({ ...newQuestionForm, marks: parseInt(e.target.value, 10) })
                     }
                   >
+                    <option value={5}>5 Marks</option>
+                    <option value={7}>7 Marks</option>
                     <option value={8}>8 Marks</option>
                     <option value={9}>9 Marks</option>
+                    <option value={10}>10 Marks</option>
+                    <option value={15}>15 Marks</option>
                     <option value={17}>17 Marks</option>
                     <option value={18}>18 Marks</option>
                   </select>
@@ -1344,6 +1842,20 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
                     <option value="EASY">EASY</option>
                     <option value="MEDIUM">MEDIUM</option>
                     <option value="HARD">HARD</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={styles.label}>Question Type</label>
+                  <select
+                    style={styles.select}
+                    value={newQuestionForm.questionType}
+                    onChange={(e) =>
+                      setNewQuestionForm({ ...newQuestionForm, questionType: e.target.value })
+                    }
+                  >
+                    <option value="DESCRIPTIVE">DESCRIPTIVE</option>
+                    <option value="NUMERICAL">NUMERICAL</option>
+                    <option value="ANALYTICAL">ANALYTICAL</option>
                   </select>
                 </div>
               </div>

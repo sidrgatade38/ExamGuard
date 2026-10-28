@@ -25,6 +25,31 @@ const blueprintService = {
     const res = await api.get(`/exam-blueprints/${id}/feasibility`);
     return res.data;
   },
+
+  getMarksStructure: async (totalMarks = 70) => {
+    const res = await api.get('/exam-blueprints/marks-structure', { params: { totalMarks } });
+    return res.data;
+  },
+
+  saveDraft: async (payload) => {
+    const res = await api.post('/exam-blueprints/drafts', payload);
+    return res.data;
+  },
+
+  listDrafts: async () => {
+    const res = await api.get('/exam-blueprints/drafts');
+    return res.data;
+  },
+
+  getDraft: async (id) => {
+    const res = await api.get(`/exam-blueprints/drafts/${id}`);
+    return res.data;
+  },
+
+  deleteDraft: async (id) => {
+    const res = await api.delete(`/exam-blueprints/drafts/${id}`);
+    return res.data;
+  },
 };
 
 export default blueprintService;

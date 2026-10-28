@@ -175,6 +175,184 @@ const DEFAULT_DAA_BLUEPRINT = {
 };
 
 /**
+ * Constructs dynamic university marks structure sections for 20, 30, 60, or 70 marks (Requirement 3).
+ * Identifies configurable university examination structure templates with OR-alternatives.
+ */
+function getDefaultMarksStructure(totalMarks = 70, units = []) {
+  const marks = parseInt(totalMarks, 10);
+  const u1 = units[0]?.unitTitle || 'Unit 1: Fundamentals';
+  const u2 = units[1]?.unitTitle || 'Unit 2: Core Concepts';
+  const u3 = units[2]?.unitTitle || 'Unit 3: Advanced Architectures';
+  const u4 = units[3]?.unitTitle || 'Unit 4: Applications & Security';
+
+  if (marks === 20) {
+    // 20 Marks: 2 Units, 10M each (In-Sem / Class Assessment template)
+    return [
+      {
+        groupOrder: 1,
+        groupLabel: `Group 1 (${u1})`,
+        primaryQuestionNumber: 1,
+        alternativeQuestionNumber: 2,
+        targetMarks: 10,
+        targetUnit: 1,
+        subquestionsConfig: [
+          { subPart: 'a', marks: 5, difficulty: 'MEDIUM', questionType: 'DESCRIPTIVE', unit: 1 },
+          { subPart: 'b', marks: 5, difficulty: 'MEDIUM', questionType: 'DESCRIPTIVE', unit: 1 },
+        ],
+      },
+      {
+        groupOrder: 2,
+        groupLabel: `Group 2 (${u2})`,
+        primaryQuestionNumber: 3,
+        alternativeQuestionNumber: 4,
+        targetMarks: 10,
+        targetUnit: 2,
+        subquestionsConfig: [
+          { subPart: 'a', marks: 5, difficulty: 'MEDIUM', questionType: 'DESCRIPTIVE', unit: 2 },
+          { subPart: 'b', marks: 5, difficulty: 'HARD', questionType: 'DESCRIPTIVE', unit: 2 },
+        ],
+      },
+    ];
+  }
+
+  if (marks === 30) {
+    // 30 Marks: 2 Units, 15M each (In-Semester Examination template)
+    return [
+      {
+        groupOrder: 1,
+        groupLabel: `Group 1 (${u1})`,
+        primaryQuestionNumber: 1,
+        alternativeQuestionNumber: 2,
+        targetMarks: 15,
+        targetUnit: 1,
+        subquestionsConfig: [
+          { subPart: 'a', marks: 7, difficulty: 'MEDIUM', questionType: 'DESCRIPTIVE', unit: 1 },
+          { subPart: 'b', marks: 8, difficulty: 'HARD', questionType: 'DESCRIPTIVE', unit: 1 },
+        ],
+      },
+      {
+        groupOrder: 2,
+        groupLabel: `Group 2 (${u2})`,
+        primaryQuestionNumber: 3,
+        alternativeQuestionNumber: 4,
+        targetMarks: 15,
+        targetUnit: 2,
+        subquestionsConfig: [
+          { subPart: 'a', marks: 7, difficulty: 'EASY', questionType: 'DESCRIPTIVE', unit: 2 },
+          { subPart: 'b', marks: 8, difficulty: 'MEDIUM', questionType: 'DESCRIPTIVE', unit: 2 },
+        ],
+      },
+    ];
+  }
+
+  if (marks === 60) {
+    // 60 Marks: 4 Units, 15M each (End-Semester Autonomous / NEP template)
+    return [
+      {
+        groupOrder: 1,
+        groupLabel: `Group 1 (${u1})`,
+        primaryQuestionNumber: 1,
+        alternativeQuestionNumber: 2,
+        targetMarks: 15,
+        targetUnit: 1,
+        subquestionsConfig: [
+          { subPart: 'a', marks: 7, difficulty: 'MEDIUM', questionType: 'DESCRIPTIVE', unit: 1 },
+          { subPart: 'b', marks: 8, difficulty: 'HARD', questionType: 'DESCRIPTIVE', unit: 1 },
+        ],
+      },
+      {
+        groupOrder: 2,
+        groupLabel: `Group 2 (${u2})`,
+        primaryQuestionNumber: 3,
+        alternativeQuestionNumber: 4,
+        targetMarks: 15,
+        targetUnit: 2,
+        subquestionsConfig: [
+          { subPart: 'a', marks: 7, difficulty: 'EASY', questionType: 'DESCRIPTIVE', unit: 2 },
+          { subPart: 'b', marks: 8, difficulty: 'MEDIUM', questionType: 'DESCRIPTIVE', unit: 2 },
+        ],
+      },
+      {
+        groupOrder: 3,
+        groupLabel: `Group 3 (${u3})`,
+        primaryQuestionNumber: 5,
+        alternativeQuestionNumber: 6,
+        targetMarks: 15,
+        targetUnit: 3,
+        subquestionsConfig: [
+          { subPart: 'a', marks: 7, difficulty: 'MEDIUM', questionType: 'DESCRIPTIVE', unit: 3 },
+          { subPart: 'b', marks: 8, difficulty: 'HARD', questionType: 'DESCRIPTIVE', unit: 3 },
+        ],
+      },
+      {
+        groupOrder: 4,
+        groupLabel: `Group 4 (${u4})`,
+        primaryQuestionNumber: 7,
+        alternativeQuestionNumber: 8,
+        targetMarks: 15,
+        targetUnit: 4,
+        subquestionsConfig: [
+          { subPart: 'a', marks: 7, difficulty: 'MEDIUM', questionType: 'DESCRIPTIVE', unit: 4 },
+          { subPart: 'b', marks: 8, difficulty: 'HARD', questionType: 'DESCRIPTIVE', unit: 4 },
+        ],
+      },
+    ];
+  }
+
+  // Default: 70 Marks across 4 Units (17M + 17M + 18M + 18M = 70M template)
+  return [
+    {
+      groupOrder: 1,
+      groupLabel: `Group 1 (${u1})`,
+      primaryQuestionNumber: 1,
+      alternativeQuestionNumber: 2,
+      targetMarks: 17,
+      targetUnit: 1,
+      subquestionsConfig: [
+        { subPart: 'a', marks: 8, difficulty: 'MEDIUM', questionType: 'DESCRIPTIVE', unit: 1 },
+        { subPart: 'b', marks: 9, difficulty: 'HARD', questionType: 'DESCRIPTIVE', unit: 1 },
+      ],
+    },
+    {
+      groupOrder: 2,
+      groupLabel: `Group 2 (${u2})`,
+      primaryQuestionNumber: 3,
+      alternativeQuestionNumber: 4,
+      targetMarks: 17,
+      targetUnit: 2,
+      subquestionsConfig: [
+        { subPart: 'a', marks: 8, difficulty: 'EASY', questionType: 'DESCRIPTIVE', unit: 2 },
+        { subPart: 'b', marks: 9, difficulty: 'MEDIUM', questionType: 'DESCRIPTIVE', unit: 2 },
+      ],
+    },
+    {
+      groupOrder: 3,
+      groupLabel: `Group 3 (${u3})`,
+      primaryQuestionNumber: 5,
+      alternativeQuestionNumber: 6,
+      targetMarks: 18,
+      targetUnit: 3,
+      subquestionsConfig: [
+        { subPart: 'a', marks: 9, difficulty: 'MEDIUM', questionType: 'DESCRIPTIVE', unit: 3 },
+        { subPart: 'b', marks: 9, difficulty: 'HARD', questionType: 'DESCRIPTIVE', unit: 3 },
+      ],
+    },
+    {
+      groupOrder: 4,
+      groupLabel: `Group 4 (${u4})`,
+      primaryQuestionNumber: 7,
+      alternativeQuestionNumber: 8,
+      targetMarks: 18,
+      targetUnit: 4,
+      subquestionsConfig: [
+        { subPart: 'a', marks: 9, difficulty: 'MEDIUM', questionType: 'DESCRIPTIVE', unit: 4 },
+        { subPart: 'b', marks: 9, difficulty: 'HARD', questionType: 'DESCRIPTIVE', unit: 4 },
+      ],
+    },
+  ];
+}
+
+/**
  * Validates blueprint consistency, marks calculations, subquestions, and max question limits (Priority 3).
  */
 function validateBlueprintStructure(blueprint) {
@@ -658,6 +836,7 @@ function getStandardCurriculumBlueprint(params = {}) {
 module.exports = {
   DEFAULT_SPOS_BLUEPRINT,
   DEFAULT_DAA_BLUEPRINT,
+  getDefaultMarksStructure,
   getStandardCurriculumBlueprint,
   validateBlueprintStructure,
   createBlueprint,

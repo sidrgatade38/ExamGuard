@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import questionPaperService from '../services/questionPaperService';
 import answerKeyService from '../services/answerKeyService';
+import blueprintService from '../services/blueprintService';
 import NotificationBell from '../components/NotificationBell';
 import {
   BookOpen,
@@ -40,10 +41,16 @@ export default function TeacherHome() {
   // Mobile navigation drawer toggle
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // Navigation tab: 'list' | 'assigned' | 'create'
+  // Navigation tab: 'list' | 'assigned' | 'drafts' | 'create'
   const [activeTab, setActiveTab] = useState('list');
   // Creation sub-mode: 'select' | 'upload' | 'generate'
   const [creationMode, setCreationMode] = useState('select');
+
+  // Drafts state (Module 23 & Lifecycle)
+  const [drafts, setDrafts] = useState([]);
+  const [loadingDrafts, setLoadingDrafts] = useState(false);
+  const [draftsError, setDraftsError] = useState('');
+  const [activeDraft, setActiveDraft] = useState(null);
 
   // Question Papers state (Authored)
   const [papers, setPapers] = useState([]);
@@ -236,11 +243,54 @@ export default function TeacherHome() {
     }
   }, []);
 
+  // Fetch Saved Paper Drafts (Module 23)
+  const fetchDrafts = useCallback(async () => {
+    setLoadingDrafts(true);
+    setDraftsError('');
+    try {
+      const res = await blueprintService.listDrafts();
+      setDrafts(res.data || []);
+    } catch (err) {
+      console.warn('Failed to load drafts:', err);
+      setDraftsError('Could not load drafts list.');
+    } finally {
+      setLoadingDrafts(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchPapers();
     fetchAssignedPapers();
     fetchRecipients();
-  }, [fetchPapers, fetchAssignedPapers, fetchRecipients]);
+    fetchDrafts();
+  }, [fetchPapers, fetchAssignedPapers, fetchRecipients, fetchDrafts]);
+
+  // Resume Draft Handler
+  const handleResumeDraft = (draft) => {
+    setActiveDraft(draft);
+    setActiveTab('create');
+    setCreationMode('generate');
+  };
+
+  // Delete Draft Handler
+  const handleDeleteDraft = async (draftId, draftTitle) => {
+    if (!window.confirm(`Are you sure you want to delete draft "${draftTitle || 'Untitled Draft'}"?`)) {
+      return;
+    }
+    try {
+      await blueprintService.deleteDraft(draftId);
+      setActionAlert({
+        type: 'success',
+        message: `Draft "${draftTitle || 'Draft'}" was deleted successfully.`,
+      });
+      fetchDrafts();
+    } catch (err) {
+      setActionAlert({
+        type: 'danger',
+        message: `Failed to delete draft: ${err.message}`,
+      });
+    }
+  };
 
   // Form Field Change Handler
   const handleInputChange = (e) => {
@@ -567,6 +617,17 @@ export default function TeacherHome() {
               </button>
               <button
                 onClick={() => {
+                  setActiveTab('drafts');
+                  setMobileMenuOpen(false);
+                }}
+                style={activeTab === 'drafts' ? { ...styles.mobileTabBtn, ...styles.mobileTabBtnActive } : styles.mobileTabBtn}
+              >
+                <Sparkles size={18} />
+                <span>Drafts ({drafts.length})</span>
+              </button>
+              <button
+                onClick={() => {
+                  setActiveDraft(null);
                   setActiveTab('create');
                   setMobileMenuOpen(false);
                 }}
@@ -645,7 +706,19 @@ export default function TeacherHome() {
           </button>
 
           <button
-            onClick={() => setActiveTab('create')}
+            onClick={() => setActiveTab('drafts')}
+            style={activeTab === 'drafts' ? { ...styles.tab, ...styles.activeTab } : styles.tab}
+          >
+            <Sparkles size={18} />
+            <span>Drafts</span>
+            <span style={styles.counterBadge}>{drafts.length}</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setActiveDraft(null);
+              setActiveTab('create');
+            }}
             style={activeTab === 'create' ? { ...styles.tab, ...styles.activeTab } : styles.tab}
           >
             <Plus size={18} />
@@ -1225,6 +1298,148 @@ export default function TeacherHome() {
           </div>
         )}
 
+        {/* TAB 2B: DRAFTS (MODULE 23) */}
+        {activeTab === 'drafts' && (
+          <div style={styles.tabContent}>
+            {/* Header / Stats Banner */}
+            <div style={styles.statsBanner}>
+              <div>
+                <h2 style={styles.sectionHeading}>Question Paper Drafts</h2>
+                <p style={styles.sectionSubtitle}>
+                  Multi-day saved examination drafts. Resume or edit your work anytime without data loss.
+                </p>
+              </div>
+
+              <div style={styles.bannerActions}>
+                <button onClick={fetchDrafts} style={styles.refreshBtn} title="Refresh Drafts">
+                  <RefreshCw size={16} className={loadingDrafts ? 'spin' : ''} />
+                  <span>Refresh</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setActiveDraft(null);
+                    setActiveTab('create');
+                    setCreationMode('generate');
+                  }}
+                  style={styles.createPaperBtn}
+                >
+                  <Plus size={16} />
+                  <span>New Paper Draft</span>
+                </button>
+              </div>
+            </div>
+
+            {draftsError && (
+              <div style={styles.alertError}>
+                <AlertCircle size={18} />
+                <span>{draftsError}</span>
+              </div>
+            )}
+
+            {loadingDrafts ? (
+              <div style={styles.loadingContainer}>
+                <Loader2 size={32} style={{ animation: 'spin 1s linear infinite' }} />
+                <p style={{ marginTop: '0.75rem', color: 'var(--color-structure-muted)' }}>Loading saved drafts...</p>
+              </div>
+            ) : drafts.length === 0 ? (
+              <div style={styles.emptyState}>
+                <Sparkles size={48} color="var(--color-structure-muted)" />
+                <h3 style={styles.emptyTitle}>No saved drafts found</h3>
+                <p style={styles.emptySubtitle}>
+                  You have no pending drafts. Start generating an examination paper and click &ldquo;Save Draft&rdquo; at any stage to work across multiple days.
+                </p>
+                <button
+                  onClick={() => {
+                    setActiveDraft(null);
+                    setActiveTab('create');
+                    setCreationMode('generate');
+                  }}
+                  style={{ ...styles.submitBtn, width: 'auto', marginTop: '1rem', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
+                >
+                  <Plus size={16} />
+                  <span>Create Question Paper</span>
+                </button>
+              </div>
+            ) : (
+              <div style={styles.paperGrid}>
+                {drafts.map((draft) => {
+                  const bp = draft.blueprint || draft.payload || {};
+                  return (
+                    <div key={draft.id} style={styles.paperCard}>
+                      <div style={styles.cardHeader}>
+                        <div style={styles.subjectPill}>{draft.subject || bp.subject || 'Curriculum Draft'}</div>
+                        <span
+                          style={{
+                            fontSize: '0.7rem',
+                            fontWeight: '700',
+                            backgroundColor: '#fef3c7',
+                            color: '#92400e',
+                            padding: '0.2rem 0.5rem',
+                            borderRadius: '4px',
+                          }}
+                        >
+                          DRAFT • STEP {draft.step || 1}
+                        </span>
+                      </div>
+
+                      <h3 style={styles.paperTitle}>{draft.title || bp.title || `${draft.subject || 'Examination'} Draft`}</h3>
+
+                      <div style={styles.paperMeta}>
+                        <div style={styles.metaItem}>
+                          <Clock size={14} color="var(--color-structure-muted)" />
+                          <span>Last Saved: {new Date(draft.updated_at || draft.updatedAt || Date.now()).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                        <div style={styles.metaItem}>
+                          <Layers size={14} color="var(--color-structure-muted)" />
+                          <span>Pattern: {bp.academicPattern || '2019 Pattern'} • {bp.semester || 'Semester 5'}</span>
+                        </div>
+                        <div style={styles.metaItem}>
+                          <CheckCircle2 size={14} color="var(--color-structure-muted)" />
+                          <span>Total Marks: {bp.totalMarks || 70} Marks • Class: {bp.classYear || 'TE'}</span>
+                        </div>
+                      </div>
+
+                      <div style={styles.cardActions}>
+                        <button
+                          onClick={() => handleResumeDraft(draft)}
+                          style={{
+                            ...styles.primaryActionBtn,
+                            flex: 1,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '0.4rem',
+                            backgroundColor: 'var(--color-primary)',
+                            color: '#ffffff',
+                          }}
+                        >
+                          <Sparkles size={14} />
+                          <span>Resume Draft</span>
+                        </button>
+                        <button
+                          onClick={() => handleDeleteDraft(draft.id, draft.title || bp.title)}
+                          style={{
+                            ...styles.secondaryActionBtn,
+                            color: '#dc2626',
+                            borderColor: '#fca5a5',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: '0.4rem 0.6rem',
+                          }}
+                          title="Delete Draft"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* TAB 3: CREATE QUESTION PAPER HUB (MODULE 18: TWO OPTIONS) */}
         {activeTab === 'create' && (
           <div>
@@ -1388,14 +1603,20 @@ export default function TeacherHome() {
                   </button>
                 </div>
                 <QuestionPaperGeneratorWizard
+                  initialDraft={activeDraft}
                   recipients={recipients}
                   onSuccess={(msg) => {
                     setActionAlert({ type: 'success', message: msg });
                     fetchPapers();
+                    fetchDrafts();
+                    setActiveDraft(null);
                     setActiveTab('list');
                     setCreationMode('select');
                   }}
-                  onCancel={() => setCreationMode('select')}
+                  onCancel={() => {
+                    setActiveDraft(null);
+                    setCreationMode('select');
+                  }}
                 />
               </div>
             )}
