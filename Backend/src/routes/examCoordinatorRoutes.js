@@ -8,6 +8,7 @@ const {
   getPaperDetails,
   downloadPaper,
   verifyPaperSignature,
+  reviewPaper,
 } = require('../controllers/examCoordinatorController');
 const {
   getCoordinatorAnswerKey,
@@ -32,6 +33,9 @@ router.get('/question-papers', getAssignedPapers);
 
 // GET /api/exam-coordinator/question-papers/:id - View safe question paper metadata (strict assignment check)
 router.get('/question-papers/:id', getPaperDetails);
+
+// POST /api/exam-coordinator/question-papers/:id/review - Review question paper (RECOMMEND, RETURN, REJECT)
+router.post('/question-papers/:id/review', reviewPaper);
 
 // GET /api/exam-coordinator/question-papers/:id/download - Secure download & decrypt (Verify-Before-Decrypt pipeline)
 router.get('/question-papers/:id/download', downloadPaper);

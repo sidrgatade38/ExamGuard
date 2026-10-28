@@ -741,6 +741,86 @@ export default function TeacherHome() {
 
                       <h3 style={styles.paperTitle}>{paper.title}</h3>
 
+                      {/* Module 22 Workflow Status Pills */}
+                      <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', margin: '0.35rem 0 0.5rem 0' }}>
+                        <span
+                          style={{
+                            fontSize: '0.72rem',
+                            fontWeight: 600,
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            backgroundColor:
+                              paper.review_status === 'RECOMMENDED'
+                                ? '#dcfce7'
+                                : paper.review_status === 'RETURNED'
+                                ? '#fef3c7'
+                                : paper.review_status === 'REJECTED'
+                                ? '#fee2e2'
+                                : '#e0f2fe',
+                            color:
+                              paper.review_status === 'RECOMMENDED'
+                                ? '#166534'
+                                : paper.review_status === 'RETURNED'
+                                ? '#92400e'
+                                : paper.review_status === 'REJECTED'
+                                ? '#991b1b'
+                                : '#0369a1',
+                          }}
+                        >
+                          Coordinator: {paper.review_status || 'PENDING'}
+                        </span>
+
+                        <span
+                          style={{
+                            fontSize: '0.72rem',
+                            fontWeight: 600,
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            backgroundColor:
+                              paper.admin_approval_status === 'APPROVED'
+                                ? '#dcfce7'
+                                : paper.admin_approval_status === 'RETURNED'
+                                ? '#fef3c7'
+                                : paper.admin_approval_status === 'REJECTED'
+                                ? '#fee2e2'
+                                : '#f1f5f9',
+                            color:
+                              paper.admin_approval_status === 'APPROVED'
+                                ? '#166534'
+                                : paper.admin_approval_status === 'RETURNED'
+                                ? '#92400e'
+                                : paper.admin_approval_status === 'REJECTED'
+                                ? '#991b1b'
+                                : '#475569',
+                          }}
+                        >
+                          Admin: {paper.admin_approval_status || 'PENDING'}
+                        </span>
+                      </div>
+
+                      {/* Revision Guidance Banner */}
+                      {(paper.review_status === 'RETURNED' || paper.admin_approval_status === 'RETURNED') && (
+                        <div
+                          style={{
+                            margin: '0.5rem 0',
+                            padding: '0.5rem 0.75rem',
+                            backgroundColor: '#fffbeb',
+                            border: '1px solid #fde68a',
+                            borderRadius: '6px',
+                            fontSize: '0.78rem',
+                            color: '#92400e',
+                          }}
+                        >
+                          <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <AlertCircle size={14} />
+                            <span>Revision Required</span>
+                          </div>
+                          <div style={{ marginTop: '2px', color: '#78350f' }}>
+                            {paper.review_comments || paper.admin_comments || 'Please revise the paper and re-submit.'}
+                          </div>
+                        </div>
+                      )}
+
                       <div style={styles.metaRows}>
                         <div style={styles.metaRow}>
                           <Calendar size={14} color="#94a3b8" />
@@ -948,6 +1028,86 @@ export default function TeacherHome() {
                       </div>
 
                       <h3 style={styles.paperTitle}>{paper.title}</h3>
+
+                      {/* Module 22 Workflow Status Pills */}
+                      <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', margin: '0.35rem 0 0.5rem 0' }}>
+                        <span
+                          style={{
+                            fontSize: '0.72rem',
+                            fontWeight: 600,
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            backgroundColor:
+                              paper.review_status === 'RECOMMENDED'
+                                ? '#dcfce7'
+                                : paper.review_status === 'RETURNED'
+                                ? '#fef3c7'
+                                : paper.review_status === 'REJECTED'
+                                ? '#fee2e2'
+                                : '#e0f2fe',
+                            color:
+                              paper.review_status === 'RECOMMENDED'
+                                ? '#166534'
+                                : paper.review_status === 'RETURNED'
+                                ? '#92400e'
+                                : paper.review_status === 'REJECTED'
+                                ? '#991b1b'
+                                : '#0369a1',
+                          }}
+                        >
+                          Coordinator: {paper.review_status || 'PENDING'}
+                        </span>
+
+                        <span
+                          style={{
+                            fontSize: '0.72rem',
+                            fontWeight: 600,
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            backgroundColor:
+                              paper.admin_approval_status === 'APPROVED'
+                                ? '#dcfce7'
+                                : paper.admin_approval_status === 'RETURNED'
+                                ? '#fef3c7'
+                                : paper.admin_approval_status === 'REJECTED'
+                                ? '#fee2e2'
+                                : '#f1f5f9',
+                            color:
+                              paper.admin_approval_status === 'APPROVED'
+                                ? '#166534'
+                                : paper.admin_approval_status === 'RETURNED'
+                                ? '#92400e'
+                                : paper.admin_approval_status === 'REJECTED'
+                                ? '#991b1b'
+                                : '#475569',
+                          }}
+                        >
+                          Admin: {paper.admin_approval_status || 'PENDING'}
+                        </span>
+                      </div>
+
+                      {/* Revision Guidance Banner */}
+                      {(paper.review_status === 'RETURNED' || paper.admin_approval_status === 'RETURNED') && (
+                        <div
+                          style={{
+                            margin: '0.5rem 0',
+                            padding: '0.5rem 0.75rem',
+                            backgroundColor: '#fffbeb',
+                            border: '1px solid #fde68a',
+                            borderRadius: '6px',
+                            fontSize: '0.78rem',
+                            color: '#92400e',
+                          }}
+                        >
+                          <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <AlertCircle size={14} />
+                            <span>Revision Required</span>
+                          </div>
+                          <div style={{ marginTop: '2px', color: '#78350f' }}>
+                            {paper.review_comments || paper.admin_comments || 'Please revise the paper and re-submit.'}
+                          </div>
+                        </div>
+                      )}
 
                       <div style={styles.metaRows}>
                         <div style={styles.metaRow}>

@@ -58,6 +58,12 @@ async function createQuestion(req, res, next) {
       difficulty,
       answerScheme,
       approvalStatus,
+      courseOutcome,
+      course_outcome,
+      programOutcome,
+      program_outcome,
+      bloomTaxonomy,
+      bloom_taxonomy,
     } = req.body;
 
     const question = await questionBankService.createQuestion({
@@ -76,6 +82,9 @@ async function createQuestion(req, res, next) {
       difficulty,
       answerScheme,
       approvalStatus,
+      courseOutcome: courseOutcome || course_outcome,
+      programOutcome: programOutcome || program_outcome,
+      bloomTaxonomy: bloomTaxonomy || bloom_taxonomy,
     });
 
     return res.status(201).json({

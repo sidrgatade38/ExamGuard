@@ -1,5 +1,5 @@
 /**
- * ExamGuard - Academic Master Routes (Module 21)
+ * ExamGuard - Academic Master Routes (Module 21 & 22)
  */
 
 const express = require('express');
@@ -11,6 +11,8 @@ const {
   getSemesters,
   getSubjects,
   getUnits,
+  getOutcomes,
+  getTeacherProfile,
 } = require('../controllers/academicMasterController');
 
 const router = express.Router();
@@ -23,5 +25,7 @@ router.get('/patterns', getPatterns);
 router.get('/semesters', getSemesters);
 router.get('/subjects', getSubjects);
 router.get('/subjects/:subjectCode/units', getUnits);
+router.get('/outcomes', getOutcomes);
+router.get('/teacher-profile', getTeacherProfile);
 
 module.exports = router;

@@ -104,6 +104,21 @@ export const examCoordinatorService = {
     const response = await api.get(`/exam-coordinator/question-papers/${id}/verify-signature`);
     return response.data?.data;
   },
+
+  /**
+   * Reviews a submitted question paper (Module 22 workflow)
+   * Coordinator can RECOMMEND to Admin, RETURN to Teacher for revisions, or REJECT.
+   * @param {string} id - Question paper UUID
+   * @param {Object} reviewData - { action: 'RECOMMEND' | 'RETURN' | 'REJECT', comments: string }
+   * @returns {Promise<Object>} Updated question paper state
+   */
+  async reviewQuestionPaper(id, { action, comments }) {
+    const response = await api.post(`/exam-coordinator/question-papers/${id}/review`, {
+      action,
+      comments,
+    });
+    return response.data;
+  },
 };
 
 export default examCoordinatorService;

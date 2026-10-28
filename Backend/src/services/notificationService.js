@@ -461,8 +461,41 @@ async function markAllAsRead(userId) {
   };
 }
 
+/**
+ * Creates workflow transition notifications for coordinators, admins, and teachers (Module 22 & Priority 2)
+ */
+async function createWorkflowNotification({ recipientId, questionPaperId, type = 'SYSTEM', subject, message }) {
+  if (!recipientId || !subject || !message) {
+    throw new Error('Missing recipientId, subject, or message for workflow notification.');
+  }
+
+  const { data: created, error: insertError } = await supabase
+    .from('notifications')
+    .insert([
+      {
+        user_id: recipientId,
+        question_paper_id: questionPaperId || null,
+        type,
+        channel: 'IN_APP',
+        subject,
+        message,
+        scheduled_at: new Date().toISOString(),
+        sent_at: new Date().toISOString(),
+        status: 'SENT',
+      },
+    ])
+    .select('id, user_id, question_paper_id, type, channel, subject, message, scheduled_at, sent_at, status, created_at')
+    .single();
+
+  if (insertError) {
+    console.warn('[NotificationService] Workflow notification notice:', insertError.message);
+  }
+  return created;
+}
+
 module.exports = {
   createQuestionPaperNotification,
+  createWorkflowNotification,
   getUserNotifications,
   getUnreadCount,
   markAsRead,

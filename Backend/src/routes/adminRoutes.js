@@ -37,4 +37,8 @@ router.post('/users/:id/reset-password', adminController.resetPassword);
 // System roles listing
 router.get('/roles', adminController.getRoles);
 
+// Question Paper review & approval workflow
+router.get('/question-papers', adminController.getQuestionPapers);
+router.post('/question-papers/:id/approval', adminController.approveQuestionPaper);
+
 module.exports = router;

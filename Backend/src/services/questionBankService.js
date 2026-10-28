@@ -9,6 +9,118 @@ const { supabase } = require('../config/supabase');
 const auditLogService = require('./auditLogService');
 const crypto = require('crypto');
 
+// Standard curriculum question bank seed for Design and Analysis of Algorithms (DAA)
+const SAMPLE_DAA_QUESTIONS = [
+  // Unit 1: Algorithm Analysis and Recurrence Relations (Marks 8 & 9)
+  {
+    unit_number: 1,
+    unit_title: 'Algorithm Analysis and Recurrence Relations',
+    topic: 'Asymptotic Notation & Analysis',
+    question_text: 'Explain Big-Oh, Big-Omega, and Big-Theta asymptotic notations with mathematical definitions and graphical representations.',
+    question_type: 'DESCRIPTIVE',
+    marks: 8,
+    difficulty: 'MEDIUM',
+    course_outcome: 'CO1',
+    program_outcome: 'PO1',
+    bloom_taxonomy: 'L2 - Understand',
+    answer_scheme: 'Definitions of f(n) <= c*g(n), lower bounds, tight bounds. Graphical representation and formal proofs.',
+  },
+  {
+    unit_number: 1,
+    unit_title: 'Algorithm Analysis and Recurrence Relations',
+    topic: 'Master Theorem Recurrence',
+    question_text: 'Solve the recurrence relation T(n) = 2T(n/2) + n*log(n) using Master Theorem or state why Master Theorem cannot be applied directly.',
+    question_type: 'NUMERICAL',
+    marks: 9,
+    difficulty: 'HARD',
+    course_outcome: 'CO1',
+    program_outcome: 'PO2',
+    bloom_taxonomy: 'L4 - Analyze',
+    answer_scheme: 'Analysis of a=2, b=2, f(n)=n log n. Case analysis, extended master theorem comparison, O(n log^2 n) derivation.',
+  },
+  // Unit 2: Divide-and-Conquer and Dynamic Programming (Marks 8 & 9)
+  {
+    unit_number: 2,
+    unit_title: 'Divide-and-Conquer and Dynamic Programming',
+    topic: 'Dynamic Programming 0/1 Knapsack',
+    question_text: 'Explain the principle of Dynamic Programming. Formulate the recurrence relation and solve the 0/1 Knapsack problem for W=5, items: weights={2,3,4}, values={3,4,5}.',
+    question_type: 'NUMERICAL',
+    marks: 8,
+    difficulty: 'MEDIUM',
+    course_outcome: 'CO2',
+    program_outcome: 'PO3',
+    bloom_taxonomy: 'L3 - Apply',
+    answer_scheme: 'Overlapping subproblems, optimal substructure, 2D DP matrix filling, backtracking to identify selected items.',
+  },
+  {
+    unit_number: 2,
+    unit_title: 'Divide-and-Conquer and Dynamic Programming',
+    topic: 'Longest Common Subsequence (LCS)',
+    question_text: 'Write the algorithm to find Longest Common Subsequence (LCS) using Dynamic Programming. Trace for X = "ABCBDAB" and Y = "BDCABA".',
+    question_type: 'DESCRIPTIVE',
+    marks: 9,
+    difficulty: 'HARD',
+    course_outcome: 'CO2',
+    program_outcome: 'PO3',
+    bloom_taxonomy: 'L4 - Analyze',
+    answer_scheme: 'Recurrence relation for LCS[i,j], dynamic programming table construction, arrow pointer traceback.',
+  },
+  // Unit 3: Greedy Techniques and Graph Algorithms (Marks 8 & 9)
+  {
+    unit_number: 3,
+    unit_title: 'Greedy Techniques and Graph Algorithms',
+    topic: 'Huffman Coding',
+    question_text: 'Explain Huffman coding algorithm. Construct the optimal Huffman tree and compute prefix codes for characters with frequencies: a:45, b:13, c:12, d:16, e:9, f:5.',
+    question_type: 'NUMERICAL',
+    marks: 8,
+    difficulty: 'MEDIUM',
+    course_outcome: 'CO3',
+    program_outcome: 'PO2',
+    bloom_taxonomy: 'L3 - Apply',
+    answer_scheme: 'Greedy choice property, priority queue construction, binary prefix tree, average code length.',
+  },
+  {
+    unit_number: 3,
+    unit_title: 'Greedy Techniques and Graph Algorithms',
+    topic: 'Dijkstras Shortest Path Algorithm',
+    question_text: 'Explain Dijkstra algorithm for Single Source Shortest Path with priority queue implementation. Analyze its time complexity.',
+    question_type: 'DESCRIPTIVE',
+    marks: 9,
+    difficulty: 'MEDIUM',
+    course_outcome: 'CO3',
+    program_outcome: 'PO2',
+    bloom_taxonomy: 'L3 - Apply',
+    answer_scheme: 'Greedy choice property, relaxation step, min-heap priority queue complexity O((V+E) log V).',
+  },
+  // Unit 4: NP-Completeness and Approximation Algorithms (Marks 8 & 9)
+  {
+    unit_number: 4,
+    unit_title: 'NP-Completeness and Approximation Algorithms',
+    topic: 'P vs NP and Reductions',
+    question_text: 'Define class P, NP, NP-Hard, and NP-Complete. Describe the polynomial-time reduction process to prove Circuit-SAT <= 3-SAT.',
+    question_type: 'DESCRIPTIVE',
+    marks: 8,
+    difficulty: 'HARD',
+    course_outcome: 'CO4',
+    program_outcome: 'PO1',
+    bloom_taxonomy: 'L4 - Analyze',
+    answer_scheme: 'Nondeterministic Turing machines, verification in polynomial time, Cook-Levin theorem, reduction gadget.',
+  },
+  {
+    unit_number: 4,
+    unit_title: 'NP-Completeness and Approximation Algorithms',
+    topic: 'Vertex Cover Approximation',
+    question_text: 'Explain 2-approximation algorithm for Vertex Cover problem. Prove that it achieves an approximation ratio of at most 2.',
+    question_type: 'DESCRIPTIVE',
+    marks: 9,
+    difficulty: 'HARD',
+    course_outcome: 'CO4',
+    program_outcome: 'PO3',
+    bloom_taxonomy: 'L4 - Analyze',
+    answer_scheme: 'Maximal matching concept, edge selection, proof that |C| <= 2*|C*|.',
+  },
+];
+
 // Standard curriculum question bank seed for Systems Programming & Operating System
 const SAMPLE_SPOS_QUESTIONS = [
   // Unit 1: Loaders & Linkers (Marks 8 & 9)
@@ -449,29 +561,38 @@ function isTableMissingError(error) {
 }
 
 /**
- * Normalizes question object
+ * Normalizes question object including CO, PO, and Bloom's Taxonomy outcomes (Module 22)
  */
 function normalizeQuestion(q) {
+  // Infer CO based on unit if not set
+  const unitNum = q.unit_number || q.unitNumber || 1;
+  const inferredCO = `CO${Math.min(Math.max(unitNum, 1), 6)}`;
+  const inferredPO = (q.difficulty === 'HARD') ? 'PO3' : (q.difficulty === 'MEDIUM') ? 'PO2' : 'PO1';
+  const inferredBT = (q.difficulty === 'HARD') ? 'L4 - Analyze' : (q.difficulty === 'MEDIUM') ? 'L3 - Apply' : 'L2 - Understand';
+
   return {
     id: q.id,
-    authorId: q.author_id,
+    authorId: q.author_id || q.authorId,
     subject: q.subject,
     course: q.course,
     semester: q.semester,
-    academicPattern: q.academic_pattern,
-    examType: q.exam_type,
-    unitNumber: q.unit_number,
-    unitTitle: q.unit_title,
+    academicPattern: q.academic_pattern || q.academicPattern,
+    examType: q.exam_type || q.examType,
+    unitNumber: q.unit_number || q.unitNumber,
+    unitTitle: q.unit_title || q.unitTitle,
     topic: q.topic,
-    questionText: q.question_text,
-    questionType: q.question_type,
+    questionText: q.question_text || q.questionText,
+    questionType: q.question_type || q.questionType,
     marks: q.marks,
     difficulty: q.difficulty,
-    answerScheme: q.answer_scheme,
-    approvalStatus: q.approval_status,
-    isActive: q.is_active,
-    createdAt: q.created_at,
-    updatedAt: q.updated_at,
+    answerScheme: q.answer_scheme || q.answerScheme,
+    approvalStatus: q.approval_status || q.approvalStatus,
+    courseOutcome: q.course_outcome || q.courseOutcome || inferredCO,
+    programOutcome: q.program_outcome || q.programOutcome || inferredPO,
+    bloomTaxonomy: q.bloom_taxonomy || q.bloomTaxonomy || inferredBT,
+    isActive: q.is_active !== undefined ? q.is_active : (q.isActive !== undefined ? q.isActive : true),
+    createdAt: q.created_at || q.createdAt,
+    updatedAt: q.updated_at || q.updatedAt,
   };
 }
 
@@ -497,7 +618,20 @@ async function getQuestions({
       .select('*', { count: 'exact' })
       .eq('is_active', true);
 
-    if (subject) query = query.ilike('subject', `%${subject.trim()}%`);
+    const isDAA = subject && (subject.toUpperCase() === 'DAA' || subject.toLowerCase().includes('design and analysis of algorithms') || subject === '410241');
+    const isDBMS = subject && (subject.toUpperCase() === 'DBMS' || subject.toLowerCase().includes('database') || subject === '310241');
+    const isSPOS = subject && (subject.toUpperCase() === 'SPOS' || subject.toLowerCase().includes('systems programming') || subject === '310243');
+
+    if (isDAA) {
+      query = query.ilike('subject', '%Design and Analysis of Algorithms%');
+    } else if (isDBMS) {
+      query = query.ilike('subject', '%Database Management Systems%');
+    } else if (isSPOS) {
+      query = query.ilike('subject', '%Systems Programming%');
+    } else if (subject) {
+      query = query.ilike('subject', `%${subject.trim()}%`);
+    }
+
     if (semester) query = query.eq('semester', semester.trim());
     if (unitNumber) query = query.eq('unit_number', parseInt(unitNumber, 10));
     if (difficulty) query = query.eq('difficulty', difficulty.toUpperCase());
@@ -533,6 +667,40 @@ async function getQuestions({
         return getMemoryQuestions({ authorId, role, subject, unitNumber, difficulty, questionType, approvalStatus });
       }
       throw error;
+    }
+
+    // If DAA was queried but DB has no DAA questions yet, provide fallback sample DAA questions
+    if (isDAA && (!data || data.length === 0)) {
+      const daaList = SAMPLE_DAA_QUESTIONS.map((q, idx) => ({
+        id: `sample-daa-${idx + 1}`,
+        author_id: authorId,
+        subject: 'Design and Analysis of Algorithms',
+        course: 'B.E. (Computer Engineering)',
+        semester: 'Semester 7',
+        academic_pattern: '2019 Pattern',
+        exam_type: 'End Semester Examination',
+        unit_number: q.unit_number,
+        unit_title: q.unit_title,
+        topic: q.topic,
+        question_text: q.question_text,
+        question_type: q.question_type,
+        marks: q.marks,
+        difficulty: q.difficulty,
+        answer_scheme: q.answer_scheme,
+        approval_status: 'APPROVED',
+        course_outcome: q.course_outcome,
+        program_outcome: q.program_outcome,
+        bloom_taxonomy: q.bloom_taxonomy,
+        is_active: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }));
+
+      return {
+        success: true,
+        data: daaList.map(normalizeQuestion),
+        totalCount: daaList.length,
+      };
     }
 
     return {
@@ -600,6 +768,9 @@ async function createQuestion({
   difficulty = 'MEDIUM',
   answerScheme = '',
   approvalStatus = 'APPROVED',
+  courseOutcome,
+  programOutcome,
+  bloomTaxonomy,
 }) {
   if (!authorId) throw new Error('Author identity is required.');
   if (!subject || !subject.trim()) throw new Error('Subject is required.');
@@ -607,6 +778,11 @@ async function createQuestion({
   if (!unitTitle || !unitTitle.trim()) throw new Error('Unit title is required.');
   if (!questionText || !questionText.trim()) throw new Error('Question text is required.');
   if (!marks || isNaN(marks) || marks <= 0) throw new Error('Valid marks (greater than 0) are required.');
+
+  const unitInt = parseInt(unitNumber, 10);
+  const defaultCO = `CO${Math.min(Math.max(unitInt, 1), 6)}`;
+  const defaultPO = (difficulty?.toUpperCase() === 'HARD') ? 'PO3' : (difficulty?.toUpperCase() === 'MEDIUM') ? 'PO2' : 'PO1';
+  const defaultBT = (difficulty?.toUpperCase() === 'HARD') ? 'L4 - Analyze' : (difficulty?.toUpperCase() === 'MEDIUM') ? 'L3 - Apply' : 'L2 - Understand';
 
   const payload = {
     id: crypto.randomUUID(),
@@ -616,7 +792,7 @@ async function createQuestion({
     semester: semester.trim(),
     academic_pattern: academicPattern.trim(),
     exam_type: examType.trim(),
-    unit_number: parseInt(unitNumber, 10),
+    unit_number: unitInt,
     unit_title: unitTitle.trim(),
     topic: topic ? topic.trim() : null,
     question_text: questionText.trim(),
@@ -625,6 +801,9 @@ async function createQuestion({
     difficulty: difficulty.toUpperCase(),
     answer_scheme: answerScheme ? answerScheme.trim() : null,
     approval_status: approvalStatus.toUpperCase(),
+    course_outcome: courseOutcome || defaultCO,
+    program_outcome: programOutcome || defaultPO,
+    bloom_taxonomy: bloomTaxonomy || defaultBT,
     is_active: true,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -641,6 +820,21 @@ async function createQuestion({
       if (isTableMissingError(error)) {
         memoryQuestionBank.set(payload.id, payload);
         return normalizeQuestion(payload);
+      }
+      // If error is about missing column in older DB schema, insert without new columns
+      if (error.code === '42703' || (error.message || '').includes('column')) {
+        const fallbackPayload = { ...payload };
+        delete fallbackPayload.course_outcome;
+        delete fallbackPayload.program_outcome;
+        delete fallbackPayload.bloom_taxonomy;
+        const { data: fbData, error: fbErr } = await supabase
+          .from('question_bank')
+          .insert([fallbackPayload])
+          .select('*')
+          .single();
+        if (!fbErr && fbData) {
+          return normalizeQuestion({ ...fbData, course_outcome: payload.course_outcome, program_outcome: payload.program_outcome, bloom_taxonomy: payload.bloom_taxonomy });
+        }
       }
       throw error;
     }
@@ -718,6 +912,12 @@ async function updateQuestion(id, updates, authorId, role) {
     updatePayload.answer_scheme = updates.answerScheme !== undefined ? updates.answerScheme : updates.answer_scheme;
   if (updates.approvalStatus !== undefined || updates.approval_status !== undefined)
     updatePayload.approval_status = (updates.approvalStatus || updates.approval_status).toUpperCase();
+  if (updates.courseOutcome !== undefined || updates.course_outcome !== undefined)
+    updatePayload.course_outcome = updates.courseOutcome || updates.course_outcome;
+  if (updates.programOutcome !== undefined || updates.program_outcome !== undefined)
+    updatePayload.program_outcome = updates.programOutcome || updates.program_outcome;
+  if (updates.bloomTaxonomy !== undefined || updates.bloom_taxonomy !== undefined)
+    updatePayload.bloom_taxonomy = updates.bloomTaxonomy || updates.bloom_taxonomy;
   if (updates.isActive !== undefined || updates.is_active !== undefined)
     updatePayload.is_active = updates.isActive !== undefined ? updates.isActive : updates.is_active;
 

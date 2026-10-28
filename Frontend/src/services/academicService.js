@@ -31,6 +31,16 @@ const academicService = {
     const res = await api.get(`/academic/subjects/${encodeURIComponent(subjectCode)}/units`);
     return res.data;
   },
+
+  getOutcomes: async () => {
+    const res = await api.get('/academic/outcomes');
+    return res.data;
+  },
+
+  getTeacherProfile: async () => {
+    const res = await api.get('/academic/teacher-profile');
+    return res.data;
+  },
 };
 
 export default academicService;

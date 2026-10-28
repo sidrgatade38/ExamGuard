@@ -12,6 +12,7 @@
  */
 
 const adminService = require('../services/adminService');
+const questionPaperService = require('../services/questionPaperService');
 
 function getClientContext(req) {
   return {
@@ -205,6 +206,54 @@ async function getRoles(req, res, next) {
   }
 }
 
+/**
+ * Handles GET /api/admin/question-papers
+ */
+async function getQuestionPapers(req, res, next) {
+  try {
+    const { search, status, page, limit } = req.query;
+    const result = await questionPaperService.getAdminQuestionPapers({
+      search,
+      status,
+      page,
+      limit,
+    });
+    return res.status(200).json(result);
+  } catch (err) {
+    if (err.statusCode) {
+      return res.status(err.statusCode).json({ success: false, message: err.message });
+    }
+    return next(err);
+  }
+}
+
+/**
+ * Handles POST /api/admin/question-papers/:id/approval
+ */
+async function approveQuestionPaper(req, res, next) {
+  try {
+    const adminId = req.user?.userId;
+    const adminName = req.user?.name;
+    const { id } = req.params;
+    const { action, comments } = req.body;
+
+    const result = await questionPaperService.adminApproveQuestionPaper({
+      paperId: id,
+      adminId,
+      adminName,
+      action,
+      comments,
+    });
+
+    return res.status(200).json(result);
+  } catch (err) {
+    if (err.statusCode) {
+      return res.status(err.statusCode).json({ success: false, message: err.message });
+    }
+    return next(err);
+  }
+}
+
 module.exports = {
   getUsers,
   getUser,
@@ -213,4 +262,6 @@ module.exports = {
   updateRole,
   resetPassword,
   getRoles,
+  getQuestionPapers,
+  approveQuestionPaper,
 };

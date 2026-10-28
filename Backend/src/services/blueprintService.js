@@ -40,6 +40,7 @@ const DEFAULT_SPOS_BLUEPRINT = {
   subjectCode: '310243',
   durationHours: 2.5,
   totalMarks: 70,
+  maxQuestionsLimit: 30,
   instructions: [
     'Answer Q1 or Q2, Q3 or Q4, Q5 or Q6, Q7 or Q8.',
     'Neat diagrams must be drawn wherever necessary.',
@@ -101,7 +102,80 @@ const DEFAULT_SPOS_BLUEPRINT = {
 };
 
 /**
- * Validates blueprint consistency, marks calculations, and subquestions.
+ * Standard DAA 2019 Pattern Blueprint configuration for Design and Analysis of Algorithms
+ */
+const DEFAULT_DAA_BLUEPRINT = {
+  title: 'End Semester Examination: Design and Analysis of Algorithms',
+  subject: 'Design and Analysis of Algorithms',
+  course: 'B.E. (Computer Engineering)',
+  semester: 'Semester 7',
+  academicPattern: '2019 Pattern',
+  subjectCode: '410241',
+  durationHours: 2.5,
+  totalMarks: 70,
+  maxQuestionsLimit: 30,
+  instructions: [
+    'Answer Q1 or Q2, Q3 or Q4, Q5 or Q6, Q7 or Q8.',
+    'Neat diagrams must be drawn wherever necessary.',
+    'Figures to the right indicate full marks.',
+    'Assume suitable data if necessary.',
+  ],
+  numSets: 2,
+  maxOverlapPercentage: 40,
+  sections: [
+    {
+      groupOrder: 1,
+      groupLabel: 'Group 1 (Unit 1: Algorithm Analysis and Recurrence Relations)',
+      primaryQuestionNumber: 1,
+      alternativeQuestionNumber: 2,
+      targetMarks: 17,
+      targetUnit: 1,
+      subquestionsConfig: [
+        { subPart: 'a', marks: 8, difficulty: 'MEDIUM', questionType: 'DESCRIPTIVE', unit: 1 },
+        { subPart: 'b', marks: 9, difficulty: 'HARD', questionType: 'NUMERICAL', unit: 1 },
+      ],
+    },
+    {
+      groupOrder: 2,
+      groupLabel: 'Group 2 (Unit 2: Divide-and-Conquer and Dynamic Programming)',
+      primaryQuestionNumber: 3,
+      alternativeQuestionNumber: 4,
+      targetMarks: 17,
+      targetUnit: 2,
+      subquestionsConfig: [
+        { subPart: 'a', marks: 8, difficulty: 'MEDIUM', questionType: 'NUMERICAL', unit: 2 },
+        { subPart: 'b', marks: 9, difficulty: 'HARD', questionType: 'DESCRIPTIVE', unit: 2 },
+      ],
+    },
+    {
+      groupOrder: 3,
+      groupLabel: 'Group 3 (Unit 3: Greedy Techniques and Graph Algorithms)',
+      primaryQuestionNumber: 5,
+      alternativeQuestionNumber: 6,
+      targetMarks: 18,
+      targetUnit: 3,
+      subquestionsConfig: [
+        { subPart: 'a', marks: 9, difficulty: 'MEDIUM', questionType: 'NUMERICAL', unit: 3 },
+        { subPart: 'b', marks: 9, difficulty: 'HARD', questionType: 'DESCRIPTIVE', unit: 3 },
+      ],
+    },
+    {
+      groupOrder: 4,
+      groupLabel: 'Group 4 (Unit 4: NP-Completeness and Approximation Algorithms)',
+      primaryQuestionNumber: 7,
+      alternativeQuestionNumber: 8,
+      targetMarks: 18,
+      targetUnit: 4,
+      subquestionsConfig: [
+        { subPart: 'a', marks: 9, difficulty: 'MEDIUM', questionType: 'DESCRIPTIVE', unit: 4 },
+        { subPart: 'b', marks: 9, difficulty: 'HARD', questionType: 'DESCRIPTIVE', unit: 4 },
+      ],
+    },
+  ],
+};
+
+/**
+ * Validates blueprint consistency, marks calculations, subquestions, and max question limits (Priority 3).
  */
 function validateBlueprintStructure(blueprint) {
   const errors = [];
@@ -118,8 +192,9 @@ function validateBlueprintStructure(blueprint) {
     return { valid: false, errors };
   }
 
-  // Calculate sum of answered marks across all groups
+  // Calculate sum of answered marks across all groups and total question count
   let calculatedAnsweredMarks = 0;
+  let totalQuestionsCount = 0;
 
   sections.forEach((sec, idx) => {
     const groupNum = sec.groupOrder || idx + 1;
@@ -140,8 +215,25 @@ function validateBlueprintStructure(blueprint) {
           `Group ${groupNum}: Subquestions sum (${subSum}) does not equal group target marks (${sec.targetMarks}).`
         );
       }
+      // Count primary subquestions
+      totalQuestionsCount += subConfigs.length;
+      // If alternative OR question exists, count alternative subquestions
+      if (sec.alternativeQuestionNumber) {
+        totalQuestionsCount += subConfigs.length;
+      }
     }
   });
+
+  // Enforce question count limit (approx 30 questions, or pattern limit)
+  const maxLimit = parseInt(blueprint.maxQuestionsLimit, 10) || 30;
+  if (totalQuestionsCount > maxLimit) {
+    errors.push(
+      `Question count limit exceeded: Selected examination pattern allows at most ${maxLimit} questions (configured ${totalQuestionsCount}).`
+    );
+  }
+  if (totalQuestionsCount < 1) {
+    errors.push('At least one question must be configured in the blueprint.');
+  }
 
   if (calculatedAnsweredMarks !== parseInt(blueprint.totalMarks, 10)) {
     errors.push(
@@ -153,6 +245,9 @@ function validateBlueprintStructure(blueprint) {
     valid: errors.length === 0,
     errors,
     calculatedAnsweredMarks,
+    totalQuestionsCount,
+    maxQuestionsLimit: maxLimit,
+    remainingCapacity: Math.max(0, maxLimit - totalQuestionsCount),
   };
 }
 
@@ -479,6 +574,16 @@ function getStandardCurriculumBlueprint(params = {}) {
   const academicPattern = params.academicPattern || '2019 Pattern';
   const subjectCode = params.subjectCode || '310243';
 
+  const isDAA = subject.toUpperCase() === 'DAA' || subject.toLowerCase().includes('algorithm') || subjectCode === '410241';
+  if (isDAA) {
+    return {
+      ...DEFAULT_DAA_BLUEPRINT,
+      course: params.course || DEFAULT_DAA_BLUEPRINT.course,
+      semester: params.semester || DEFAULT_DAA_BLUEPRINT.semester,
+      academicPattern: params.academicPattern || DEFAULT_DAA_BLUEPRINT.academicPattern,
+    };
+  }
+
   return {
     title: `End Semester Examination: ${subject}`,
     subject,
@@ -488,6 +593,7 @@ function getStandardCurriculumBlueprint(params = {}) {
     subjectCode,
     durationHours: 2.5,
     totalMarks: 70,
+    maxQuestionsLimit: 30,
     instructions: [
       'Answer Q1 or Q2, Q3 or Q4, Q5 or Q6, Q7 or Q8.',
       'Neat diagrams must be drawn wherever necessary.',
@@ -551,6 +657,7 @@ function getStandardCurriculumBlueprint(params = {}) {
 
 module.exports = {
   DEFAULT_SPOS_BLUEPRINT,
+  DEFAULT_DAA_BLUEPRINT,
   getStandardCurriculumBlueprint,
   validateBlueprintStructure,
   createBlueprint,

@@ -108,6 +108,24 @@ export default function AdminHome() {
   const [selectedLog, setSelectedLog] = useState(null);
 
   // ==========================================
+  // SECTION C: Question Paper Approval States (Module 22)
+  // ==========================================
+  const [papersList, setPapersList] = useState([]);
+  const [papersLoading, setPapersLoading] = useState(false);
+  const [paperSearch, setPaperSearch] = useState('');
+  const [paperStatusFilter, setPaperStatusFilter] = useState('');
+  const [paperPagination, setPaperPagination] = useState({
+    total: 0,
+    page: 1,
+    limit: 15,
+    totalPages: 1,
+  });
+  const [selectedApprovalPaper, setSelectedApprovalPaper] = useState(null);
+  const [approvalAction, setApprovalAction] = useState('APPROVE');
+  const [approvalComments, setApprovalComments] = useState('');
+  const [approvalSubmitting, setApprovalSubmitting] = useState(false);
+
+  // ==========================================
   // User Management Handlers
   // ==========================================
   const fetchUsers = useCallback(
@@ -328,6 +346,77 @@ export default function AdminHome() {
     navigate('/login');
   };
 
+  // ==========================================
+  // Question Paper Approval Handlers (Module 22)
+  // ==========================================
+  const fetchAdminQuestionPapers = useCallback(
+    async (pageToLoad = 1) => {
+      setPapersLoading(true);
+      setUserActionError(null);
+      try {
+        const params = {
+          page: pageToLoad,
+          limit: paperPagination.limit,
+        };
+        if (paperSearch) params.search = paperSearch;
+        if (paperStatusFilter) params.status = paperStatusFilter;
+
+        const result = await adminService.getQuestionPapers(params);
+        setPapersList(result.data || []);
+        setPaperPagination(
+          result.pagination || {
+            total: 0,
+            page: pageToLoad,
+            limit: paperPagination.limit,
+            totalPages: 1,
+          }
+        );
+      } catch (err) {
+        console.error('Error fetching admin question papers:', err);
+        setUserActionError(
+          err.response?.data?.message || err.message || 'Failed to load question papers.'
+        );
+      } finally {
+        setPapersLoading(false);
+      }
+    },
+    [paperSearch, paperStatusFilter, paperPagination.limit]
+  );
+
+  useEffect(() => {
+    if (activeTab === 'approvals') {
+      fetchAdminQuestionPapers(1);
+    }
+  }, [fetchAdminQuestionPapers, activeTab]);
+
+  const handleConfirmApproval = async (e) => {
+    e.preventDefault();
+    if (!selectedApprovalPaper) return;
+    setUserActionError(null);
+    setUserActionSuccess(null);
+    setApprovalSubmitting(true);
+
+    try {
+      await adminService.approveQuestionPaper(selectedApprovalPaper.id, {
+        action: approvalAction,
+        comments: approvalComments,
+      });
+
+      setUserActionSuccess(
+        `Question paper "${selectedApprovalPaper.title}" successfully updated with decision: ${approvalAction}.`
+      );
+      setSelectedApprovalPaper(null);
+      setApprovalComments('');
+      fetchAdminQuestionPapers(paperPagination.page);
+    } catch (err) {
+      setUserActionError(
+        err.response?.data?.message || err.message || 'Failed to submit approval decision.'
+      );
+    } finally {
+      setApprovalSubmitting(false);
+    }
+  };
+
   const formatTimestamp = (isoStr) => {
     if (!isoStr) return 'N/A';
     try {
@@ -451,6 +540,20 @@ export default function AdminHome() {
 
               <button
                 onClick={() => {
+                  setActiveTab('approvals');
+                  setMobileMenuOpen(false);
+                }}
+                style={{
+                  ...styles.mobileNavBtn,
+                  ...(activeTab === 'approvals' ? styles.mobileNavBtnActive : {}),
+                }}
+              >
+                <FileText size={18} />
+                <span>Paper Approvals</span>
+              </button>
+
+              <button
+                onClick={() => {
                   setActiveTab('audit');
                   setMobileMenuOpen(false);
                 }}
@@ -485,6 +588,17 @@ export default function AdminHome() {
         >
           <Users size={18} style={{ marginRight: '0.5rem' }} />
           <span>User Management</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('approvals')}
+          style={{
+            ...styles.tabBtn,
+            ...(activeTab === 'approvals' ? styles.tabBtnActive : {}),
+          }}
+        >
+          <FileText size={18} style={{ marginRight: '0.5rem' }} />
+          <span>Paper Approvals</span>
         </button>
 
         <button
@@ -780,7 +894,267 @@ export default function AdminHome() {
         )}
 
         {/* ============================================================== */}
-        {/* TAB 2: AUDIT LOGS (Module 13 preserved in full)                */}
+        {/* TAB 2: QUESTION PAPER APPROVAL WORKFLOW (Module 22)            */}
+        {/* ============================================================== */}
+        {activeTab === 'approvals' && (
+          <div>
+            {/* Filter Toolbar */}
+            <section style={styles.filterCard}>
+              <div style={styles.filterGroup}>
+                <label style={styles.filterLabel}>
+                  <Search size={14} style={{ marginRight: '0.35rem' }} />
+                  Search Paper / Subject / Faculty
+                </label>
+                <input
+                  type="text"
+                  placeholder="Filter by title, subject code, or teacher..."
+                  value={paperSearch}
+                  onChange={(e) => setPaperSearch(e.target.value)}
+                  style={styles.searchInput}
+                />
+              </div>
+
+              <div style={styles.filterGroup}>
+                <label style={styles.filterLabel}>Approval Status</label>
+                <select
+                  value={paperStatusFilter}
+                  onChange={(e) => setPaperStatusFilter(e.target.value)}
+                  style={styles.selectInput}
+                >
+                  <option value="">All Workflow Statuses</option>
+                  <option value="PENDING">Pending Admin Approval</option>
+                  <option value="APPROVED">Admin Approved</option>
+                  <option value="RETURNED">Returned for Revision</option>
+                  <option value="REJECTED">Rejected</option>
+                </select>
+              </div>
+
+              <div style={styles.filterActions}>
+                <button
+                  type="button"
+                  onClick={() => fetchAdminQuestionPapers(1)}
+                  style={styles.refreshBtn}
+                  disabled={papersLoading}
+                  title="Reload Question Papers"
+                >
+                  <RefreshCw
+                    size={16}
+                    style={papersLoading ? { animation: 'spin 1s linear infinite' } : {}}
+                  />
+                  <span>Refresh</span>
+                </button>
+              </div>
+            </section>
+
+            {/* Papers Table Card */}
+            <section style={styles.tableCard}>
+              {papersLoading ? (
+                <div style={styles.loadingBox}>
+                  <Loader2 size={36} color="#3b82f6" style={{ animation: 'spin 1s linear infinite' }} />
+                  <p style={{ marginTop: '0.75rem', color: '#94a3b8' }}>Loading question papers for review &amp; approval...</p>
+                </div>
+              ) : papersList.length === 0 ? (
+                <div style={styles.emptyState}>
+                  <FileText size={44} color="#64748b" />
+                  <h4 style={styles.emptyTitle}>No Question Papers Found</h4>
+                  <p style={styles.emptySubtitle}>
+                    {paperSearch || paperStatusFilter
+                      ? 'No papers match your search and filter parameters.'
+                      : 'No question papers submitted for administrative approval.'}
+                  </p>
+                </div>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={styles.table}>
+                    <thead>
+                      <tr>
+                        <th style={styles.th}>Subject &amp; Paper Title</th>
+                        <th style={styles.th}>Authoring Faculty</th>
+                        <th style={styles.th}>Exam Date &amp; Status</th>
+                        <th style={styles.th}>Coordinator Review</th>
+                        <th style={styles.th}>Admin Approval</th>
+                        <th style={{ ...styles.th, textAlign: 'right' }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {papersList.map((p) => (
+                        <tr key={p.id} style={styles.tr}>
+                          <td style={styles.td}>
+                            <div style={{ fontWeight: 600, color: '#f8fafc' }}>{p.title}</div>
+                            <div style={{ fontSize: '0.8rem', color: '#38bdf8', marginTop: '2px' }}>
+                              {p.subject} {p.subject_code ? `[${p.subject_code}]` : ''}
+                            </div>
+                            <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '2px' }}>
+                              {p.semester} • {p.pattern || '2019 Pattern'}
+                            </div>
+                          </td>
+
+                          <td style={styles.td}>
+                            <div style={{ fontWeight: 500, color: '#f1f5f9' }}>{p.teacher?.name || 'Faculty Member'}</div>
+                            <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{p.teacher?.email}</div>
+                          </td>
+
+                          <td style={styles.td}>
+                            <div style={{ fontSize: '0.85rem', color: '#e2e8f0' }}>{p.exam_date || 'Scheduled'}</div>
+                            <span
+                              style={{
+                                display: 'inline-block',
+                                marginTop: '4px',
+                                fontSize: '0.75rem',
+                                padding: '2px 6px',
+                                borderRadius: '4px',
+                                backgroundColor: p.status === 'SCHEDULED' ? '#064e3b' : '#1e293b',
+                                color: p.status === 'SCHEDULED' ? '#6ee7b7' : '#94a3b8',
+                                border: '1px solid #334155',
+                              }}
+                            >
+                              {p.status}
+                            </span>
+                          </td>
+
+                          <td style={styles.td}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                              <span
+                                style={{
+                                  display: 'inline-block',
+                                  fontSize: '0.75rem',
+                                  padding: '2px 6px',
+                                  borderRadius: '4px',
+                                  fontWeight: 600,
+                                  backgroundColor:
+                                    p.review_status === 'RECOMMENDED'
+                                      ? '#064e3b'
+                                      : p.review_status === 'RETURNED'
+                                      ? '#78350f'
+                                      : p.review_status === 'REJECTED'
+                                      ? '#7f1d1d'
+                                      : '#1e293b',
+                                  color:
+                                    p.review_status === 'RECOMMENDED'
+                                      ? '#6ee7b7'
+                                      : p.review_status === 'RETURNED'
+                                      ? '#fde68a'
+                                      : p.review_status === 'REJECTED'
+                                      ? '#fca5a5'
+                                      : '#94a3b8',
+                                }}
+                              >
+                                {p.review_status || 'PENDING'}
+                              </span>
+                              {p.reviewer_name && (
+                                <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+                                  By: {p.reviewer_name}
+                                </span>
+                              )}
+                              {p.review_comments && (
+                                <span style={{ fontSize: '0.75rem', color: '#cbd5e1', fontStyle: 'italic', maxWidth: '200px' }}>
+                                  &ldquo;{p.review_comments}&rdquo;
+                                </span>
+                              )}
+                            </div>
+                          </td>
+
+                          <td style={styles.td}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                              <span
+                                style={{
+                                  display: 'inline-block',
+                                  fontSize: '0.75rem',
+                                  padding: '2px 6px',
+                                  borderRadius: '4px',
+                                  fontWeight: 600,
+                                  backgroundColor:
+                                    p.admin_approval_status === 'APPROVED'
+                                      ? '#064e3b'
+                                      : p.admin_approval_status === 'RETURNED'
+                                      ? '#78350f'
+                                      : p.admin_approval_status === 'REJECTED'
+                                      ? '#7f1d1d'
+                                      : '#1e293b',
+                                  color:
+                                    p.admin_approval_status === 'APPROVED'
+                                      ? '#6ee7b7'
+                                      : p.admin_approval_status === 'RETURNED'
+                                      ? '#fde68a'
+                                      : p.admin_approval_status === 'REJECTED'
+                                      ? '#fca5a5'
+                                      : '#94a3b8',
+                                }}
+                              >
+                                {p.admin_approval_status || 'PENDING'}
+                              </span>
+                              {p.admin_approver_name && (
+                                <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+                                  Approver: {p.admin_approver_name}
+                                </span>
+                              )}
+                              {p.admin_comments && (
+                                <span style={{ fontSize: '0.75rem', color: '#cbd5e1', fontStyle: 'italic', maxWidth: '200px' }}>
+                                  &ldquo;{p.admin_comments}&rdquo;
+                                </span>
+                              )}
+                            </div>
+                          </td>
+
+                          <td style={{ ...styles.td, textAlign: 'right' }}>
+                            <button
+                              onClick={() => {
+                                setSelectedApprovalPaper(p);
+                                setApprovalAction(p.admin_approval_status === 'APPROVED' ? 'APPROVE' : 'APPROVE');
+                                setApprovalComments(p.admin_comments || '');
+                              }}
+                              style={{
+                                ...styles.actionBtn,
+                                backgroundColor: '#2563eb',
+                                color: '#ffffff',
+                              }}
+                              title="Review &amp; Approve/Return Paper"
+                            >
+                              <ShieldCheck size={14} style={{ marginRight: '4px' }} />
+                              <span>Decide</span>
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Pagination Bar */}
+              {papersList.length > 0 && (
+                <div style={styles.paginationBar}>
+                  <span style={styles.pageInfoText}>
+                    Showing page <strong>{paperPagination.page}</strong> of{' '}
+                    <strong>{paperPagination.totalPages}</strong> ({paperPagination.total} total question papers)
+                  </span>
+
+                  <div style={styles.pageBtnGroup}>
+                    <button
+                      onClick={() => fetchAdminQuestionPapers(paperPagination.page - 1)}
+                      disabled={paperPagination.page <= 1}
+                      style={styles.pageBtn}
+                    >
+                      <ArrowLeft size={14} style={{ marginRight: '0.35rem' }} />
+                      Previous
+                    </button>
+                    <button
+                      onClick={() => fetchAdminQuestionPapers(paperPagination.page + 1)}
+                      disabled={paperPagination.page >= paperPagination.totalPages}
+                      style={styles.pageBtn}
+                    >
+                      Next
+                      <ArrowRight size={14} style={{ marginLeft: '0.35rem' }} />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </section>
+          </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* TAB 3: AUDIT LOGS (Module 13 preserved in full)                */}
         {/* ============================================================== */}
         {activeTab === 'audit' && (
           <div>
@@ -1502,6 +1876,138 @@ export default function AdminHome() {
                 Close
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* MODAL 7: QUESTION PAPER APPROVAL DECISION (Module 22)          */}
+      {/* ============================================================== */}
+      {selectedApprovalPaper && (
+        <div style={styles.modalOverlay}>
+          <div style={styles.modalCard}>
+            <div style={styles.modalHeader}>
+              <h3 style={styles.modalTitle}>
+                Question Paper Approval Decision
+              </h3>
+              <button
+                onClick={() => setSelectedApprovalPaper(null)}
+                style={styles.modalCloseBtn}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmApproval}>
+              <div style={styles.modalBody}>
+                <div style={{ marginBottom: '1rem', padding: '0.75rem', backgroundColor: '#0f172a', borderRadius: '6px', border: '1px solid #1e293b' }}>
+                  <div style={{ fontWeight: 600, color: '#f8fafc', fontSize: '0.95rem' }}>
+                    {selectedApprovalPaper.title}
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: '#38bdf8', marginTop: '2px' }}>
+                    {selectedApprovalPaper.subject} [{selectedApprovalPaper.subject_code || selectedApprovalPaper.code || 'Code'}]
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '4px' }}>
+                    Authoring Faculty: <strong>{selectedApprovalPaper.teacher?.name || 'Faculty Member'}</strong> ({selectedApprovalPaper.teacher?.email})
+                  </div>
+                  {selectedApprovalPaper.review_status && (
+                    <div style={{ marginTop: '6px', fontSize: '0.75rem', color: '#e2e8f0' }}>
+                      Coordinator Review: <strong style={{ color: selectedApprovalPaper.review_status === 'RECOMMENDED' ? '#6ee7b7' : '#fde68a' }}>{selectedApprovalPaper.review_status}</strong>
+                      {selectedApprovalPaper.review_comments && (
+                        <span style={{ fontStyle: 'italic', marginLeft: '6px' }}>&ldquo;{selectedApprovalPaper.review_comments}&rdquo;</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div style={styles.formField}>
+                  <label style={styles.formLabel}>Admin Decision Action</label>
+                  <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem', marginBottom: '0.75rem' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontSize: '0.85rem' }}>
+                      <input
+                        type="radio"
+                        name="adminApprovalAction"
+                        value="APPROVE"
+                        checked={approvalAction === 'APPROVE'}
+                        onChange={(e) => setApprovalAction(e.target.value)}
+                      />
+                      <span style={{ color: '#6ee7b7', fontWeight: 600 }}>Approve (Schedule Delivery)</span>
+                    </label>
+
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontSize: '0.85rem' }}>
+                      <input
+                        type="radio"
+                        name="adminApprovalAction"
+                        value="RETURN"
+                        checked={approvalAction === 'RETURN'}
+                        onChange={(e) => setApprovalAction(e.target.value)}
+                      />
+                      <span style={{ color: '#fde68a', fontWeight: 600 }}>Return to Faculty</span>
+                    </label>
+
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontSize: '0.85rem' }}>
+                      <input
+                        type="radio"
+                        name="adminApprovalAction"
+                        value="REJECT"
+                        checked={approvalAction === 'REJECT'}
+                        onChange={(e) => setApprovalAction(e.target.value)}
+                      />
+                      <span style={{ color: '#fca5a5', fontWeight: 600 }}>Reject</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div style={styles.formField}>
+                  <label style={styles.formLabel}>Administrative Comments &amp; Instructions</label>
+                  <textarea
+                    rows={4}
+                    value={approvalComments}
+                    onChange={(e) => setApprovalComments(e.target.value)}
+                    placeholder="Enter approval endorsement notes or specific revision instructions for the faculty..."
+                    style={{
+                      width: '100%',
+                      padding: '0.6rem 0.75rem',
+                      borderRadius: '6px',
+                      border: '1px solid #334155',
+                      backgroundColor: '#0f172a',
+                      color: '#f8fafc',
+                      fontSize: '0.875rem',
+                      resize: 'vertical',
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div style={styles.modalFooter}>
+                <button
+                  type="button"
+                  onClick={() => setSelectedApprovalPaper(null)}
+                  style={styles.modalDismissBtn}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={approvalSubmitting}
+                  style={{
+                    ...styles.modalSubmitBtn,
+                    backgroundColor:
+                      approvalAction === 'APPROVE'
+                        ? '#059669'
+                        : approvalAction === 'RETURN'
+                        ? '#d97706'
+                        : '#dc2626',
+                  }}
+                >
+                  {approvalSubmitting ? (
+                    <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
+                  ) : (
+                    `Confirm Decision (${approvalAction})`
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

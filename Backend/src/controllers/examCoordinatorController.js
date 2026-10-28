@@ -1,4 +1,5 @@
 const examCoordinatorService = require('../services/examCoordinatorService');
+const questionPaperService = require('../services/questionPaperService');
 
 /**
  * Exam Coordinator Controller (Module 9)
@@ -208,6 +209,33 @@ async function verifyPaperSignature(req, res, next) {
   }
 }
 
+async function reviewPaper(req, res, next) {
+  try {
+    const coordinatorId = req.user?.userId;
+    const coordinatorName = req.user?.name;
+    const { id } = req.params;
+    const { action, comments } = req.body;
+
+    const result = await questionPaperService.reviewQuestionPaper({
+      paperId: id,
+      coordinatorId,
+      coordinatorName,
+      action,
+      comments,
+    });
+
+    return res.status(200).json(result);
+  } catch (err) {
+    if (err.statusCode) {
+      return res.status(err.statusCode).json({
+        success: false,
+        message: err.message,
+      });
+    }
+    return next(err);
+  }
+}
+
 module.exports = {
   getAssignedPapers,
   getDashboardStats,
@@ -215,4 +243,5 @@ module.exports = {
   getPaperDetails,
   downloadPaper,
   verifyPaperSignature,
+  reviewPaper,
 };

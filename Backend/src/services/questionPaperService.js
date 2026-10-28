@@ -429,6 +429,14 @@ async function getMyQuestionPapers(teacherId) {
       scheduled_delivery_date,
       created_at,
       updated_at,
+      review_status,
+      reviewer_id,
+      reviewed_at,
+      review_comments,
+      admin_approval_status,
+      admin_approver_id,
+      admin_approved_at,
+      admin_comments,
       question_paper_assignments (
         id,
         assigned_to_user_id,
@@ -492,6 +500,14 @@ async function getQuestionPaperById(paperId, requesterId, requesterRole) {
       scheduled_delivery_date,
       created_at,
       updated_at,
+      review_status,
+      reviewer_id,
+      reviewed_at,
+      review_comments,
+      admin_approval_status,
+      admin_approver_id,
+      admin_approved_at,
+      admin_comments,
       teacher:users!teacher_id (
         id,
         name,
@@ -932,6 +948,14 @@ async function getAssignedQuestionPapers(facultyId) {
       scheduled_delivery_date,
       created_at,
       updated_at,
+      review_status,
+      reviewer_id,
+      reviewed_at,
+      review_comments,
+      admin_approval_status,
+      admin_approver_id,
+      admin_approved_at,
+      admin_comments,
       teacher:users!teacher_id (
         id,
         name,
@@ -1299,6 +1323,333 @@ async function deleteQuestionPaper(paperId, requesterId, requesterRole, reason =
   };
 }
 
+/**
+ * Exam Coordinator reviews an assigned question paper (Module 22 & Priority 2)
+ */
+async function reviewQuestionPaper({ paperId, coordinatorId, coordinatorName, action, comments }) {
+  if (!paperId) throw new Error('Paper ID is required.');
+  if (!coordinatorId) throw new Error('Coordinator ID is required.');
+  if (!action) throw new Error('Review action is required (RECOMMEND, APPROVE, RETURN, or REJECT).');
+
+  const normalizedAction = action.toUpperCase();
+  if (!['RECOMMEND', 'APPROVE', 'FORWARD', 'RETURN', 'REJECT'].includes(normalizedAction)) {
+    const err = new Error('Invalid review action. Allowed: RECOMMEND, APPROVE, RETURN, REJECT.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  // Fetch paper details
+  const { data: paper, error: fetchErr } = await supabase
+    .from('question_papers')
+    .select('*, teacher:users!teacher_id(id, name, email)')
+    .eq('id', paperId)
+    .maybeSingle();
+
+  if (fetchErr || !paper) {
+    const err = new Error('Question paper not found.');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  // Check coordinator role
+  const { data: coordUser } = await supabase
+    .from('users')
+    .select('id, name, roles(name)')
+    .eq('id', coordinatorId)
+    .maybeSingle();
+
+  if (!coordUser || coordUser.roles?.name !== 'EXAM_COORDINATOR') {
+    const err = new Error('Unauthorized: Only an authorized Exam Coordinator can review question papers.');
+    err.statusCode = 403;
+    throw err;
+  }
+
+  const now = new Date().toISOString();
+  let newReviewStatus = 'REVIEWED';
+  let newPaperStatus = paper.status;
+
+  if (normalizedAction === 'RETURN') {
+    newReviewStatus = 'RETURNED';
+  } else if (normalizedAction === 'REJECT') {
+    newReviewStatus = 'REJECTED';
+    newPaperStatus = 'ARCHIVED';
+  } else {
+    newReviewStatus = 'REVIEWED';
+  }
+
+  // Persist review transition
+  const { data: updatedPaper, error: updateErr } = await supabase
+    .from('question_papers')
+    .update({
+      review_status: newReviewStatus,
+      status: newPaperStatus,
+      reviewer_id: coordinatorId,
+      reviewed_at: now,
+      review_comments: comments ? comments.trim() : null,
+      updated_at: now,
+    })
+    .eq('id', paperId)
+    .select('*')
+    .single();
+
+  if (updateErr) {
+    console.error('[QuestionPaperService] Error updating paper review status:', updateErr.message);
+    const dbErr = new Error('Failed to record review decision in database.');
+    dbErr.statusCode = 500;
+    throw dbErr;
+  }
+
+  // Send Notifications
+  if (newReviewStatus === 'REVIEWED') {
+    try {
+      const { data: admins } = await supabase
+        .from('users')
+        .select('id, roles!inner(name)')
+        .eq('roles.name', 'ADMIN')
+        .eq('is_active', true);
+
+      if (admins && admins.length > 0) {
+        for (const admin of admins) {
+          await notificationService.createWorkflowNotification({
+            recipientId: admin.id,
+            questionPaperId: paperId,
+            type: 'SYSTEM',
+            subject: `Admin Approval Required: ${paper.title} (${paper.subject})`,
+            message: `Exam Coordinator ${coordUser.name || 'Coordinator'} has reviewed and recommended question paper "${paper.title}" (${paper.subject}). Administrative approval is now required. Notes: ${comments || 'None'}`,
+          }).catch(() => {});
+        }
+      }
+    } catch (_) {}
+  } else if (newReviewStatus === 'RETURNED' || newReviewStatus === 'REJECTED') {
+    try {
+      await notificationService.createWorkflowNotification({
+        recipientId: paper.teacher_id,
+        questionPaperId: paperId,
+        type: 'SYSTEM',
+        subject: `Question Paper ${newReviewStatus === 'RETURNED' ? 'Returned for Revision' : 'Rejected'}: ${paper.title}`,
+        message: `Your question paper "${paper.title}" (${paper.subject}) has been ${newReviewStatus.toLowerCase()} by Exam Coordinator ${coordUser.name || 'Coordinator'}. Review comments: ${comments || 'No specific comments provided.'}`,
+      }).catch(() => {});
+    } catch (_) {}
+  }
+
+  // Audit log
+  await auditLogService.logAuditEvent({
+    userId: coordinatorId,
+    role: 'EXAM_COORDINATOR',
+    action: `QUESTION_PAPER_${newReviewStatus}`,
+    resourceType: 'QUESTION_PAPER',
+    resourceId: paperId,
+    outcome: 'SUCCESS',
+    summary: `Question paper ${paperId} was ${newReviewStatus.toLowerCase()} by coordinator`,
+    metadata: {
+      paperId,
+      title: paper.title,
+      reviewStatus: newReviewStatus,
+      comments,
+    },
+  });
+
+  return {
+    success: true,
+    message: `Question paper review completed successfully with decision: ${newReviewStatus}.`,
+    paper: updatedPaper,
+  };
+}
+
+/**
+ * Administrator approves, returns, or rejects a question paper (Module 22 & Priority 2)
+ */
+async function adminApproveQuestionPaper({ paperId, adminId, adminName, action, comments }) {
+  if (!paperId) throw new Error('Paper ID is required.');
+  if (!adminId) throw new Error('Admin ID is required.');
+  if (!action) throw new Error('Action is required (APPROVE, RETURN, or REJECT).');
+
+  const normalizedAction = action.toUpperCase();
+  if (!['APPROVE', 'RETURN', 'REJECT'].includes(normalizedAction)) {
+    const err = new Error('Invalid action. Allowed: APPROVE, RETURN, REJECT.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const { data: paper, error: fetchErr } = await supabase
+    .from('question_papers')
+    .select('*, teacher:users!teacher_id(id, name, email)')
+    .eq('id', paperId)
+    .maybeSingle();
+
+  if (fetchErr || !paper) {
+    const err = new Error('Question paper not found.');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const now = new Date().toISOString();
+  let newAdminStatus = 'APPROVED';
+  let newPaperStatus = 'SCHEDULED';
+
+  if (normalizedAction === 'RETURN') {
+    newAdminStatus = 'RETURNED';
+    newPaperStatus = 'SUBMITTED';
+  } else if (normalizedAction === 'REJECT') {
+    newAdminStatus = 'REJECTED';
+    newPaperStatus = 'ARCHIVED';
+  } else {
+    newAdminStatus = 'APPROVED';
+    newPaperStatus = 'SCHEDULED';
+  }
+
+  const { data: updatedPaper, error: updateErr } = await supabase
+    .from('question_papers')
+    .update({
+      admin_approval_status: newAdminStatus,
+      status: newPaperStatus,
+      admin_approver_id: adminId,
+      admin_approved_at: now,
+      admin_comments: comments ? comments.trim() : null,
+      updated_at: now,
+    })
+    .eq('id', paperId)
+    .select('*')
+    .single();
+
+  if (updateErr) {
+    console.error('[QuestionPaperService] Error recording administrative decision:', updateErr.message);
+    const dbErr = new Error('Failed to record administrative decision in database.');
+    dbErr.statusCode = 500;
+    throw dbErr;
+  }
+
+  // Notify Teacher and Coordinator
+  try {
+    await notificationService.createWorkflowNotification({
+      recipientId: paper.teacher_id,
+      questionPaperId: paperId,
+      type: newAdminStatus === 'APPROVED' ? 'QUESTION_PAPER_SCHEDULED' : 'SYSTEM',
+      subject: `Question Paper ${newAdminStatus === 'APPROVED' ? 'Approved' : newAdminStatus === 'RETURNED' ? 'Returned' : 'Rejected'}: ${paper.title}`,
+      message: `Your question paper "${paper.title}" (${paper.subject}) has been ${newAdminStatus.toLowerCase()} by the Examination Cell Administrator. Notes: ${comments || 'Examination schedule verified.'}`,
+    }).catch(() => {});
+
+    if (paper.reviewer_id) {
+      await notificationService.createWorkflowNotification({
+        recipientId: paper.reviewer_id,
+        questionPaperId: paperId,
+        type: newAdminStatus === 'APPROVED' ? 'QUESTION_PAPER_SCHEDULED' : 'SYSTEM',
+        subject: `Admin Decision on Paper: ${paper.title} (${newAdminStatus})`,
+        message: `Question paper "${paper.title}" has been ${newAdminStatus.toLowerCase()} by the Administrator. Scheduled distribution can proceed accordingly.`,
+      }).catch(() => {});
+    }
+  } catch (_) {}
+
+  // Audit log
+  await auditLogService.logAuditEvent({
+    userId: adminId,
+    role: 'ADMIN',
+    action: `QUESTION_PAPER_ADMIN_${newAdminStatus}`,
+    resourceType: 'QUESTION_PAPER',
+    resourceId: paperId,
+    outcome: 'SUCCESS',
+    summary: `Question paper ${paperId} was ${newAdminStatus.toLowerCase()} by administrator`,
+    metadata: {
+      paperId,
+      title: paper.title,
+      adminStatus: newAdminStatus,
+      paperStatus: newPaperStatus,
+      comments,
+    },
+  });
+
+  return {
+    success: true,
+    message: `Administrative decision recorded successfully: ${newAdminStatus}.`,
+    paper: updatedPaper,
+  };
+}
+
+/**
+ * Retrieves question papers for administrative review and approval workspace (Module 22 & Priority 2)
+ */
+async function getAdminQuestionPapers({ status, reviewStatus, adminStatus, search, page = 1, limit = 50 } = {}) {
+  let query = supabase
+    .from('question_papers')
+    .select(`
+      id,
+      title,
+      subject,
+      semester,
+      academic_year,
+      exam_type,
+      exam_date,
+      teacher_id,
+      file_name,
+      file_size,
+      mime_type,
+      status,
+      submitted_at,
+      scheduled_delivery_date,
+      created_at,
+      updated_at,
+      review_status,
+      reviewer_id,
+      reviewed_at,
+      review_comments,
+      admin_approval_status,
+      admin_approver_id,
+      admin_approved_at,
+      admin_comments,
+      review_status,
+      reviewer_id,
+      reviewed_at,
+      review_comments,
+      admin_approval_status,
+      admin_approver_id,
+      admin_approved_at,
+      admin_comments,
+      teacher:users!teacher_id (
+        id,
+        name,
+        email
+      ),
+      question_paper_assignments (
+        id,
+        assigned_to_user_id,
+        delivery_status,
+        recipient:users!assigned_to_user_id (
+          id,
+          name,
+          email
+        )
+      )
+    `, { count: 'exact' });
+
+  if (status && status !== 'ALL') query = query.eq('status', status);
+  if (reviewStatus && reviewStatus !== 'ALL') query = query.eq('review_status', reviewStatus);
+  if (adminStatus && adminStatus !== 'ALL') query = query.eq('admin_approval_status', adminStatus);
+
+  if (search && search.trim()) {
+    const term = `%${search.trim()}%`;
+    query = query.or(`title.ilike.${term},subject.ilike.${term}`);
+  }
+
+  const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
+  query = query.order('created_at', { ascending: false }).range(offset, offset + parseInt(limit, 10) - 1);
+
+  const { data, count, error } = await query;
+  if (error) {
+    console.error('[QuestionPaperService] Error fetching admin question papers:', error.message);
+    throw error;
+  }
+
+  return {
+    papers: data || [],
+    pagination: {
+      total: count || (data ? data.length : 0),
+      page: parseInt(page, 10),
+      limit: parseInt(limit, 10),
+      totalPages: Math.ceil((count || 1) / parseInt(limit, 10)),
+    },
+  };
+}
+
 module.exports = {
   submitQuestionPaper,
   getMyQuestionPapers,
@@ -1311,4 +1662,7 @@ module.exports = {
   calculateNextCalendarDay,
   validateRecipientFaculty,
   deleteQuestionPaper,
+  reviewQuestionPaper,
+  adminApproveQuestionPaper,
+  getAdminQuestionPapers,
 };

@@ -1,5 +1,5 @@
 /**
- * ExamGuard - Academic Master Controller (Module 21)
+ * ExamGuard - Academic Master Controller (Module 21 & 22)
  */
 
 const academicService = require('../services/academicMasterService');
@@ -43,8 +43,16 @@ async function getSemesters(req, res, next) {
 
 async function getSubjects(req, res, next) {
   try {
-    const { departmentCode, courseCode, patternCode, semester } = req.query;
-    const data = await academicService.getSubjects({ departmentCode, courseCode, patternCode, semester });
+    const { departmentCode, courseCode, patternCode, semester, search } = req.query;
+    const teacherId = req.user?.roleName === 'TEACHER' ? req.user.userId : undefined;
+    const data = await academicService.getSubjects({
+      departmentCode,
+      courseCode,
+      patternCode,
+      semester,
+      search,
+      teacherId,
+    });
     return res.status(200).json({ success: true, data });
   } catch (err) {
     next(err);
@@ -61,6 +69,25 @@ async function getUnits(req, res, next) {
   }
 }
 
+async function getOutcomes(req, res, next) {
+  try {
+    const data = await academicService.getOutcomes();
+    return res.status(200).json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function getTeacherProfile(req, res, next) {
+  try {
+    const teacherId = req.user?.userId;
+    const data = await academicService.getTeacherProfileWithSubjects(teacherId);
+    return res.status(200).json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   getDepartments,
   getCourses,
@@ -68,4 +95,6 @@ module.exports = {
   getSemesters,
   getSubjects,
   getUnits,
+  getOutcomes,
+  getTeacherProfile,
 };

@@ -64,10 +64,48 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
   const [blueprintId, setBlueprintId] = useState(null);
 
   // Question Bank State
+  const MAX_QUESTIONS_LIMIT = 30;
   const [questions, setQuestions] = useState([]);
   const [loadingBank, setLoadingBank] = useState(false);
   const [bankError, setBankError] = useState('');
   const [newQuestionModalOpen, setNewQuestionModalOpen] = useState(false);
+  const [subjectSearch, setSubjectSearch] = useState('');
+  const [teacherProfile, setTeacherProfile] = useState(null);
+  const [outcomes, setOutcomes] = useState({
+    courseOutcomes: [
+      { code: 'CO1', title: 'Fundamentals and Mathematical Analysis' },
+      { code: 'CO2', title: 'Design and Analysis of Divide-and-Conquer / Greedy Algorithms' },
+      { code: 'CO3', title: 'Dynamic Programming and Complex Formulations' },
+      { code: 'CO4', title: 'Backtracking and Branch-and-Bound Paradigms' },
+      { code: 'CO5', title: 'Computational Complexity and NP-Completeness' },
+      { code: 'CO6', title: 'Advanced & Approximation Algorithms' },
+    ],
+    programOutcomes: [
+      { code: 'PO1', title: 'Engineering Knowledge' },
+      { code: 'PO2', title: 'Problem Analysis' },
+      { code: 'PO3', title: 'Design/Development of Solutions' },
+      { code: 'PO4', title: 'Conduct Investigations of Complex Problems' },
+      { code: 'PO5', title: 'Modern Tool Usage' },
+      { code: 'PO6', title: 'The Engineer and Society' },
+      { code: 'PO7', title: 'Environment and Sustainability' },
+      { code: 'PO8', title: 'Ethics' },
+      { code: 'PO9', title: 'Individual and Team Work' },
+      { code: 'PO10', title: 'Communication' },
+      { code: 'PO11', title: 'Project Management and Finance' },
+      { code: 'PO12', title: 'Life-long Learning' },
+      { code: 'PSO1', title: 'Professional Skills' },
+      { code: 'PSO2', title: 'Problem-Solving Skills' },
+    ],
+    bloomTaxonomyLevels: [
+      { code: 'L1', title: 'Remember' },
+      { code: 'L2', title: 'Understand' },
+      { code: 'L3', title: 'Apply' },
+      { code: 'L4', title: 'Analyze' },
+      { code: 'L5', title: 'Evaluate' },
+      { code: 'L6', title: 'Create' },
+    ],
+  });
+
   const [newQuestionForm, setNewQuestionForm] = useState({
     unitNumber: 1,
     unitTitle: 'Unit 1: Fundamentals',
@@ -76,6 +114,9 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
     questionType: 'DESCRIPTIVE',
     marks: 8,
     difficulty: 'MEDIUM',
+    courseOutcome: 'CO1',
+    programOutcome: 'PO1',
+    bloomTaxonomy: 'L2 - Understand',
     answerScheme: '',
   });
 
@@ -103,11 +144,13 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
     async function loadAcademicCatalogs() {
       try {
         setLoadingAcademic(true);
-        const [deptsData, coursesData, patternsData, semestersData] = await Promise.all([
+        const [deptsData, coursesData, patternsData, semestersData, outcomesData, profileData] = await Promise.all([
           academicService.getDepartments().catch(() => ({ data: [] })),
           academicService.getCourses().catch(() => ({ data: [] })),
           academicService.getPatterns().catch(() => ({ data: [] })),
           academicService.getSemesters().catch(() => ({ data: [] })),
+          academicService.getOutcomes().catch(() => ({ data: null })),
+          academicService.getTeacherProfile().catch(() => ({ data: null })),
         ]);
 
         const deptsList = deptsData.data || [];
@@ -120,12 +163,24 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
         setPatterns(patternsList);
         setSemesters(semsList);
 
-        // Fetch subjects for default selections
-        const subsData = await academicService.getSubjects({
-          departmentCode: selectedDept,
-        }).catch(() => ({ data: [] }));
+        if (outcomesData?.data) {
+          setOutcomes(outcomesData.data);
+        }
+        if (profileData?.data) {
+          setTeacherProfile(profileData.data);
+        }
 
-        const subsList = subsData.data || [];
+        // Fetch subjects for default selections - use teacher's assigned subjects if available
+        let subsList = [];
+        if (profileData?.data?.subjects && profileData.data.subjects.length > 0) {
+          subsList = profileData.data.subjects;
+        } else {
+          const subsData = await academicService.getSubjects({
+            departmentCode: selectedDept,
+          }).catch(() => ({ data: [] }));
+          subsList = subsData.data || [];
+        }
+
         setSubjects(subsList);
 
         if (subsList.length > 0) {
@@ -183,7 +238,13 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
 
   // 3. Subject selection handler
   const handleSubjectChange = async (selectedSubTitle) => {
-    const subObj = subjects.find((s) => s.title === selectedSubTitle);
+    const subObj = subjects.find(
+      (s) =>
+        s.title === selectedSubTitle ||
+        s.code === selectedSubTitle ||
+        s.shortName === selectedSubTitle ||
+        s.short_name === selectedSubTitle
+    );
     if (!subObj) {
       setBlueprint((prev) => ({ ...prev, subject: selectedSubTitle }));
       return;
@@ -197,6 +258,7 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
       totalMarks: subObj.totalMarks || 70,
       durationHours: subObj.durationHours || 2.5,
       semester: subObj.semester || prev.semester,
+      academicPattern: subObj.patternName || prev.academicPattern,
     }));
 
     try {
@@ -240,6 +302,10 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
   // Add custom question for this subject
   const handleCreateQuestion = async (e) => {
     e.preventDefault();
+    if (questions.length >= MAX_QUESTIONS_LIMIT) {
+      alert(`Maximum question limit of ${MAX_QUESTIONS_LIMIT} questions reached for this examination pattern.`);
+      return;
+    }
     try {
       await questionBankService.createQuestion({
         ...newQuestionForm,
@@ -255,6 +321,9 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
         questionText: '',
         marks: 8,
         difficulty: 'MEDIUM',
+        courseOutcome: 'CO1',
+        programOutcome: 'PO1',
+        bloomTaxonomy: 'L2 - Understand',
         answerScheme: '',
       }));
       await loadQuestions();
@@ -436,6 +505,17 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
     }
   };
 
+  const filteredSubjects = subjects.filter((s) => {
+    if (!subjectSearch.trim()) return true;
+    const q = subjectSearch.trim().toLowerCase();
+    return (
+      (s.title && s.title.toLowerCase().includes(q)) ||
+      (s.code && s.code.toLowerCase().includes(q)) ||
+      (s.shortName && s.shortName.toLowerCase().includes(q)) ||
+      (s.short_name && s.short_name.toLowerCase().includes(q))
+    );
+  });
+
   const activeSet = generatedPaperData?.sets?.[activeSetIndex];
 
   return (
@@ -576,22 +656,49 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
               </select>
             </div>
 
-            {/* Subject Selection (Dynamic from Database) */}
-            <div>
-              <label style={styles.label}>Subject</label>
+            {/* Subject Selection (Searchable & Dynamic from Database) */}
+            <div style={{ gridColumn: 'span 2' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                <label style={styles.label}>
+                  Subject (Fast Search by Code, Full Title, or Short Name e.g. DAA, SPOS, DBMS, CNS)
+                </label>
+                {teacherProfile?.name && (
+                  <span style={{ fontSize: '11px', color: '#0369a1', background: '#e0f2fe', padding: '2px 8px', borderRadius: '4px' }}>
+                    Faculty Authorized: {teacherProfile.name}
+                  </span>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                <input
+                  type="text"
+                  placeholder="Type to filter subjects: e.g. DAA, 410241, Algorithms, SPOS, DBMS..."
+                  value={subjectSearch}
+                  onChange={(e) => setSubjectSearch(e.target.value)}
+                  style={{ ...styles.input, flex: 1 }}
+                />
+                {subjectSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setSubjectSearch('')}
+                    style={{ ...styles.secondaryButton, padding: '4px 10px', height: '38px', fontSize: '12px' }}
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
               <select
                 style={styles.select}
                 value={blueprint.subject}
                 onChange={(e) => handleSubjectChange(e.target.value)}
               >
-                {subjects.map((s) => (
-                  <option key={s.id} value={s.title}>
-                    [{s.code}] {s.title}
+                {filteredSubjects.map((s) => (
+                  <option key={s.id || s.code} value={s.title}>
+                    [{s.code || s.subject_code}] {s.shortName ? `(${s.shortName}) ` : ''}{s.title}
                   </option>
                 ))}
-                {subjects.length === 0 && (
-                  <option value="Systems Programming and Operating System">
-                    [310243] Systems Programming and Operating System
+                {filteredSubjects.length === 0 && (
+                  <option value={blueprint.subject}>
+                    {blueprint.subject} [{blueprint.subjectCode}]
                   </option>
                 )}
               </select>
@@ -678,14 +785,45 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
               <div>
                 <h3 style={styles.cardTitle}>Step 2: Question Bank Pool: {blueprint.subject}</h3>
                 <p style={styles.cardSubtitle}>
-                  Scoped strictly to {blueprint.subject} ({blueprint.subjectCode || 'Active Subject'}). Questions must be categorized by Unit, Marks, and Difficulty.
+                  Scoped strictly to {blueprint.subject} ({blueprint.subjectCode || 'Active Subject'}). Questions must be categorized by Unit, Marks, Outcomes (CO/PO) and Bloom&apos;s Taxonomy.
                 </p>
               </div>
-              <div style={{ display: 'flex', gap: '8px' }}>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <div
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '6px 12px',
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    backgroundColor: questions.length >= MAX_QUESTIONS_LIMIT ? '#fee2e2' : '#ecfdf5',
+                    color: questions.length >= MAX_QUESTIONS_LIMIT ? '#991b1b' : '#065f46',
+                    border: `1px solid ${questions.length >= MAX_QUESTIONS_LIMIT ? '#fca5a5' : '#a7f3d0'}`,
+                  }}
+                >
+                  <Database size={14} />
+                  <span>Pool: <strong>{questions.length} / {MAX_QUESTIONS_LIMIT}</strong> Questions</span>
+                  <span>• {Math.max(0, MAX_QUESTIONS_LIMIT - questions.length)} remaining capacity</span>
+                </div>
+
                 <button
                   type="button"
-                  style={styles.actionBtnPrimary}
-                  onClick={() => setNewQuestionModalOpen(true)}
+                  style={{
+                    ...styles.actionBtnPrimary,
+                    opacity: questions.length >= MAX_QUESTIONS_LIMIT ? 0.6 : 1,
+                    cursor: questions.length >= MAX_QUESTIONS_LIMIT ? 'not-allowed' : 'pointer',
+                  }}
+                  onClick={() => {
+                    if (questions.length >= MAX_QUESTIONS_LIMIT) {
+                      alert(`Maximum limit of ${MAX_QUESTIONS_LIMIT} questions reached for this examination pattern pool.`);
+                      return;
+                    }
+                    setNewQuestionModalOpen(true);
+                  }}
+                  disabled={questions.length >= MAX_QUESTIONS_LIMIT}
+                  title={questions.length >= MAX_QUESTIONS_LIMIT ? 'Maximum question pool limit reached' : 'Add Question'}
                 >
                   <Plus size={16} />
                   <span>Add Question</span>
@@ -733,6 +871,7 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
                     <th style={styles.th}>Question Text</th>
                     <th style={styles.th}>Type</th>
                     <th style={styles.th}>Marks</th>
+                    <th style={styles.th}>CO / PO / Bloom</th>
                     <th style={styles.th}>Difficulty</th>
                     <th style={styles.th}>Status</th>
                   </tr>
@@ -741,7 +880,7 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
                   {questions.map((q) => (
                     <tr key={q.id} style={styles.tr}>
                       <td style={styles.td}>Unit {q.unitNumber}</td>
-                      <td style={{ ...styles.td, maxWidth: '400px' }}>
+                      <td style={{ ...styles.td, maxWidth: '360px' }}>
                         <div style={{ fontWeight: 500 }}>{q.questionText}</div>
                         {q.topic && <div style={{ fontSize: '11px', color: '#64748b' }}>Topic: {q.topic}</div>}
                       </td>
@@ -750,6 +889,21 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
                       </td>
                       <td style={styles.td}>
                         <strong>{q.marks}M</strong>
+                      </td>
+                      <td style={styles.td}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                          <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: '10px', fontWeight: 700, padding: '1px 5px', borderRadius: '4px', background: '#dbeafe', color: '#1e40af' }}>
+                              {q.courseOutcome || q.course_outcome || 'CO1'}
+                            </span>
+                            <span style={{ fontSize: '10px', fontWeight: 700, padding: '1px 5px', borderRadius: '4px', background: '#fef3c7', color: '#92400e' }}>
+                              {q.programOutcome || q.program_outcome || 'PO1'}
+                            </span>
+                          </div>
+                          <span style={{ fontSize: '10px', color: '#475569' }}>
+                            {q.bloomTaxonomy || q.bloom_taxonomy || 'L2 - Understand'}
+                          </span>
+                        </div>
                       </td>
                       <td style={styles.td}>
                         <span
@@ -1190,6 +1344,89 @@ export default function QuestionPaperGeneratorWizard({ recipients = [], onSucces
                     <option value="EASY">EASY</option>
                     <option value="MEDIUM">MEDIUM</option>
                     <option value="HARD">HARD</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* CO / PO / Bloom's Taxonomy Dropdowns (Module 22 & OBE Compliance) */}
+              <div style={{ ...styles.grid2, marginTop: '12px' }}>
+                <div>
+                  <label style={styles.label}>Course Outcome (CO)</label>
+                  <select
+                    style={styles.select}
+                    value={newQuestionForm.courseOutcome}
+                    onChange={(e) =>
+                      setNewQuestionForm({ ...newQuestionForm, courseOutcome: e.target.value })
+                    }
+                  >
+                    {(outcomes.courseOutcomes || []).map((co) => (
+                      <option key={co.code} value={co.code}>
+                        {co.code}: {co.title}
+                      </option>
+                    ))}
+                    {(!outcomes.courseOutcomes || outcomes.courseOutcomes.length === 0) && (
+                      <>
+                        <option value="CO1">CO1: Fundamentals and Analysis</option>
+                        <option value="CO2">CO2: Algorithm Design Paradigms</option>
+                        <option value="CO3">CO3: Dynamic Programming</option>
+                        <option value="CO4">CO4: Backtracking and Branch-and-Bound</option>
+                        <option value="CO5">CO5: Complexity Classes</option>
+                        <option value="CO6">CO6: Advanced Algorithms</option>
+                      </>
+                    )}
+                  </select>
+                </div>
+
+                <div>
+                  <label style={styles.label}>Program Outcome (PO / PSO)</label>
+                  <select
+                    style={styles.select}
+                    value={newQuestionForm.programOutcome}
+                    onChange={(e) =>
+                      setNewQuestionForm({ ...newQuestionForm, programOutcome: e.target.value })
+                    }
+                  >
+                    {(outcomes.programOutcomes || []).map((po) => (
+                      <option key={po.code} value={po.code}>
+                        {po.code}: {po.title}
+                      </option>
+                    ))}
+                    {(!outcomes.programOutcomes || outcomes.programOutcomes.length === 0) && (
+                      <>
+                        <option value="PO1">PO1: Engineering Knowledge</option>
+                        <option value="PO2">PO2: Problem Analysis</option>
+                        <option value="PO3">PO3: Design/Development of Solutions</option>
+                        <option value="PO4">PO4: Investigations</option>
+                        <option value="PSO1">PSO1: Professional Skills</option>
+                      </>
+                    )}
+                  </select>
+                </div>
+
+                <div style={{ gridColumn: 'span 2' }}>
+                  <label style={styles.label}>Bloom&apos;s Taxonomy Level (BT)</label>
+                  <select
+                    style={styles.select}
+                    value={newQuestionForm.bloomTaxonomy}
+                    onChange={(e) =>
+                      setNewQuestionForm({ ...newQuestionForm, bloomTaxonomy: e.target.value })
+                    }
+                  >
+                    {(outcomes.bloomTaxonomyLevels || []).map((bt) => (
+                      <option key={bt.code} value={`${bt.code} - ${bt.title}`}>
+                        {bt.code} - {bt.title}
+                      </option>
+                    ))}
+                    {(!outcomes.bloomTaxonomyLevels || outcomes.bloomTaxonomyLevels.length === 0) && (
+                      <>
+                        <option value="L1 - Remember">L1 - Remember (Recall facts and basic concepts)</option>
+                        <option value="L2 - Understand">L2 - Understand (Explain ideas or concepts)</option>
+                        <option value="L3 - Apply">L3 - Apply (Use information in new situations)</option>
+                        <option value="L4 - Analyze">L4 - Analyze (Draw connections among ideas)</option>
+                        <option value="L5 - Evaluate">L5 - Evaluate (Justify a stand or decision)</option>
+                        <option value="L6 - Create">L6 - Create (Produce new or original work)</option>
+                      </>
+                    )}
                   </select>
                 </div>
               </div>

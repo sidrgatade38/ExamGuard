@@ -99,6 +99,12 @@ export default function ExamCoordinatorHome() {
   // Notification / Alert message state
   const [actionAlert, setActionAlert] = useState(null);
 
+  // Review & Workflow State (Module 22)
+  const [reviewModalPaper, setReviewModalPaper] = useState(null);
+  const [reviewAction, setReviewAction] = useState('RECOMMEND');
+  const [reviewComments, setReviewComments] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
+
   // Cryptographic Algorithm Flow Modal state (Module 20)
   const [showAlgorithmModal, setShowAlgorithmModal] = useState(false);
 
@@ -329,6 +335,40 @@ export default function ExamCoordinatorHome() {
       });
     } finally {
       setDownloadingId(null);
+    }
+  };
+
+  // Submit Coordinator Review Decision (Module 22)
+  const handleReviewSubmit = async (e) => {
+    e.preventDefault();
+    if (!reviewModalPaper) return;
+
+    setSubmittingReview(true);
+    try {
+      await examCoordinatorService.reviewQuestionPaper(reviewModalPaper.id, {
+        action: reviewAction,
+        comments: reviewComments,
+      });
+
+      setActionAlert({
+        type: 'success',
+        title: 'Review Decision Submitted',
+        message: `Paper "${reviewModalPaper.title}" successfully reviewed with decision: ${reviewAction}.`,
+      });
+
+      setReviewModalPaper(null);
+      setReviewComments('');
+      await fetchPapers();
+      await fetchDashboardStats();
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message || 'Failed to submit review decision.';
+      setActionAlert({
+        type: 'danger',
+        title: 'Review Submission Failed',
+        message: msg,
+      });
+    } finally {
+      setSubmittingReview(false);
     }
   };
 
@@ -1210,6 +1250,25 @@ export default function ExamCoordinatorHome() {
                             {/* State-Gated Actions */}
                             <td style={{ ...styles.td, textAlign: 'right' }}>
                               <div style={styles.actionRow}>
+                                {/* Workflow Review & Forward */}
+                                <button
+                                  onClick={() => {
+                                    setReviewModalPaper(paper);
+                                    setReviewAction('RECOMMEND');
+                                    setReviewComments(paper.reviewComments || '');
+                                  }}
+                                  style={{
+                                    ...styles.verifyBtn,
+                                    backgroundColor: '#0284c7',
+                                    color: '#ffffff',
+                                    borderColor: '#0369a1',
+                                  }}
+                                  title="Review question paper and recommend to Admin, return, or reject"
+                                >
+                                  <ClipboardCheck size={14} />
+                                  <span>Review</span>
+                                </button>
+
                                 {/* Answer Key */}
                                 <button
                                   onClick={() => handleOpenAnswerKeyModal(paper)}
@@ -1920,6 +1979,130 @@ export default function ExamCoordinatorHome() {
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* QUESTION PAPER REVIEW MODAL (Module 22 Lifecycle) */}
+      {reviewModalPaper && (
+        <div style={styles.modalOverlay} onClick={() => setReviewModalPaper(null)}>
+          <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <ClipboardCheck size={20} color="#0284c7" />
+                <h3 style={styles.modalTitle}>Review Question Paper: {reviewModalPaper.title}</h3>
+              </div>
+              <button onClick={() => setReviewModalPaper(null)} style={styles.modalCloseBtn}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleReviewSubmit}>
+              <div style={styles.modalBody}>
+                <div style={styles.modalSection}>
+                  <div style={styles.modalSectionTitle}>Paper Metadata</div>
+                  <div style={styles.metaGrid}>
+                    <div style={styles.metaItem}>
+                      <span style={styles.metaLabel}>Subject</span>
+                      <span style={styles.metaVal}>{reviewModalPaper.subject}</span>
+                    </div>
+                    <div style={styles.metaItem}>
+                      <span style={styles.metaLabel}>Authoring Faculty</span>
+                      <span style={styles.metaVal}>{reviewModalPaper.teacher?.name || 'Faculty Member'}</span>
+                    </div>
+                    <div style={styles.metaItem}>
+                      <span style={styles.metaLabel}>Exam Date</span>
+                      <span style={styles.metaVal}>{reviewModalPaper.examDate || reviewModalPaper.exam_date}</span>
+                    </div>
+                    <div style={styles.metaItem}>
+                      <span style={styles.metaLabel}>Current Status</span>
+                      <span style={styles.metaVal}>{reviewModalPaper.status} ({reviewModalPaper.reviewStatus || 'PENDING'})</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ ...styles.modalSection, marginTop: '1rem' }}>
+                  <div style={styles.modalSectionTitle}>Coordinator Review Decision</div>
+                  <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem', marginBottom: '1rem' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.875rem' }}>
+                      <input
+                        type="radio"
+                        name="reviewAction"
+                        value="RECOMMEND"
+                        checked={reviewAction === 'RECOMMEND'}
+                        onChange={(e) => setReviewAction(e.target.value)}
+                      />
+                      <span style={{ color: '#86efac', fontWeight: 600 }}>Recommend to Admin</span>
+                    </label>
+
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.875rem' }}>
+                      <input
+                        type="radio"
+                        name="reviewAction"
+                        value="RETURN"
+                        checked={reviewAction === 'RETURN'}
+                        onChange={(e) => setReviewAction(e.target.value)}
+                      />
+                      <span style={{ color: '#fde047', fontWeight: 600 }}>Return for Revision</span>
+                    </label>
+
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.875rem' }}>
+                      <input
+                        type="radio"
+                        name="reviewAction"
+                        value="REJECT"
+                        checked={reviewAction === 'REJECT'}
+                        onChange={(e) => setReviewAction(e.target.value)}
+                      />
+                      <span style={{ color: '#fca5a5', fontWeight: 600 }}>Reject</span>
+                    </label>
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: '0.4rem' }}>
+                      Review Comments / Guidance (Visible to Admin and Teacher)
+                    </label>
+                    <textarea
+                      value={reviewComments}
+                      onChange={(e) => setReviewComments(e.target.value)}
+                      placeholder="Add evaluation comments, syllabus adherence notes, or required revision details..."
+                      rows={4}
+                      style={{
+                        width: '100%',
+                        padding: '0.75rem',
+                        borderRadius: '6px',
+                        border: '1px solid #334155',
+                        backgroundColor: '#0f172a',
+                        color: '#f8fafc',
+                        fontSize: '0.875rem',
+                        resize: 'vertical',
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div style={styles.modalFooter}>
+                <button
+                  type="button"
+                  onClick={() => setReviewModalPaper(null)}
+                  style={styles.modalCloseFooterBtn}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingReview}
+                  style={{
+                    ...styles.modalDownloadBtn,
+                    backgroundColor: reviewAction === 'RECOMMEND' ? '#059669' : reviewAction === 'RETURN' ? '#d97706' : '#dc2626',
+                  }}
+                >
+                  {submittingReview ? <Loader2 size={15} style={{ animation: 'spin 1s linear infinite' }} /> : <ClipboardCheck size={16} />}
+                  <span>Confirm Decision ({reviewAction})</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -92,6 +92,29 @@ const adminService = {
     const response = await api.get('/admin/roles');
     return response.data.roles;
   },
+
+  /**
+   * Retrieves question papers pending or processed by admin approval workflow
+   *
+   * @param {Object} params - { search, status, page, limit }
+   * @returns {Promise<{ papers: Array, pagination: Object }>}
+   */
+  async getQuestionPapers(params = {}) {
+    const response = await api.get('/admin/question-papers', { params });
+    return response.data;
+  },
+
+  /**
+   * Submits an admin approval decision (APPROVE, RETURN, REJECT)
+   *
+   * @param {string} id - Question paper UUID
+   * @param {Object} decision - { action: 'APPROVE' | 'RETURN' | 'REJECT', comments: string }
+   * @returns {Promise<Object>}
+   */
+  async approveQuestionPaper(id, { action, comments }) {
+    const response = await api.post(`/admin/question-papers/${id}/approval`, { action, comments });
+    return response.data;
+  },
 };
 
 export default adminService;
