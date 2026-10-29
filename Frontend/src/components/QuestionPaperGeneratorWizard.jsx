@@ -28,6 +28,8 @@ import {
   Save,
   Check,
   X,
+  Image as ImageIcon,
+  UploadCloud,
 } from 'lucide-react';
 
 export default function QuestionPaperGeneratorWizard({ initialDraft = null, recipients = [], onSuccess, onCancel }) {
@@ -141,7 +143,52 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
     programOutcome: 'PO1',
     bloomTaxonomy: 'L2 - Understand',
     answerScheme: '',
+    image: null,
   });
+
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [imageError, setImageError] = useState('');
+
+  const handleImageUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImageError('');
+    const allowed = ['image/png', 'image/jpeg', 'image/webp'];
+    if (!allowed.includes(file.type)) {
+      setImageError('Please select a valid PNG or JPEG image file.');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setImageError('Image size exceeds the 5MB limit.');
+      return;
+    }
+
+    setUploadingImage(true);
+    const reader = new FileReader();
+    reader.onload = () => {
+      setNewQuestionForm((prev) => ({
+        ...prev,
+        image: {
+          dataUrl: reader.result,
+          name: file.name,
+          size: file.size,
+          type: file.type,
+        },
+      }));
+      setUploadingImage(false);
+    };
+    reader.onerror = () => {
+      setImageError('Failed to read image file.');
+      setUploadingImage(false);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveImage = () => {
+    setNewQuestionForm((prev) => ({ ...prev, image: null }));
+  };
 
   // Feasibility & Generation State
   const [feasibility, setFeasibility] = useState(null);
@@ -386,6 +433,7 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
         programOutcome: 'PO1',
         bloomTaxonomy: 'L2 - Understand',
         answerScheme: '',
+        image: null,
       }));
       await loadQuestions();
     } catch (err) {
@@ -796,21 +844,37 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
               />
             </div>
 
-            {/* Department Selection */}
+            {/* Academic Department (Strict Module 1 Requirement: Fixed to Computer Engineering) */}
             <div>
               <label style={styles.label}>Academic Department</label>
-              <select
-                style={styles.select}
-                value={selectedDept}
-                onChange={(e) => handleDepartmentChange(e.target.value)}
+              <div
+                style={{
+                  ...styles.input,
+                  backgroundColor: 'var(--color-surface-subtle)',
+                  color: 'var(--color-structure)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  fontWeight: '600',
+                  border: '1px solid var(--color-border)',
+                }}
               >
-                {departments.map((d) => (
-                  <option key={d.id} value={d.code}>
-                    {d.name}
-                  </option>
-                ))}
-                {departments.length === 0 && <option value="COMP">Department of Computer Engineering</option>}
-              </select>
+                <Building size={16} color="var(--color-primary)" />
+                <span>Department of Computer Engineering</span>
+                <span
+                  style={{
+                    marginLeft: 'auto',
+                    fontSize: '0.7rem',
+                    backgroundColor: 'var(--color-primary-subtle)',
+                    color: 'var(--color-primary)',
+                    padding: '2px 8px',
+                    borderRadius: '12px',
+                    fontWeight: '700',
+                  }}
+                >
+                  FIXED
+                </span>
+              </div>
             </div>
 
             {/* Course / Degree Selection */}
@@ -1595,9 +1659,21 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
                           Q{sec.primaryQuestionNumber || (idx * 2 + 1)}
                         </div>
                         {(sec.primaryQuestion?.subquestions || sec.subquestionsConfig || []).map((sq, sqIdx) => (
-                          <div key={sqIdx} style={{ fontSize: '12px', color: '#334155', marginBottom: '4px', display: 'flex', justifyContent: 'space-between' }}>
-                            <span><strong>({sq.subPart || String.fromCharCode(97 + sqIdx)})</strong> {sq.questionText || `Evaluation question for ${blueprint.subject}`}</span>
-                            <span style={{ fontWeight: 600, color: '#0f172a', whiteSpace: 'nowrap', marginLeft: '12px' }}>[{sq.marks}M]</span>
+                          <div key={sqIdx} style={{ marginBottom: '6px' }}>
+                            <div style={{ fontSize: '12px', color: '#334155', display: 'flex', justifyContent: 'space-between' }}>
+                              <span><strong>({sq.subPart || String.fromCharCode(97 + sqIdx)})</strong> {sq.questionText || `Evaluation question for ${blueprint.subject}`}</span>
+                              <span style={{ fontWeight: 600, color: '#0f172a', whiteSpace: 'nowrap', marginLeft: '12px' }}>[{sq.marks}M]</span>
+                            </div>
+                            {(sq.image || sq.imageData || sq.imageUrl) && (
+                              <div style={{ margin: '8px 0', textAlign: 'center' }}>
+                                <img
+                                  src={(sq.image?.dataUrl) || sq.image || sq.imageData || sq.imageUrl}
+                                  alt="Attached diagram"
+                                  style={{ maxWidth: '320px', maxHeight: '160px', objectFit: 'contain', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '4px', backgroundColor: '#ffffff' }}
+                                />
+                                <div style={{ fontSize: '10px', color: '#64748b', fontStyle: 'italic', marginTop: '2px' }}>[Figure / Diagram]</div>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -1612,9 +1688,21 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
                           Q{sec.alternativeQuestionNumber || (idx * 2 + 2)}
                         </div>
                         {(sec.alternativeQuestion?.subquestions || sec.subquestionsConfig || []).map((sq, sqIdx) => (
-                          <div key={sqIdx} style={{ fontSize: '12px', color: '#334155', marginBottom: '4px', display: 'flex', justifyContent: 'space-between' }}>
-                            <span><strong>({sq.subPart || String.fromCharCode(97 + sqIdx)})</strong> {sq.questionText || `Alternative curriculum question for ${blueprint.subject}`}</span>
-                            <span style={{ fontWeight: 600, color: '#0f172a', whiteSpace: 'nowrap', marginLeft: '12px' }}>[{sq.marks}M]</span>
+                          <div key={sqIdx} style={{ marginBottom: '6px' }}>
+                            <div style={{ fontSize: '12px', color: '#334155', display: 'flex', justifyContent: 'space-between' }}>
+                              <span><strong>({sq.subPart || String.fromCharCode(97 + sqIdx)})</strong> {sq.questionText || `Alternative curriculum question for ${blueprint.subject}`}</span>
+                              <span style={{ fontWeight: 600, color: '#0f172a', whiteSpace: 'nowrap', marginLeft: '12px' }}>[{sq.marks}M]</span>
+                            </div>
+                            {(sq.image || sq.imageData || sq.imageUrl) && (
+                              <div style={{ margin: '8px 0', textAlign: 'center' }}>
+                                <img
+                                  src={(sq.image?.dataUrl) || sq.image || sq.imageData || sq.imageUrl}
+                                  alt="Attached diagram"
+                                  style={{ maxWidth: '320px', maxHeight: '160px', objectFit: 'contain', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '4px', backgroundColor: '#ffffff' }}
+                                />
+                                <div style={{ fontSize: '10px', color: '#64748b', fontStyle: 'italic', marginTop: '2px' }}>[Figure / Diagram]</div>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -1966,6 +2054,97 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
                   }
                   required
                 />
+              </div>
+
+              {/* Module 4.3: Insert Image Option */}
+              <div style={{ marginTop: '14px', padding: '12px', border: '1px dashed var(--color-border)', borderRadius: '8px', backgroundColor: 'var(--color-surface-subtle)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <label style={{ ...styles.label, margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <ImageIcon size={16} color="var(--color-primary)" />
+                    <span>Attach Diagram / Figure (PNG, JPEG - Max 5MB)</span>
+                  </label>
+                  {!newQuestionForm.image && (
+                    <label style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '6px 12px',
+                      borderRadius: '6px',
+                      backgroundColor: 'var(--color-primary)',
+                      color: '#ffffff',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}>
+                      <UploadCloud size={14} />
+                      <span>Insert Image</span>
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        style={{ display: 'none' }}
+                        onChange={handleImageUpload}
+                        disabled={uploadingImage}
+                      />
+                    </label>
+                  )}
+                </div>
+
+                {imageError && (
+                  <div style={{ color: '#ef4444', fontSize: '12px', marginBottom: '8px' }}>
+                    {imageError}
+                  </div>
+                )}
+
+                {newQuestionForm.image && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', backgroundColor: 'var(--color-surface)', padding: '10px', borderRadius: '6px', border: '1px solid var(--color-border)' }}>
+                    <img
+                      src={newQuestionForm.image.dataUrl}
+                      alt="Question diagram preview"
+                      style={{ maxWidth: '120px', maxHeight: '70px', objectFit: 'contain', borderRadius: '4px', border: '1px solid #cbd5e1' }}
+                    />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-structure)' }}>
+                        {newQuestionForm.image.name}
+                      </div>
+                      <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
+                        {(newQuestionForm.image.size / 1024).toFixed(1)} KB • Ready for examination embedding
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <label style={{
+                        padding: '4px 8px',
+                        fontSize: '11px',
+                        borderRadius: '4px',
+                        border: '1px solid var(--color-border)',
+                        cursor: 'pointer',
+                        color: 'var(--color-text)',
+                      }}>
+                        Replace
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp"
+                          style={{ display: 'none' }}
+                          onChange={handleImageUpload}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={handleRemoveImage}
+                        style={{
+                          padding: '4px 8px',
+                          fontSize: '11px',
+                          borderRadius: '4px',
+                          border: '1px solid #fca5a5',
+                          backgroundColor: '#fee2e2',
+                          color: '#dc2626',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '16px' }}>

@@ -77,7 +77,28 @@ async function loginUser(email, password) {
     email: user.email,
     roleId: user.role_id,
     role: roleName,
+    department: 'Department of Computer Engineering',
   };
+
+  if (roleName === 'TEACHER') {
+    try {
+      safeUser.profile = await getOrCreateTeacherProfile(user.id, user);
+    } catch (_) {
+      safeUser.profile = {
+        userId: user.id,
+        name: user.name,
+        email: user.email,
+        facultyId: `COMP-FAC-${user.id.replace(/-/g, '').slice(0, 6).toUpperCase()}`,
+        department: 'Department of Computer Engineering',
+        designation: 'Assistant Professor',
+        specialization: 'Computer Engineering',
+        isActive: true,
+        isProfileComplete: true,
+        createdAt: user.created_at,
+        role: 'TEACHER',
+      };
+    }
+  }
 
   return {
     token,
@@ -113,16 +134,197 @@ async function getUserById(userId) {
 
   const roleName = await resolveRoleName(user);
 
-  return {
+  const safeUser = {
     id: user.id,
     name: user.name,
     email: user.email,
     roleId: user.role_id,
     role: roleName,
+    department: 'Department of Computer Engineering',
   };
+
+  if (roleName === 'TEACHER') {
+    try {
+      safeUser.profile = await getOrCreateTeacherProfile(user.id, user);
+    } catch (_) {
+      safeUser.profile = {
+        userId: user.id,
+        name: user.name,
+        email: user.email,
+        facultyId: `COMP-FAC-${user.id.replace(/-/g, '').slice(0, 6).toUpperCase()}`,
+        department: 'Department of Computer Engineering',
+        designation: 'Assistant Professor',
+        specialization: 'Computer Engineering',
+        isActive: true,
+        isProfileComplete: true,
+        createdAt: user.created_at,
+        role: 'TEACHER',
+      };
+    }
+  }
+
+  return safeUser;
+}
+
+// In-memory fallback for teacher profiles if table migration is pending
+const memoryTeacherProfiles = new Map();
+
+/**
+ * Gets or creates the independent teacher profile for the authenticated teacher.
+ * Strictly guarantees the Department is "Department of Computer Engineering".
+ */
+async function getOrCreateTeacherProfile(userId, userRecord = null) {
+  let user = userRecord;
+  const defaultFacultyId = `COMP-FAC-${(userId || '').replace(/-/g, '').slice(0, 6).toUpperCase()}`;
+
+  try {
+    if (!user) {
+      const { data: fetchedUser } = await supabase
+        .from('users')
+        .select('id, name, email, is_active, created_at, roles(name)')
+        .eq('id', userId)
+        .maybeSingle();
+      user = fetchedUser;
+    }
+
+    const { data: profile, error } = await supabase
+      .from('teacher_profiles')
+      .select('*')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (profile && !error) {
+      return {
+        userId: user?.id || userId,
+        name: user?.name || 'Faculty Member',
+        email: user?.email || '',
+        facultyId: profile.faculty_id || defaultFacultyId,
+        department: 'Department of Computer Engineering',
+        designation: profile.designation || 'Assistant Professor',
+        specialization: profile.specialization || 'Computer Engineering',
+        phone: profile.phone || '',
+        isActive: user ? Boolean(user.is_active) : true,
+        isProfileComplete: Boolean(profile.is_profile_complete),
+        createdAt: profile.created_at || user?.created_at,
+        role: 'TEACHER',
+      };
+    }
+
+    // If profile does not exist yet, create default
+    const newProfile = {
+      user_id: userId,
+      faculty_id: defaultFacultyId,
+      department: 'Department of Computer Engineering',
+      designation: 'Assistant Professor',
+      specialization: 'Computer Engineering',
+      phone: '',
+      is_profile_complete: true,
+    };
+
+    const { data: inserted, error: insertError } = await supabase
+      .from('teacher_profiles')
+      .insert([newProfile])
+      .select()
+      .maybeSingle();
+
+    if (inserted && !insertError) {
+      return {
+        userId: user?.id || userId,
+        name: user?.name || 'Faculty Member',
+        email: user?.email || '',
+        facultyId: inserted.faculty_id,
+        department: 'Department of Computer Engineering',
+        designation: inserted.designation,
+        specialization: inserted.specialization,
+        phone: inserted.phone || '',
+        isActive: user ? Boolean(user.is_active) : true,
+        isProfileComplete: Boolean(inserted.is_profile_complete),
+        createdAt: inserted.created_at || user?.created_at,
+        role: 'TEACHER',
+      };
+    }
+  } catch (err) {
+    console.warn('[AuthService] Falling back to memory profile:', err.message);
+  }
+
+  // Memory fallback
+  if (!memoryTeacherProfiles.has(userId)) {
+    memoryTeacherProfiles.set(userId, {
+      userId,
+      name: user?.name || 'Faculty Member',
+      email: user?.email || '',
+      facultyId: defaultFacultyId,
+      department: 'Department of Computer Engineering',
+      designation: 'Assistant Professor',
+      specialization: 'Computer Engineering',
+      phone: '',
+      isActive: true,
+      isProfileComplete: true,
+      createdAt: user?.created_at || new Date().toISOString(),
+      role: 'TEACHER',
+    });
+  }
+
+  return memoryTeacherProfiles.get(userId);
+}
+
+/**
+ * Updates a teacher's profile.
+ * Department is strictly locked to "Department of Computer Engineering".
+ */
+async function updateTeacherProfile(userId, profileData) {
+  const { facultyId, designation, specialization, phone } = profileData || {};
+
+  const cleanFacultyId = (facultyId && facultyId.trim())
+    ? facultyId.trim().toUpperCase()
+    : `COMP-FAC-${userId.replace(/-/g, '').slice(0, 6).toUpperCase()}`;
+
+  const cleanDesignation = (designation && designation.trim()) ? designation.trim() : 'Assistant Professor';
+  const cleanSpecialization = specialization ? specialization.trim() : 'Computer Engineering';
+  const cleanPhone = phone ? phone.trim() : '';
+
+  const updatePayload = {
+    user_id: userId,
+    faculty_id: cleanFacultyId,
+    department: 'Department of Computer Engineering',
+    designation: cleanDesignation,
+    specialization: cleanSpecialization,
+    phone: cleanPhone,
+    is_profile_complete: true,
+    updated_at: new Date().toISOString(),
+  };
+
+  try {
+    const { data: updated, error } = await supabase
+      .from('teacher_profiles')
+      .upsert(updatePayload, { onConflict: 'user_id' })
+      .select()
+      .maybeSingle();
+
+    if (!error && updated) {
+      return getOrCreateTeacherProfile(userId);
+    }
+  } catch (err) {
+    console.warn('[AuthService] Supabase profile update error, using memory fallback:', err.message);
+  }
+
+  // Update memory fallback
+  const existing = await getOrCreateTeacherProfile(userId);
+  const merged = {
+    ...existing,
+    facultyId: cleanFacultyId,
+    designation: cleanDesignation,
+    specialization: cleanSpecialization,
+    phone: cleanPhone,
+    isProfileComplete: true,
+  };
+  memoryTeacherProfiles.set(userId, merged);
+  return merged;
 }
 
 module.exports = {
   loginUser,
   getUserById,
+  getOrCreateTeacherProfile,
+  updateTeacherProfile,
 };

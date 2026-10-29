@@ -36,9 +36,11 @@ function formatDuration(hours) {
  * @param {Array} options.sections - Array of question groups/OR pairs with numbered questions & subquestions
  * @returns {Promise<Buffer>}
  */
-function renderQuestionPaperPDF({ metadata, sections }) {
+function renderQuestionPaperPDF(options = {}) {
   return new Promise((resolve, reject) => {
     try {
+      const metadata = options.metadata || options || {};
+      const sections = options.sections || [];
       const doc = new PDFDocument({
         size: 'A4',
         margins: { top: 40, bottom: 40, left: 45, right: 45 },
@@ -82,6 +84,9 @@ function renderQuestionPaperPDF({ metadata, sections }) {
       // Subcode identifier
       const subjectCode = metadata.subjectCode || metadata.code || 'EXAM-2026';
       doc.fontSize(9).font('Helvetica-Bold').text(`[${subjectCode}]`, leftMargin, 65);
+
+      // Department (Strict Module 1 Requirement)
+      doc.fontSize(10).font('Helvetica-Bold').text('DEPARTMENT OF COMPUTER ENGINEERING', { align: 'center' });
 
       // Course / Degree
       const course = metadata.course || 'T.E. (Computer Engineering)';
@@ -204,7 +209,48 @@ function countTotalQuestions(sections) {
 }
 
 /**
- * Renders an individual numbered question with its subquestions (a, b, c) and right-aligned marks.
+ * Renders an optional diagram/image for a question or subquestion.
+ * Handles base64 data URIs or file paths safely, preventing page overflow and text overlap.
+ */
+function renderOptionalImage(doc, imageSource, leftMargin, contentWidth) {
+  if (!imageSource) return;
+  try {
+    let imgBuffer = null;
+    if (Buffer.isBuffer(imageSource)) {
+      imgBuffer = imageSource;
+    } else if (typeof imageSource === 'string') {
+      if (imageSource.startsWith('data:image')) {
+        const parts = imageSource.split(',');
+        if (parts.length > 1) {
+          imgBuffer = Buffer.from(parts[1], 'base64');
+        }
+      }
+    }
+
+    if (imgBuffer && imgBuffer.length > 0) {
+      const maxImgWidth = Math.min(300, contentWidth - 40);
+      const estHeight = 140;
+
+      // Ensure room on current page or start a new page
+      if (doc.y + estHeight > doc.page.height - 45) {
+        doc.addPage();
+      }
+
+      doc.moveDown(0.3);
+      const posX = leftMargin + 25;
+      doc.image(imgBuffer, posX, doc.y, {
+        fit: [maxImgWidth, 160],
+        align: 'center',
+      });
+      doc.moveDown(0.5);
+    }
+  } catch (err) {
+    console.warn('[PDFRenderer] Unable to render image in PDF:', err.message);
+  }
+}
+
+/**
+ * Renders an individual numbered question with its subquestions (a, b, c), images, and right-aligned marks.
  */
 function renderQuestionItem(doc, question, leftMargin, rightMargin, contentWidth) {
   const qNum = question.questionNumber || question.qNum || 1;
@@ -235,6 +281,11 @@ function renderQuestionItem(doc, question, leftMargin, rightMargin, contentWidth
           align: 'right',
         });
 
+      // Render image attached to subquestion if present
+      if (sub.image || sub.imageData || sub.imageUrl) {
+        renderOptionalImage(doc, sub.image || sub.imageData || sub.imageUrl, leftMargin, contentWidth);
+      }
+
       doc.moveDown(0.4);
     });
   } else {
@@ -255,6 +306,11 @@ function renderQuestionItem(doc, question, leftMargin, rightMargin, contentWidth
         width: 40,
         align: 'right',
       });
+
+    // Render image attached to question if present
+    if (question.image || question.imageData || question.imageUrl || question.diagram) {
+      renderOptionalImage(doc, question.image || question.imageData || question.imageUrl || question.diagram, leftMargin, contentWidth);
+    }
 
     doc.moveDown(0.4);
   }

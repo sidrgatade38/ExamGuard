@@ -470,9 +470,21 @@ export default function AdminHome() {
             <ShieldAlert size={26} color="var(--color-primary)" />
           </div>
           <div>
-            <h1 style={styles.headerTitle}>ExamGuard Administration</h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <h1 style={styles.headerTitle}>ExamGuard Administration</h1>
+              <span style={{
+                background: 'rgba(56, 189, 248, 0.15)',
+                color: '#38bdf8',
+                border: '1px solid rgba(56, 189, 248, 0.3)',
+                padding: '2px 8px',
+                borderRadius: '9999px',
+                fontSize: '0.7rem',
+                fontWeight: 700,
+                letterSpacing: '0.05em'
+              }}>COMP DEPT</span>
+            </div>
             <p style={styles.headerSubtitle}>
-              Enterprise Security Oversight, User Administration & Cryptographic Audit
+              Department of Computer Engineering • Security Oversight, User Administration & Cryptographic Audit
             </p>
           </div>
         </div>

@@ -20,6 +20,25 @@ export const authService = {
     const response = await api.get('/auth/me');
     return response.data;
   },
+
+  /**
+   * Fetches the independent teacher profile from GET /api/auth/profile
+   * @returns {Promise<{ success: boolean, data: Object }>}
+   */
+  async getProfile() {
+    const response = await api.get('/auth/profile');
+    return response.data;
+  },
+
+  /**
+   * Updates teacher profile details via PUT /api/auth/profile
+   * @param {Object} profileData
+   * @returns {Promise<{ success: boolean, data: Object }>}
+   */
+  async updateProfile(profileData) {
+    const response = await api.put('/auth/profile', profileData);
+    return response.data;
+  },
 };
 
 export default authService;

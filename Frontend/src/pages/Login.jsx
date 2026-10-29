@@ -65,7 +65,7 @@ export default function Login() {
           </div>
           <h1 style={styles.title}>ExamGuard</h1>
           <p style={styles.subtitle}>Secure Question Paper Management System</p>
-          <div style={styles.badge}>Secure Examination Management System</div>
+          <div style={styles.badge}>Department of Computer Engineering</div>
         </div>
 
         {errorMessage && (

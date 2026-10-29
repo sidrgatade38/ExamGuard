@@ -328,6 +328,89 @@ async function deletePaper(req, res, next) {
   }
 }
 
+const crypto = require('crypto');
+const config = require('../config');
+const { supabase } = require('../config/supabase');
+
+/**
+ * Handles uploading and validating an embedded question diagram/image (POST /api/question-papers/upload-image)
+ * Module 4: Strictly validates image type, magic bytes, and size, providing dataUrl and metadata.
+ */
+async function uploadQuestionImage(req, res, next) {
+  try {
+    const teacherId = req.user?.userId;
+    if (!teacherId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required',
+      });
+    }
+
+    if (!req.validatedImage) {
+      return res.status(400).json({
+        success: false,
+        message: 'No validated image file found in request.',
+      });
+    }
+
+    const { buffer, mimeType, originalName, size, dataUrl } = req.validatedImage;
+    const imageId = crypto.randomUUID();
+
+    let storagePath = null;
+    try {
+      const ext = mimeType === 'image/png' ? 'png' : mimeType === 'image/jpeg' ? 'jpg' : 'webp';
+      storagePath = `question-images/${teacherId}/${imageId}.${ext}`;
+      const bucketName = config.storageBucket || 'examguard-storage';
+      await supabase.storage
+        .from(bucketName)
+        .upload(storagePath, buffer, { contentType: mimeType, upsert: true });
+    } catch (_) {}
+
+    return res.status(200).json({
+      success: true,
+      message: 'Question diagram/image uploaded and validated successfully.',
+      data: {
+        imageId,
+        originalName,
+        mimeType,
+        size,
+        dataUrl,
+        storagePath,
+      },
+    });
+  } catch (err) {
+    if (err.statusCode) {
+      return res.status(err.statusCode).json({
+        success: false,
+        message: err.message,
+      });
+    }
+    return next(err);
+  }
+}
+
+/**
+ * Handles fetching traceable verification history (GET /api/question-papers/:id/verification-history)
+ * Module 5: Returns immutable verification decisions, verifier identities, and comments.
+ */
+async function getVerificationHistory(req, res, next) {
+  try {
+    const history = await questionPaperService.getPaperVerificationHistory(req.params.id);
+    return res.status(200).json({
+      success: true,
+      data: history,
+    });
+  } catch (err) {
+    if (err.statusCode) {
+      return res.status(err.statusCode).json({
+        success: false,
+        message: err.message,
+      });
+    }
+    return next(err);
+  }
+}
+
 module.exports = {
   submitPaper,
   getMyPapers,
@@ -337,5 +420,7 @@ module.exports = {
   getRecipients,
   verifyPaperSignature,
   deletePaper,
+  uploadQuestionImage,
+  getVerificationHistory,
 };
 

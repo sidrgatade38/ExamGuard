@@ -65,7 +65,7 @@ async function saveDraft({
     subject: effectiveSubject,
     subject_code: subjectCode || null,
     course: course || 'Computer Engineering',
-    department: department || 'Department of Computer Engineering',
+    department: 'Department of Computer Engineering',
     class_year: classYear || 'TE',
     academic_pattern: academicPattern || '2019 Pattern',
     semester: semester || 'Semester 5',

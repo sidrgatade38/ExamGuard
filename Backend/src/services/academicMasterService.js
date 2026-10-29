@@ -12,16 +12,10 @@ const { supabase } = require('../config/supabase');
 const FALLBACK_ACADEMIC_DATA = {
   departments: [
     { id: 'dept-comp', code: 'COMP', name: 'Department of Computer Engineering' },
-    { id: 'dept-it', code: 'IT', name: 'Department of Information Technology' },
-    { id: 'dept-entc', code: 'ENTC', name: 'Department of Electronics & Telecommunication' },
-    { id: 'dept-mech', code: 'MECH', name: 'Department of Mechanical Engineering' },
   ],
   courses: [
     { id: 'course-te-comp', departmentCode: 'COMP', code: 'TE_COMP', name: 'T.E. (Computer Engineering)', degree: 'B.E.' },
     { id: 'course-be-comp', departmentCode: 'COMP', code: 'BE_COMP', name: 'B.E. (Computer Engineering)', degree: 'B.E.' },
-    { id: 'course-te-it', departmentCode: 'IT', code: 'TE_IT', name: 'T.E. (Information Technology)', degree: 'B.Tech' },
-    { id: 'course-be-it', departmentCode: 'IT', code: 'BE_IT', name: 'B.E. (Information Technology)', degree: 'B.Tech' },
-    { id: 'course-te-entc', departmentCode: 'ENTC', code: 'TE_ENTC', name: 'T.E. (E&TC Engineering)', degree: 'B.E.' },
   ],
   patterns: [
     { id: 'pat-2019', code: 'PAT_2019', name: '2019 Pattern', revisionYear: 2019, maxQuestions: 30 },
@@ -121,20 +115,6 @@ const FALLBACK_ACADEMIC_DATA = {
       totalMarks: 70,
       durationHours: 2.5,
     },
-    // IT Sem 5
-    {
-      id: 'sub-it-os',
-      departmentCode: 'IT',
-      courseCode: 'TE_IT',
-      patternCode: 'PAT_2019',
-      patternName: '2019 Pattern',
-      semester: 'Semester 5',
-      code: '314443',
-      shortName: 'OSV',
-      title: 'Operating System and Virtualization',
-      totalMarks: 70,
-      durationHours: 2.5,
-    },
   ],
   units: {
     '310243': [
@@ -226,6 +206,7 @@ async function getDepartments() {
     const { data, error } = await supabase
       .from('academic_departments')
       .select('id, code, name')
+      .eq('code', 'COMP')
       .eq('is_active', true)
       .order('name');
     if (!error && data && data.length > 0) return data;
@@ -234,15 +215,19 @@ async function getDepartments() {
 }
 
 async function getCourses(departmentCode) {
+  if (departmentCode && departmentCode.toUpperCase() !== 'COMP') {
+    return [];
+  }
   try {
-    let query = supabase.from('academic_courses').select('id, code, name, degree, department_id').eq('is_active', true);
+    let query = supabase
+      .from('academic_courses')
+      .select('id, code, name, degree, department_id, academic_departments!inner(code)')
+      .eq('academic_departments.code', 'COMP')
+      .eq('is_active', true);
     const { data, error } = await query;
     if (!error && data && data.length > 0) return data;
   } catch (_) {}
-  if (!departmentCode) return FALLBACK_ACADEMIC_DATA.courses;
-  return FALLBACK_ACADEMIC_DATA.courses.filter(
-    (c) => !departmentCode || c.departmentCode.toLowerCase() === departmentCode.toLowerCase()
-  );
+  return FALLBACK_ACADEMIC_DATA.courses;
 }
 
 async function getPatterns() {

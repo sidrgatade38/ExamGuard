@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import authService from '../services/authService';
 import questionPaperService from '../services/questionPaperService';
 import answerKeyService from '../services/answerKeyService';
 import blueprintService from '../services/blueprintService';
@@ -29,6 +30,11 @@ import {
   Sparkles,
   Menu,
   Trash2,
+  LayoutDashboard,
+  UserCheck,
+  Building,
+  History,
+  Award,
 } from 'lucide-react';
 import QuestionPaperGeneratorWizard from '../components/QuestionPaperGeneratorWizard';
 import DeletePaperModal from '../components/DeletePaperModal';
@@ -41,10 +47,31 @@ export default function TeacherHome() {
   // Mobile navigation drawer toggle
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // Navigation tab: 'list' | 'assigned' | 'drafts' | 'create'
-  const [activeTab, setActiveTab] = useState('list');
+  // Navigation tab: 'dashboard' | 'list' | 'assigned' | 'drafts' | 'create' | 'profile'
+  const [activeTab, setActiveTab] = useState('dashboard');
   // Creation sub-mode: 'select' | 'upload' | 'generate'
   const [creationMode, setCreationMode] = useState('select');
+
+  // Teacher Profile State (Module 2.1)
+  const [profileData, setProfileData] = useState(() => user?.profile || {
+    name: user?.name || '',
+    email: user?.email || '',
+    facultyId: `COMP-FAC-${(user?.id || 'FACULTY').slice(0, 6).toUpperCase()}`,
+    department: 'Department of Computer Engineering',
+    designation: 'Assistant Professor',
+    specialization: 'Computer Engineering & System Architecture',
+    phone: '',
+    isActive: true,
+  });
+  const [loadingProfile, setLoadingProfile] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileSuccess, setProfileSuccess] = useState('');
+  const [profileError, setProfileError] = useState('');
+
+  // Traceable Verification History State (Module 5.4)
+  const [historyPaper, setHistoryPaper] = useState(null);
+  const [verificationHistory, setVerificationHistory] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   // Drafts state (Module 23 & Lifecycle)
   const [drafts, setDrafts] = useState([]);
@@ -258,12 +285,60 @@ export default function TeacherHome() {
     }
   }, []);
 
+  // Fetch Teacher Profile (Module 2.1)
+  const fetchProfile = useCallback(async () => {
+    setLoadingProfile(true);
+    setProfileError('');
+    try {
+      const res = await authService.getProfile();
+      if (res?.data) {
+        setProfileData(res.data);
+      }
+    } catch (err) {
+      console.warn('Failed to fetch profile:', err);
+    } finally {
+      setLoadingProfile(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchPapers();
     fetchAssignedPapers();
     fetchRecipients();
     fetchDrafts();
-  }, [fetchPapers, fetchAssignedPapers, fetchRecipients, fetchDrafts]);
+    fetchProfile();
+  }, [fetchPapers, fetchAssignedPapers, fetchRecipients, fetchDrafts, fetchProfile]);
+
+  const handleUpdateProfile = async (e) => {
+    e.preventDefault();
+    setSavingProfile(true);
+    setProfileError('');
+    setProfileSuccess('');
+    try {
+      const res = await authService.updateProfile(profileData);
+      setProfileData(res.data);
+      setProfileSuccess('Profile updated successfully!');
+      setTimeout(() => setProfileSuccess(''), 4000);
+    } catch (err) {
+      setProfileError(err.response?.data?.message || err.message || 'Failed to update profile.');
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  const handleOpenVerificationHistory = async (paper) => {
+    setHistoryPaper(paper);
+    setVerificationHistory([]);
+    setLoadingHistory(true);
+    try {
+      const history = await questionPaperService.getVerificationHistory(paper.id);
+      setVerificationHistory(history || []);
+    } catch (err) {
+      console.warn('Failed to load verification history:', err);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
 
   // Resume Draft Handler
   const handleResumeDraft = (draft) => {
@@ -501,6 +576,31 @@ export default function TeacherHome() {
     );
   });
 
+  // KPI Statistics for Dashboard (Module 2.2)
+  const stats = useMemo(() => {
+    const authoredCount = papers.length;
+    const assignedCount = assignedPapers.length;
+    const pendingVerification = papers.filter(
+      (p) => (p.review_status === 'PENDING_REVIEW' || p.review_status === 'PENDING' || !p.review_status) && p.status !== 'DRAFT'
+    ).length;
+    const verifiedCount = papers.filter(
+      (p) => p.review_status === 'REVIEWED' || p.review_status === 'RECOMMENDED' || p.admin_approval_status === 'APPROVED' || p.status === 'SCHEDULED' || p.status === 'DELIVERED'
+    ).length;
+    const rejectedCount = papers.filter(
+      (p) => p.review_status === 'REJECTED' || p.review_status === 'RETURNED' || p.admin_approval_status === 'REJECTED' || p.admin_approval_status === 'RETURNED'
+    ).length;
+    const draftsCount = drafts.length;
+
+    return {
+      authoredCount,
+      assignedCount,
+      pendingVerification,
+      verifiedCount,
+      rejectedCount,
+      draftsCount,
+    };
+  }, [papers, assignedPapers, drafts]);
+
   return (
     <div style={styles.container}>
       {/* Top Navbar */}
@@ -511,7 +611,7 @@ export default function TeacherHome() {
           </div>
           <div>
             <h1 style={styles.brandTitle}>ExamGuard</h1>
-            <span style={styles.brandTagline}>Teacher Workspace • Question Paper Management</span>
+            <span style={styles.brandTagline}>Department of Computer Engineering • Faculty Workspace</span>
           </div>
         </div>
 
@@ -526,11 +626,15 @@ export default function TeacherHome() {
             <span>Algorithm Flow</span>
           </button>
           <NotificationBell onSelectPaper={(p) => setSelectedPaper(p)} />
-          <div style={styles.userBadge}>
+          <div
+            style={{ ...styles.userBadge, cursor: 'pointer' }}
+            onClick={() => setActiveTab('profile')}
+            title="View and Edit Profile"
+          >
             <User size={16} color="var(--color-accent)" />
             <div>
               <div style={styles.userName}>{user?.name || 'Faculty Member'}</div>
-              <div style={styles.userRole}>ROLE: {user?.role || 'TEACHER'}</div>
+              <div style={styles.userRole}>COMP. ENGG • {profileData?.designation || 'FACULTY'}</div>
             </div>
           </div>
           <button onClick={handleLogout} style={styles.logoutBtn} title="Sign Out">
@@ -595,6 +699,26 @@ export default function TeacherHome() {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '1rem' }}>
+              <button
+                onClick={() => {
+                  setActiveTab('dashboard');
+                  setMobileMenuOpen(false);
+                }}
+                style={activeTab === 'dashboard' ? { ...styles.mobileTabBtn, ...styles.mobileTabBtnActive } : styles.mobileTabBtn}
+              >
+                <LayoutDashboard size={18} />
+                <span>Personalized Dashboard</span>
+              </button>
+              <button
+                onClick={() => {
+                  setActiveTab('profile');
+                  setMobileMenuOpen(false);
+                }}
+                style={activeTab === 'profile' ? { ...styles.mobileTabBtn, ...styles.mobileTabBtnActive } : styles.mobileTabBtn}
+              >
+                <UserCheck size={18} />
+                <span>My Faculty Profile</span>
+              </button>
               <button
                 onClick={() => {
                   setActiveTab('list');
@@ -688,11 +812,27 @@ export default function TeacherHome() {
         {/* Workspace Tab Bar */}
         <div style={styles.tabBar}>
           <button
+            onClick={() => setActiveTab('dashboard')}
+            style={activeTab === 'dashboard' ? { ...styles.tab, ...styles.activeTab } : styles.tab}
+          >
+            <LayoutDashboard size={18} />
+            <span>Dashboard</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('profile')}
+            style={activeTab === 'profile' ? { ...styles.tab, ...styles.activeTab } : styles.tab}
+          >
+            <UserCheck size={18} />
+            <span>My Profile</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('list')}
             style={activeTab === 'list' ? { ...styles.tab, ...styles.activeTab } : styles.tab}
           >
             <Layers size={18} />
-            <span>My Question Papers</span>
+            <span>My Papers</span>
             <span style={styles.counterBadge}>{papers.length}</span>
           </button>
 
@@ -722,9 +862,623 @@ export default function TeacherHome() {
             style={activeTab === 'create' ? { ...styles.tab, ...styles.activeTab } : styles.tab}
           >
             <Plus size={18} />
-            <span>Create Question Paper</span>
+            <span>Create Paper</span>
           </button>
         </div>
+
+        {/* TAB 0: PERSONALIZED DASHBOARD (MODULE 2.2) */}
+        {activeTab === 'dashboard' && (
+          <div style={styles.tabContent}>
+            {/* Welcome & Faculty Profile Banner */}
+            <div
+              style={{
+                backgroundColor: 'var(--color-surface)',
+                border: '1px solid var(--color-border)',
+                borderRadius: 'var(--radius-lg)',
+                padding: '1.75rem',
+                marginBottom: '1.5rem',
+                boxShadow: 'var(--shadow-sm)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '1.25rem',
+              }}
+            >
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem' }}>
+                  <span
+                    style={{
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      backgroundColor: 'var(--color-primary-subtle)',
+                      color: 'var(--color-primary)',
+                      padding: '2px 8px',
+                      borderRadius: '12px',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                    }}
+                  >
+                    <Building size={12} />
+                    Department of Computer Engineering
+                  </span>
+                  <span
+                    style={{
+                      fontSize: '0.75rem',
+                      color: 'var(--color-text-muted)',
+                      fontFamily: 'var(--font-jetbrains)',
+                    }}
+                  >
+                    ID: {profileData?.facultyId || 'COMP-FACULTY'}
+                  </span>
+                </div>
+                <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--color-structure)', margin: '0 0 0.25rem 0' }}>
+                  Welcome back, Professor {profileData?.name || user?.name}!
+                </h2>
+                <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)', margin: 0 }}>
+                  Manage secure question paper authoring, digital verification status, and assigned colleague papers.
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveDraft(null);
+                    setActiveTab('create');
+                  }}
+                  style={{
+                    ...styles.submitBtn,
+                    padding: '0.6rem 1.1rem',
+                    fontSize: '0.85rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                  }}
+                >
+                  <Plus size={16} />
+                  <span>Create Paper</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('profile')}
+                  style={{
+                    ...styles.secondaryBtn,
+                    padding: '0.6rem 1.1rem',
+                    fontSize: '0.85rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    backgroundColor: 'var(--color-surface-subtle)',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: 'var(--radius-md)',
+                    color: 'var(--color-text)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <User size={16} />
+                  <span>My Profile</span>
+                </button>
+              </div>
+            </div>
+
+            {/* KPI Metric Cards Grid */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))',
+                gap: '1rem',
+                marginBottom: '1.75rem',
+              }}
+            >
+              <div
+                style={{
+                  backgroundColor: 'var(--color-surface)',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius-lg)',
+                  padding: '1.25rem',
+                  cursor: 'pointer',
+                }}
+                onClick={() => setActiveTab('list')}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-muted)' }}>Created by Me</span>
+                  <Layers size={18} color="#0284c7" />
+                </div>
+                <div style={{ fontSize: '1.85rem', fontWeight: 800, color: '#0284c7', margin: '0.5rem 0 0.2rem 0' }}>
+                  {stats.authoredCount}
+                </div>
+                <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>Total examination papers</span>
+              </div>
+
+              <div
+                style={{
+                  backgroundColor: 'var(--color-surface)',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius-lg)',
+                  padding: '1.25rem',
+                  cursor: 'pointer',
+                }}
+                onClick={() => setActiveTab('assigned')}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-muted)' }}>Assigned to Me</span>
+                  <FileCheck size={18} color="#8b5cf6" />
+                </div>
+                <div style={{ fontSize: '1.85rem', fontWeight: 800, color: '#8b5cf6', margin: '0.5rem 0 0.2rem 0' }}>
+                  {stats.assignedCount}
+                </div>
+                <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>Colleague papers assigned</span>
+              </div>
+
+              <div
+                style={{
+                  backgroundColor: 'var(--color-surface)',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius-lg)',
+                  padding: '1.25rem',
+                  cursor: 'pointer',
+                }}
+                onClick={() => setActiveTab('list')}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-muted)' }}>Pending Verification</span>
+                  <Clock size={18} color="#f59e0b" />
+                </div>
+                <div style={{ fontSize: '1.85rem', fontWeight: 800, color: '#f59e0b', margin: '0.5rem 0 0.2rem 0' }}>
+                  {stats.pendingVerification}
+                </div>
+                <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>Under review by coordinator</span>
+              </div>
+
+              <div
+                style={{
+                  backgroundColor: 'var(--color-surface)',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius-lg)',
+                  padding: '1.25rem',
+                  cursor: 'pointer',
+                }}
+                onClick={() => setActiveTab('list')}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-muted)' }}>Verified &amp; Approved</span>
+                  <CheckCircle2 size={18} color="#10b981" />
+                </div>
+                <div style={{ fontSize: '1.85rem', fontWeight: 800, color: '#10b981', margin: '0.5rem 0 0.2rem 0' }}>
+                  {stats.verifiedCount}
+                </div>
+                <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>Digitally verified papers</span>
+              </div>
+
+              <div
+                style={{
+                  backgroundColor: 'var(--color-surface)',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius-lg)',
+                  padding: '1.25rem',
+                  cursor: 'pointer',
+                }}
+                onClick={() => setActiveTab('list')}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-muted)' }}>Needs Revision</span>
+                  <AlertCircle size={18} color="#ef4444" />
+                </div>
+                <div style={{ fontSize: '1.85rem', fontWeight: 800, color: '#ef4444', margin: '0.5rem 0 0.2rem 0' }}>
+                  {stats.rejectedCount}
+                </div>
+                <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>Returned or rejected</span>
+              </div>
+            </div>
+
+            {/* Quick Action Navigation Buttons */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))',
+                gap: '1rem',
+                marginBottom: '1.75rem',
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveDraft(null);
+                  setActiveTab('create');
+                }}
+                style={{
+                  backgroundColor: 'var(--color-surface)',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '1rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.75rem',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                }}
+              >
+                <div style={{ width: '40px', height: '40px', borderRadius: '8px', backgroundColor: '#e0f2fe', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Plus size={20} color="#0284c7" />
+                </div>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--color-structure)' }}>Create New Paper</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>Wizard with questions &amp; images</div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('list')}
+                style={{
+                  backgroundColor: 'var(--color-surface)',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '1rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.75rem',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                }}
+              >
+                <div style={{ width: '40px', height: '40px', borderRadius: '8px', backgroundColor: '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Layers size={20} color="#16a34a" />
+                </div>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--color-structure)' }}>View My Papers</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>{papers.length} authored papers</div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('assigned')}
+                style={{
+                  backgroundColor: 'var(--color-surface)',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '1rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.75rem',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                }}
+              >
+                <div style={{ width: '40px', height: '40px', borderRadius: '8px', backgroundColor: '#faf5ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <FileCheck size={20} color="#9333ea" />
+                </div>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--color-structure)' }}>Assigned to Me</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>{assignedPapers.length} assigned papers</div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('drafts')}
+                style={{
+                  backgroundColor: 'var(--color-surface)',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '1rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.75rem',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                }}
+              >
+                <div style={{ width: '40px', height: '40px', borderRadius: '8px', backgroundColor: '#fffbeb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Sparkles size={20} color="#d97706" />
+                </div>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--color-structure)' }}>Saved Drafts</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>{drafts.length} in-progress drafts</div>
+                </div>
+              </button>
+            </div>
+
+            {/* Recent Authored Papers Summary */}
+            <div style={styles.statsBanner}>
+              <div>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--color-structure)', margin: '0 0 0.25rem 0' }}>
+                  Recent Examination Papers
+                </h3>
+                <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', margin: 0 }}>
+                  Latest question papers authored for the Computer Engineering Department.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveTab('list')}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--color-primary)',
+                  fontWeight: 600,
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                }}
+              >
+                View All &rarr;
+              </button>
+            </div>
+
+            {papers.length === 0 ? (
+              <div style={styles.emptyState}>
+                <BookOpen size={44} color="#94a3b8" />
+                <h3 style={styles.emptyTitle}>No Examination Papers Authored Yet</h3>
+                <p style={styles.emptySubtitle}>
+                  You have not created any question papers yet. Click &quot;Create Paper&quot; above to launch the builder with university templates and diagram support.
+                </p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '1rem' }}>
+                {papers.slice(0, 4).map((p) => (
+                  <div
+                    key={p.id}
+                    style={{
+                      backgroundColor: 'var(--color-surface)',
+                      border: '1px solid var(--color-border)',
+                      borderRadius: 'var(--radius-md)',
+                      padding: '1rem 1.25rem',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                      gap: '0.75rem',
+                    }}
+                  >
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span style={styles.subjectPill}>{p.subject}</span>
+                        <span style={styles.statusBadge}>{p.status}</span>
+                      </div>
+                      <h4 style={{ margin: '0.35rem 0 0.2rem 0', fontSize: '0.95rem', fontWeight: 700, color: 'var(--color-structure)' }}>
+                        {p.title}
+                      </h4>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+                        Semester: {p.semester} • Exam Date: {p.exam_date || 'TBD'} • Created: {new Date(p.created_at).toLocaleDateString()}
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      {p.review_status === 'REVIEWED' || p.review_status === 'RECOMMENDED' ? (
+                        <span style={{ fontSize: '0.75rem', color: '#16a34a', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <CheckCircle2 size={14} /> Verified {p.reviewer?.name ? `by ${p.reviewer.name}` : ''}
+                        </span>
+                      ) : p.review_status === 'RETURNED' ? (
+                        <span style={{ fontSize: '0.75rem', color: '#d97706', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <AlertCircle size={14} /> Returned for Revision
+                        </span>
+                      ) : p.review_status === 'REJECTED' ? (
+                        <span style={{ fontSize: '0.75rem', color: '#dc2626', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <AlertCircle size={14} /> Rejected
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <Clock size={14} /> Pending Verification
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPaper(p)}
+                        style={{ ...styles.actionBtn, padding: '0.4rem 0.75rem', fontSize: '0.75rem' }}
+                      >
+                        <Eye size={14} />
+                        <span>Details</span>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 0.5: MY FACULTY PROFILE (MODULE 2.1) */}
+        {activeTab === 'profile' && (
+          <div style={styles.tabContent}>
+            <div style={styles.statsBanner}>
+              <div>
+                <h2 style={styles.sectionHeading}>My Faculty Profile</h2>
+                <p style={styles.sectionSubtitle}>
+                  Institutional credentials and profile settings strictly affiliated with the Computer Engineering Department.
+                </p>
+              </div>
+            </div>
+
+            {profileSuccess && (
+              <div style={styles.alertSuccess}>
+                <CheckCircle2 size={18} />
+                <span>{profileSuccess}</span>
+              </div>
+            )}
+
+            {profileError && (
+              <div style={styles.alertError}>
+                <AlertCircle size={18} />
+                <span>{profileError}</span>
+              </div>
+            )}
+
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))',
+                gap: '1.5rem',
+                marginTop: '1rem',
+              }}
+            >
+              {/* Institutional ID Badge Card */}
+              <div
+                style={{
+                  backgroundColor: 'var(--color-surface)',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius-lg)',
+                  padding: '1.75rem',
+                  boxShadow: 'var(--shadow-sm)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.25rem' }}>
+                  <div
+                    style={{
+                      width: '56px',
+                      height: '56px',
+                      borderRadius: '50%',
+                      backgroundColor: 'var(--color-primary-subtle)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      border: '2px solid var(--color-primary-border)',
+                    }}
+                  >
+                    <User size={28} color="var(--color-primary)" />
+                  </div>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: 'var(--color-structure)' }}>
+                      {profileData?.name || user?.name}
+                    </h3>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>
+                      {profileData?.email || user?.email}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--color-primary)', fontWeight: 600, marginTop: '2px' }}>
+                      {profileData?.designation || 'Assistant Professor'}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem', fontSize: '0.85rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: 'var(--color-text-muted)' }}>Department:</span>
+                    <strong style={{ color: 'var(--color-structure)' }}>Department of Computer Engineering</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: 'var(--color-text-muted)' }}>Faculty ID:</span>
+                    <strong style={{ fontFamily: 'var(--font-jetbrains)', color: 'var(--color-primary)' }}>
+                      {profileData?.facultyId || 'COMP-FAC-001'}
+                    </strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: 'var(--color-text-muted)' }}>Account Status:</span>
+                    <span style={{ color: '#16a34a', fontWeight: 700 }}>● Active</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: 'var(--color-text-muted)' }}>Role Scope:</span>
+                    <span>TEACHER (Computer Engineering)</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: 'var(--color-text-muted)' }}>Specialization:</span>
+                    <span>{profileData?.specialization || 'Computer Engineering'}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: 'var(--color-text-muted)' }}>Contact Phone:</span>
+                    <span>{profileData?.phone || 'Not configured'}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Profile Details Edit Form */}
+              <div
+                style={{
+                  backgroundColor: 'var(--color-surface)',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius-lg)',
+                  padding: '1.75rem',
+                  boxShadow: 'var(--shadow-sm)',
+                }}
+              >
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--color-structure)', margin: '0 0 1rem 0' }}>
+                  Update Profile Information
+                </h3>
+
+                <form onSubmit={handleUpdateProfile} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div>
+                    <label style={styles.label}>Faculty / Employee Identifier</label>
+                    <input
+                      type="text"
+                      style={styles.input}
+                      value={profileData?.facultyId || ''}
+                      onChange={(e) => setProfileData({ ...profileData, facultyId: e.target.value })}
+                      placeholder="e.g. COMP-FAC-102"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label style={styles.label}>Academic Department (Locked)</label>
+                    <input
+                      type="text"
+                      style={{ ...styles.input, backgroundColor: 'var(--color-surface-subtle)', color: 'var(--color-text-muted)', cursor: 'not-allowed' }}
+                      value="Department of Computer Engineering"
+                      disabled
+                    />
+                    <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', marginTop: '3px' }}>
+                      ExamGuard is exclusively for the Computer Engineering Department.
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={styles.label}>Academic Designation</label>
+                    <select
+                      style={styles.select}
+                      value={profileData?.designation || 'Assistant Professor'}
+                      onChange={(e) => setProfileData({ ...profileData, designation: e.target.value })}
+                    >
+                      <option value="Assistant Professor">Assistant Professor</option>
+                      <option value="Associate Professor">Associate Professor</option>
+                      <option value="Professor">Professor</option>
+                      <option value="Head of Department">Head of Department (HOD)</option>
+                      <option value="Adjunct Faculty">Adjunct Faculty</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={styles.label}>Domain Specialization</label>
+                    <input
+                      type="text"
+                      style={styles.input}
+                      value={profileData?.specialization || ''}
+                      onChange={(e) => setProfileData({ ...profileData, specialization: e.target.value })}
+                      placeholder="e.g. Computer Networks & Security, Algorithms"
+                    />
+                  </div>
+
+                  <div>
+                    <label style={styles.label}>Contact Phone Number</label>
+                    <input
+                      type="tel"
+                      style={styles.input}
+                      value={profileData?.phone || ''}
+                      onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
+                      placeholder="+91 98765 43210"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={savingProfile}
+                    style={{
+                      ...styles.submitBtn,
+                      marginTop: '0.5rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.5rem',
+                    }}
+                  >
+                    {savingProfile ? <Loader2 size={16} className="spin" /> : <Save size={16} />}
+                    <span>{savingProfile ? 'Saving Changes...' : 'Save Profile Changes'}</span>
+                  </button>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* TAB 1: LIST QUESTION PAPERS */}
         {activeTab === 'list' && (
@@ -814,85 +1568,92 @@ export default function TeacherHome() {
 
                       <h3 style={styles.paperTitle}>{paper.title}</h3>
 
-                      {/* Module 22 Workflow Status Pills */}
-                      <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', margin: '0.35rem 0 0.5rem 0' }}>
-                        <span
-                          style={{
-                            fontSize: '0.72rem',
-                            fontWeight: 600,
-                            padding: '2px 6px',
-                            borderRadius: '4px',
-                            backgroundColor:
-                              paper.review_status === 'RECOMMENDED'
-                                ? '#dcfce7'
-                                : paper.review_status === 'RETURNED'
-                                ? '#fef3c7'
-                                : paper.review_status === 'REJECTED'
-                                ? '#fee2e2'
-                                : '#e0f2fe',
-                            color:
-                              paper.review_status === 'RECOMMENDED'
-                                ? '#166534'
-                                : paper.review_status === 'RETURNED'
-                                ? '#92400e'
-                                : paper.review_status === 'REJECTED'
-                                ? '#991b1b'
-                                : '#0369a1',
-                          }}
-                        >
-                          Coordinator: {paper.review_status || 'PENDING'}
-                        </span>
-
-                        <span
-                          style={{
-                            fontSize: '0.72rem',
-                            fontWeight: 600,
-                            padding: '2px 6px',
-                            borderRadius: '4px',
-                            backgroundColor:
-                              paper.admin_approval_status === 'APPROVED'
-                                ? '#dcfce7'
-                                : paper.admin_approval_status === 'RETURNED'
-                                ? '#fef3c7'
-                                : paper.admin_approval_status === 'REJECTED'
-                                ? '#fee2e2'
-                                : '#f1f5f9',
-                            color:
-                              paper.admin_approval_status === 'APPROVED'
-                                ? '#166534'
-                                : paper.admin_approval_status === 'RETURNED'
-                                ? '#92400e'
-                                : paper.admin_approval_status === 'REJECTED'
-                                ? '#991b1b'
-                                : '#475569',
-                          }}
-                        >
-                          Admin: {paper.admin_approval_status || 'PENDING'}
-                        </span>
-                      </div>
-
-                      {/* Revision Guidance Banner */}
-                      {(paper.review_status === 'RETURNED' || paper.admin_approval_status === 'RETURNED') && (
-                        <div
-                          style={{
-                            margin: '0.5rem 0',
-                            padding: '0.5rem 0.75rem',
-                            backgroundColor: '#fffbeb',
-                            border: '1px solid #fde68a',
-                            borderRadius: '6px',
-                            fontSize: '0.78rem',
-                            color: '#92400e',
-                          }}
-                        >
-                          <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <AlertCircle size={14} />
-                            <span>Revision Required</span>
-                          </div>
-                          <div style={{ marginTop: '2px', color: '#78350f' }}>
-                            {paper.review_comments || paper.admin_comments || 'Please revise the paper and re-submit.'}
-                          </div>
+                      {/* Module 5.3: Authorized Verifier Display & Decision Status */}
+                      <div
+                        style={{
+                          margin: '0.5rem 0',
+                          padding: '0.6rem 0.75rem',
+                          borderRadius: '6px',
+                          border:
+                            paper.review_status === 'RECOMMENDED' || paper.review_status === 'REVIEWED' || paper.admin_approval_status === 'APPROVED'
+                              ? '1px solid #bbf7d0'
+                              : paper.review_status === 'RETURNED' || paper.admin_approval_status === 'RETURNED'
+                              ? '1px solid #fde68a'
+                              : paper.review_status === 'REJECTED' || paper.admin_approval_status === 'REJECTED'
+                              ? '1px solid #fca5a5'
+                              : '1px solid #e2e8f0',
+                          backgroundColor:
+                            paper.review_status === 'RECOMMENDED' || paper.review_status === 'REVIEWED' || paper.admin_approval_status === 'APPROVED'
+                              ? '#f0fdf4'
+                              : paper.review_status === 'RETURNED' || paper.admin_approval_status === 'RETURNED'
+                              ? '#fffbeb'
+                              : paper.review_status === 'REJECTED' || paper.admin_approval_status === 'REJECTED'
+                              ? '#fef2f2'
+                              : '#f8fafc',
+                          fontSize: '0.78rem',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontWeight: 700, color: 'var(--color-structure)' }}>
+                            {paper.review_status === 'RECOMMENDED' || paper.review_status === 'REVIEWED' || paper.admin_approval_status === 'APPROVED'
+                              ? '✔ Verified'
+                              : paper.review_status === 'RETURNED' || paper.admin_approval_status === 'RETURNED'
+                              ? '⚠ Returned for Revision'
+                              : paper.review_status === 'REJECTED' || paper.admin_approval_status === 'REJECTED'
+                              ? '✖ Rejected'
+                              : '⏳ Pending Verification'}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenVerificationHistory(paper)}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              color: 'var(--color-primary)',
+                              fontSize: '0.72rem',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '3px',
+                              padding: 0,
+                            }}
+                          >
+                            <History size={12} />
+                            <span>Audit History</span>
+                          </button>
                         </div>
-                      )}
+
+                        {paper.reviewer?.name ? (
+                          <div style={{ color: '#334155', marginTop: '3px' }}>
+                            <strong>Verified by:</strong> {paper.reviewer.name}
+                            {paper.reviewed_at && (
+                              <span style={{ color: '#64748b' }}>
+                                {' '}• {new Date(paper.reviewed_at).toLocaleDateString()}
+                              </span>
+                            )}
+                          </div>
+                        ) : paper.review_status && paper.review_status !== 'PENDING_REVIEW' && paper.review_status !== 'PENDING' ? (
+                          <div style={{ color: '#334155', marginTop: '3px' }}>
+                            <strong>Decision:</strong> {paper.review_status}
+                            {paper.reviewed_at && (
+                              <span style={{ color: '#64748b' }}>
+                                {' '}• {new Date(paper.reviewed_at).toLocaleDateString()}
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <div style={{ color: '#64748b', marginTop: '3px' }}>
+                            Awaiting verification by Exam Coordinator.
+                          </div>
+                        )}
+
+                        {(paper.review_comments || paper.admin_comments) && (
+                          <div style={{ color: '#475569', fontStyle: 'italic', marginTop: '3px' }}>
+                            &quot;{paper.review_comments || paper.admin_comments}&quot;
+                          </div>
+                        )}
+                      </div>
 
                       <div style={styles.metaRows}>
                         <div style={styles.metaRow}>
@@ -1102,85 +1863,92 @@ export default function TeacherHome() {
 
                       <h3 style={styles.paperTitle}>{paper.title}</h3>
 
-                      {/* Module 22 Workflow Status Pills */}
-                      <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', margin: '0.35rem 0 0.5rem 0' }}>
-                        <span
-                          style={{
-                            fontSize: '0.72rem',
-                            fontWeight: 600,
-                            padding: '2px 6px',
-                            borderRadius: '4px',
-                            backgroundColor:
-                              paper.review_status === 'RECOMMENDED'
-                                ? '#dcfce7'
-                                : paper.review_status === 'RETURNED'
-                                ? '#fef3c7'
-                                : paper.review_status === 'REJECTED'
-                                ? '#fee2e2'
-                                : '#e0f2fe',
-                            color:
-                              paper.review_status === 'RECOMMENDED'
-                                ? '#166534'
-                                : paper.review_status === 'RETURNED'
-                                ? '#92400e'
-                                : paper.review_status === 'REJECTED'
-                                ? '#991b1b'
-                                : '#0369a1',
-                          }}
-                        >
-                          Coordinator: {paper.review_status || 'PENDING'}
-                        </span>
-
-                        <span
-                          style={{
-                            fontSize: '0.72rem',
-                            fontWeight: 600,
-                            padding: '2px 6px',
-                            borderRadius: '4px',
-                            backgroundColor:
-                              paper.admin_approval_status === 'APPROVED'
-                                ? '#dcfce7'
-                                : paper.admin_approval_status === 'RETURNED'
-                                ? '#fef3c7'
-                                : paper.admin_approval_status === 'REJECTED'
-                                ? '#fee2e2'
-                                : '#f1f5f9',
-                            color:
-                              paper.admin_approval_status === 'APPROVED'
-                                ? '#166534'
-                                : paper.admin_approval_status === 'RETURNED'
-                                ? '#92400e'
-                                : paper.admin_approval_status === 'REJECTED'
-                                ? '#991b1b'
-                                : '#475569',
-                          }}
-                        >
-                          Admin: {paper.admin_approval_status || 'PENDING'}
-                        </span>
-                      </div>
-
-                      {/* Revision Guidance Banner */}
-                      {(paper.review_status === 'RETURNED' || paper.admin_approval_status === 'RETURNED') && (
-                        <div
-                          style={{
-                            margin: '0.5rem 0',
-                            padding: '0.5rem 0.75rem',
-                            backgroundColor: '#fffbeb',
-                            border: '1px solid #fde68a',
-                            borderRadius: '6px',
-                            fontSize: '0.78rem',
-                            color: '#92400e',
-                          }}
-                        >
-                          <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <AlertCircle size={14} />
-                            <span>Revision Required</span>
-                          </div>
-                          <div style={{ marginTop: '2px', color: '#78350f' }}>
-                            {paper.review_comments || paper.admin_comments || 'Please revise the paper and re-submit.'}
-                          </div>
+                      {/* Module 5.3: Authorized Verifier Display & Decision Status */}
+                      <div
+                        style={{
+                          margin: '0.5rem 0',
+                          padding: '0.6rem 0.75rem',
+                          borderRadius: '6px',
+                          border:
+                            paper.review_status === 'RECOMMENDED' || paper.review_status === 'REVIEWED' || paper.admin_approval_status === 'APPROVED'
+                              ? '1px solid #bbf7d0'
+                              : paper.review_status === 'RETURNED' || paper.admin_approval_status === 'RETURNED'
+                              ? '1px solid #fde68a'
+                              : paper.review_status === 'REJECTED' || paper.admin_approval_status === 'REJECTED'
+                              ? '1px solid #fca5a5'
+                              : '1px solid #e2e8f0',
+                          backgroundColor:
+                            paper.review_status === 'RECOMMENDED' || paper.review_status === 'REVIEWED' || paper.admin_approval_status === 'APPROVED'
+                              ? '#f0fdf4'
+                              : paper.review_status === 'RETURNED' || paper.admin_approval_status === 'RETURNED'
+                              ? '#fffbeb'
+                              : paper.review_status === 'REJECTED' || paper.admin_approval_status === 'REJECTED'
+                              ? '#fef2f2'
+                              : '#f8fafc',
+                          fontSize: '0.78rem',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontWeight: 700, color: 'var(--color-structure)' }}>
+                            {paper.review_status === 'RECOMMENDED' || paper.review_status === 'REVIEWED' || paper.admin_approval_status === 'APPROVED'
+                              ? '✔ Verified'
+                              : paper.review_status === 'RETURNED' || paper.admin_approval_status === 'RETURNED'
+                              ? '⚠ Returned for Revision'
+                              : paper.review_status === 'REJECTED' || paper.admin_approval_status === 'REJECTED'
+                              ? '✖ Rejected'
+                              : '⏳ Pending Verification'}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenVerificationHistory(paper)}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              color: 'var(--color-primary)',
+                              fontSize: '0.72rem',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '3px',
+                              padding: 0,
+                            }}
+                          >
+                            <History size={12} />
+                            <span>Audit History</span>
+                          </button>
                         </div>
-                      )}
+
+                        {paper.reviewer?.name ? (
+                          <div style={{ color: '#334155', marginTop: '3px' }}>
+                            <strong>Verified by:</strong> {paper.reviewer.name}
+                            {paper.reviewed_at && (
+                              <span style={{ color: '#64748b' }}>
+                                {' '}• {new Date(paper.reviewed_at).toLocaleDateString()}
+                              </span>
+                            )}
+                          </div>
+                        ) : paper.review_status && paper.review_status !== 'PENDING_REVIEW' && paper.review_status !== 'PENDING' ? (
+                          <div style={{ color: '#334155', marginTop: '3px' }}>
+                            <strong>Decision:</strong> {paper.review_status}
+                            {paper.reviewed_at && (
+                              <span style={{ color: '#64748b' }}>
+                                {' '}• {new Date(paper.reviewed_at).toLocaleDateString()}
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <div style={{ color: '#64748b', marginTop: '3px' }}>
+                            Awaiting verification by Exam Coordinator.
+                          </div>
+                        )}
+
+                        {(paper.review_comments || paper.admin_comments) && (
+                          <div style={{ color: '#475569', fontStyle: 'italic', marginTop: '3px' }}>
+                            &quot;{paper.review_comments || paper.admin_comments}&quot;
+                          </div>
+                        )}
+                      </div>
 
                       <div style={styles.metaRows}>
                         <div style={styles.metaRow}>
@@ -2333,6 +3101,122 @@ export default function TeacherHome() {
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* TRACEABLE VERIFICATION HISTORY MODAL (Module 5.4) */}
+      {historyPaper && (
+        <div style={styles.modalOverlay} onClick={() => setHistoryPaper(null)}>
+          <div
+            style={{ ...styles.modalCard, maxWidth: '640px', maxHeight: '85vh', overflowY: 'auto' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid var(--color-border)', paddingBottom: '12px', marginBottom: '16px' }}>
+              <div>
+                <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--color-primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Traceable Verification History
+                </div>
+                <h3 style={{ margin: '4px 0 0 0', fontSize: '1.2rem', fontWeight: 700, color: 'var(--color-structure)' }}>
+                  {historyPaper.title}
+                </h3>
+                <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', marginTop: '2px' }}>
+                  {historyPaper.subject} • Department of Computer Engineering
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setHistoryPaper(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-muted)', padding: '4px' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {loadingHistory ? (
+              <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--color-text-muted)' }}>
+                <Loader2 size={24} className="spin" style={{ margin: '0 auto 8px auto' }} />
+                <div>Loading verification timeline...</div>
+              </div>
+            ) : verificationHistory.length === 0 ? (
+              <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--color-text-muted)' }}>
+                <Clock size={32} color="#94a3b8" style={{ margin: '0 auto 8px auto' }} />
+                <div style={{ fontWeight: 600, color: 'var(--color-structure)' }}>No Verification Actions Recorded Yet</div>
+                <div style={{ fontSize: '0.8rem', marginTop: '4px' }}>
+                  This paper is currently {historyPaper.review_status || historyPaper.status}. A traceable record will be appended once an authorized Exam Coordinator reviews this submission.
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                {verificationHistory.map((entry, idx) => (
+                  <div
+                    key={entry.id || idx}
+                    style={{
+                      border: '1px solid var(--color-border)',
+                      borderRadius: '8px',
+                      padding: '12px 14px',
+                      backgroundColor: 'var(--color-surface-subtle)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                      <span
+                        style={{
+                          fontSize: '0.75rem',
+                          fontWeight: 700,
+                          padding: '2px 8px',
+                          borderRadius: '4px',
+                          backgroundColor:
+                            entry.decision === 'APPROVED' || entry.decision === 'RECOMMENDED' || entry.decision === 'REVIEWED'
+                              ? '#dcfce7'
+                              : entry.decision === 'RETURNED'
+                              ? '#fef3c7'
+                              : entry.decision === 'REJECTED'
+                              ? '#fee2e2'
+                              : '#e0f2fe',
+                          color:
+                            entry.decision === 'APPROVED' || entry.decision === 'RECOMMENDED' || entry.decision === 'REVIEWED'
+                              ? '#166534'
+                              : entry.decision === 'RETURNED'
+                              ? '#92400e'
+                              : entry.decision === 'REJECTED'
+                              ? '#991b1b'
+                              : '#0369a1',
+                        }}
+                      >
+                        Decision: {entry.decision || entry.new_status}
+                      </span>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', fontFamily: 'var(--font-jetbrains)' }}>
+                        {new Date(entry.verified_at).toLocaleString()}
+                      </span>
+                    </div>
+
+                    <div style={{ fontSize: '0.85rem', color: 'var(--color-structure)', fontWeight: 600 }}>
+                      Verified by: {entry.verifier?.name || 'Authorized Verifier'} ({entry.verifier?.roles?.name || entry.verifier?.email || 'Exam Authority'})
+                    </div>
+
+                    <div style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', marginTop: '2px' }}>
+                      Status transition: <code>{entry.previous_status || 'SUBMITTED'}</code> &rarr; <code>{entry.new_status}</code>
+                    </div>
+
+                    {entry.comments && (
+                      <div style={{ marginTop: '8px', padding: '8px 10px', backgroundColor: 'var(--color-surface)', borderRadius: '6px', fontSize: '0.8rem', color: 'var(--color-text)', borderLeft: '3px solid var(--color-primary)' }}>
+                        <strong>Notes:</strong> {entry.comments}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
+              <button
+                type="button"
+                onClick={() => setHistoryPaper(null)}
+                style={{ ...styles.submitBtn, padding: '6px 14px', borderRadius: '6px', cursor: 'pointer', backgroundColor: 'var(--color-surface-subtle)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }}
+              >
+                Close History
+              </button>
+            </div>
           </div>
         </div>
       )}

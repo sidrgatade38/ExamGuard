@@ -1,7 +1,7 @@
 const express = require('express');
 const { authenticateToken } = require('../middleware/authMiddleware');
 const { authorizeRoles } = require('../middleware/roleMiddleware');
-const { handleQuestionPaperUpload, handleAnswerKeyUpload } = require('../middleware/uploadMiddleware');
+const { handleQuestionPaperUpload, handleAnswerKeyUpload, handleQuestionImageUpload } = require('../middleware/uploadMiddleware');
 const {
   submitPaper,
   getMyPapers,
@@ -11,6 +11,8 @@ const {
   getRecipients,
   verifyPaperSignature,
   deletePaper,
+  uploadQuestionImage,
+  getVerificationHistory,
 } = require('../controllers/questionPaperController');
 const {
   uploadAnswerKey,
@@ -20,6 +22,15 @@ const {
 } = require('../controllers/answerKeyController');
 
 const router = express.Router();
+
+// POST /api/question-papers/upload-image - Upload and validate question diagram/figure (TEACHER only)
+router.post(
+  '/upload-image',
+  authenticateToken,
+  authorizeRoles('TEACHER'),
+  handleQuestionImageUpload,
+  uploadQuestionImage
+);
 
 // POST /api/question-papers - Create and submit a question paper (TEACHER only)
 router.post(
@@ -76,6 +87,13 @@ router.get(
   authenticateToken,
   authorizeRoles('TEACHER'),
   verifyPaperSignature
+);
+
+// GET /api/question-papers/:id/verification-history - Traceable verification history (Module 5)
+router.get(
+  '/:id/verification-history',
+  authenticateToken,
+  getVerificationHistory
 );
 
 // DELETE /api/question-papers/:id - Secure question paper deletion & archival (TEACHER only, ownership verified in service)

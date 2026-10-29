@@ -114,6 +114,32 @@ export const questionPaperService = {
     });
     return response.data;
   },
+
+  /**
+   * Uploads and validates an embedded question diagram/figure (Module 4)
+   * @param {File} imageFile - PNG/JPEG/WebP file
+   * @returns {Promise<Object>} Image metadata and base64 dataUrl
+   */
+  async uploadQuestionImage(imageFile) {
+    const formData = new FormData();
+    formData.append('image', imageFile);
+    const response = await api.post('/question-papers/upload-image', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data?.data;
+  },
+
+  /**
+   * Fetches traceable verification history decisions for a question paper (Module 5)
+   * @param {string} id - Question paper UUID
+   * @returns {Promise<Array>} Verification history entries
+   */
+  async getVerificationHistory(id) {
+    const response = await api.get(`/question-papers/${id}/verification-history`);
+    return response.data?.data || [];
+  },
 };
 
 export default questionPaperService;

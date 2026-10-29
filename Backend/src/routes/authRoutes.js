@@ -1,5 +1,5 @@
 const express = require('express');
-const { login, getMe } = require('../controllers/authController');
+const { login, getMe, getProfile, updateProfile } = require('../controllers/authController');
 const { authenticateToken } = require('../middleware/authMiddleware');
 const { defaultLoginLimiter } = require('../middleware/rateLimiter');
 
@@ -10,5 +10,11 @@ router.post('/login', defaultLoginLimiter, login);
 
 // GET /api/auth/me (Protected by authenticateToken middleware)
 router.get('/me', authenticateToken, getMe);
+
+// GET /api/auth/profile - Fetch independent teacher profile
+router.get('/profile', authenticateToken, getProfile);
+
+// PUT /api/auth/profile - Update independent teacher profile
+router.put('/profile', authenticateToken, updateProfile);
 
 module.exports = router;

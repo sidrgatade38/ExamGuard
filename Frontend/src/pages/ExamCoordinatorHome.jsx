@@ -463,9 +463,9 @@ export default function ExamCoordinatorHome() {
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <h1 style={styles.brandTitle}>ExamGuard</h1>
-              <span style={styles.appEnvironmentPill}>SECURE EXAM CELL</span>
+              <span style={styles.appEnvironmentPill}>COMPUTER ENGINEERING</span>
             </div>
-            <p style={styles.brandSubtitle}>Examination Coordinator Control Center & Delivery Gateway</p>
+            <p style={styles.brandSubtitle}>Department of Computer Engineering • Examination Coordinator Control Center</p>
           </div>
         </div>
 
@@ -947,23 +947,23 @@ export default function ExamCoordinatorHome() {
               </div>
 
               <div style={styles.filterControls}>
-                {departments.length > 0 && (
-                  <div style={styles.selectWrapper}>
-                    <Building size={14} style={{ color: '#94a3b8', marginRight: '6px' }} />
-                    <select
-                      value={departmentFilter}
-                      onChange={(e) => setDepartmentFilter(e.target.value)}
-                      style={styles.select}
-                    >
-                      <option value="ALL">All Departments / Patterns</option>
-                      {departments.map((d) => (
-                        <option key={d} value={d}>
-                          {d}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    background: 'rgba(56, 189, 248, 0.1)',
+                    border: '1px solid rgba(56, 189, 248, 0.25)',
+                    borderRadius: '8px',
+                    padding: '6px 12px',
+                    fontSize: '0.8rem',
+                    fontWeight: 600,
+                    color: '#38bdf8',
+                  }}
+                  title="System strictly configured for Department of Computer Engineering"
+                >
+                  <Building size={14} style={{ marginRight: '6px' }} />
+                  <span>Dept: Computer Engineering</span>
+                </div>
 
                 <div style={styles.selectWrapper}>
                   <Filter size={14} style={{ color: '#94a3b8', marginRight: '6px' }} />

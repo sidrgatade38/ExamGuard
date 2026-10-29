@@ -429,6 +429,7 @@ async function getMyQuestionPapers(teacherId) {
       scheduled_delivery_date,
       created_at,
       updated_at,
+      department,
       review_status,
       reviewer_id,
       reviewed_at,
@@ -437,6 +438,16 @@ async function getMyQuestionPapers(teacherId) {
       admin_approver_id,
       admin_approved_at,
       admin_comments,
+      reviewer:users!reviewer_id (
+        id,
+        name,
+        email
+      ),
+      admin_approver:users!admin_approver_id (
+        id,
+        name,
+        email
+      ),
       question_paper_assignments (
         id,
         assigned_to_user_id,
@@ -500,6 +511,7 @@ async function getQuestionPaperById(paperId, requesterId, requesterRole) {
       scheduled_delivery_date,
       created_at,
       updated_at,
+      department,
       review_status,
       reviewer_id,
       reviewed_at,
@@ -508,6 +520,16 @@ async function getQuestionPaperById(paperId, requesterId, requesterRole) {
       admin_approver_id,
       admin_approved_at,
       admin_comments,
+      reviewer:users!reviewer_id (
+        id,
+        name,
+        email
+      ),
+      admin_approver:users!admin_approver_id (
+        id,
+        name,
+        email
+      ),
       teacher:users!teacher_id (
         id,
         name,
@@ -948,6 +970,7 @@ async function getAssignedQuestionPapers(facultyId) {
       scheduled_delivery_date,
       created_at,
       updated_at,
+      department,
       review_status,
       reviewer_id,
       reviewed_at,
@@ -956,6 +979,16 @@ async function getAssignedQuestionPapers(facultyId) {
       admin_approver_id,
       admin_approved_at,
       admin_comments,
+      reviewer:users!reviewer_id (
+        id,
+        name,
+        email
+      ),
+      admin_approver:users!admin_approver_id (
+        id,
+        name,
+        email
+      ),
       teacher:users!teacher_id (
         id,
         name,
@@ -1399,6 +1432,23 @@ async function reviewQuestionPaper({ paperId, coordinatorId, coordinatorName, ac
     throw dbErr;
   }
 
+  // Record traceable verification history (Module 5)
+  try {
+    await supabase.from('paper_verifications').insert([
+      {
+        question_paper_id: paperId,
+        verifier_id: coordinatorId,
+        previous_status: paper.review_status || 'PENDING_REVIEW',
+        new_status: newReviewStatus,
+        decision: normalizedAction,
+        comments: comments ? comments.trim() : null,
+        verified_at: now,
+      },
+    ]);
+  } catch (verifErr) {
+    console.warn('[QuestionPaperService] Note: paper_verifications logging:', verifErr.message);
+  }
+
   // Send Notifications
   if (newReviewStatus === 'REVIEWED') {
     try {
@@ -1519,6 +1569,23 @@ async function adminApproveQuestionPaper({ paperId, adminId, adminName, action, 
     throw dbErr;
   }
 
+  // Record traceable verification history (Module 5)
+  try {
+    await supabase.from('paper_verifications').insert([
+      {
+        question_paper_id: paperId,
+        verifier_id: adminId,
+        previous_status: paper.admin_approval_status || 'PENDING_APPROVAL',
+        new_status: newAdminStatus,
+        decision: normalizedAction,
+        comments: comments ? comments.trim() : null,
+        verified_at: now,
+      },
+    ]);
+  } catch (verifErr) {
+    console.warn('[QuestionPaperService] Note: admin paper_verifications logging:', verifErr.message);
+  }
+
   // Notify Teacher and Coordinator
   try {
     await notificationService.createWorkflowNotification({
@@ -1588,6 +1655,7 @@ async function getAdminQuestionPapers({ status, reviewStatus, adminStatus, searc
       scheduled_delivery_date,
       created_at,
       updated_at,
+      department,
       review_status,
       reviewer_id,
       reviewed_at,
@@ -1596,6 +1664,16 @@ async function getAdminQuestionPapers({ status, reviewStatus, adminStatus, searc
       admin_approver_id,
       admin_approved_at,
       admin_comments,
+      reviewer:users!reviewer_id (
+        id,
+        name,
+        email
+      ),
+      admin_approver:users!admin_approver_id (
+        id,
+        name,
+        email
+      ),
       review_status,
       reviewer_id,
       reviewed_at,
@@ -1650,6 +1728,69 @@ async function getAdminQuestionPapers({ status, reviewStatus, adminStatus, searc
   };
 }
 
+/**
+ * Retrieves the full verifiable history of review and verification decisions for a question paper (Module 5)
+ */
+async function getPaperVerificationHistory(paperId) {
+  if (!paperId) throw new Error('Paper ID is required.');
+
+  try {
+    const { data, error } = await supabase
+      .from('paper_verifications')
+      .select(`
+        id,
+        question_paper_id,
+        verifier_id,
+        previous_status,
+        new_status,
+        decision,
+        comments,
+        verified_at,
+        verifier:users!verifier_id (
+          id,
+          name,
+          email,
+          roles(name)
+        )
+      `)
+      .eq('question_paper_id', paperId)
+      .order('verified_at', { ascending: false });
+
+    if (!error && data && data.length > 0) {
+      return data;
+    }
+  } catch (err) {
+    console.warn('[QuestionPaperService] Error querying paper_verifications table:', err.message);
+  }
+
+  // Fallback to checking paper's reviewer_id directly
+  try {
+    const { data: paper } = await supabase
+      .from('question_papers')
+      .select('id, reviewer_id, reviewed_at, review_status, review_comments, reviewer:users!reviewer_id(id, name, email)')
+      .eq('id', paperId)
+      .maybeSingle();
+
+    if (paper && paper.reviewer_id) {
+      return [
+        {
+          id: `hist-${paper.id}`,
+          question_paper_id: paper.id,
+          verifier_id: paper.reviewer_id,
+          previous_status: 'SUBMITTED',
+          new_status: paper.review_status,
+          decision: paper.review_status,
+          comments: paper.review_comments,
+          verified_at: paper.reviewed_at || new Date().toISOString(),
+          verifier: paper.reviewer,
+        },
+      ];
+    }
+  } catch (_) {}
+
+  return [];
+}
+
 module.exports = {
   submitQuestionPaper,
   getMyQuestionPapers,
@@ -1665,4 +1806,5 @@ module.exports = {
   reviewQuestionPaper,
   adminApproveQuestionPaper,
   getAdminQuestionPapers,
+  getPaperVerificationHistory,
 };

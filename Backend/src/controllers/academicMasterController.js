@@ -16,7 +16,13 @@ async function getDepartments(req, res, next) {
 async function getCourses(req, res, next) {
   try {
     const { departmentCode } = req.query;
-    const data = await academicService.getCourses(departmentCode);
+    if (departmentCode && departmentCode.trim().toUpperCase() !== 'COMP') {
+      return res.status(400).json({
+        success: false,
+        message: 'ExamGuard is strictly restricted to the Computer Engineering Department.',
+      });
+    }
+    const data = await academicService.getCourses('COMP');
     return res.status(200).json({ success: true, data });
   } catch (err) {
     next(err);
@@ -44,9 +50,15 @@ async function getSemesters(req, res, next) {
 async function getSubjects(req, res, next) {
   try {
     const { departmentCode, courseCode, patternCode, semester, search } = req.query;
+    if (departmentCode && departmentCode.trim().toUpperCase() !== 'COMP') {
+      return res.status(400).json({
+        success: false,
+        message: 'ExamGuard is strictly restricted to the Computer Engineering Department.',
+      });
+    }
     const teacherId = req.user?.roleName === 'TEACHER' ? req.user.userId : undefined;
     const data = await academicService.getSubjects({
-      departmentCode,
+      departmentCode: 'COMP',
       courseCode,
       patternCode,
       semester,

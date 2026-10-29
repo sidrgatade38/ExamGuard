@@ -137,7 +137,89 @@ async function getMe(req, res, next) {
   }
 }
 
+/**
+ * Handles GET /api/auth/profile
+ */
+async function getProfile(req, res, next) {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Unauthorized access',
+      });
+    }
+
+    const profile = await authService.getOrCreateTeacherProfile(userId);
+    return res.status(200).json({
+      success: true,
+      data: profile,
+    });
+  } catch (error) {
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({
+        success: false,
+        message: error.message,
+      });
+    }
+    return next(error);
+  }
+}
+
+/**
+ * Handles PUT /api/auth/profile
+ */
+async function updateProfile(req, res, next) {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Unauthorized access',
+      });
+    }
+
+    // Reject attempt to set a different department
+    if (req.body.department && !req.body.department.toLowerCase().includes('computer')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Department is fixed to Department of Computer Engineering and cannot be changed.',
+      });
+    }
+
+    const updatedProfile = await authService.updateTeacherProfile(userId, req.body);
+
+    await auditLogService.logAuditEvent({
+      userId,
+      role: req.userRole || req.user?.role || 'TEACHER',
+      action: 'PROFILE_UPDATED',
+      resourceType: 'TEACHER_PROFILE',
+      resourceId: userId,
+      outcome: 'SUCCESS',
+      summary: `Teacher profile updated for user ${userId}`,
+      ipAddress: req.ip || req.headers['x-forwarded-for'],
+      userAgent: req.headers['user-agent'],
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Profile updated successfully',
+      data: updatedProfile,
+    });
+  } catch (error) {
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({
+        success: false,
+        message: error.message,
+      });
+    }
+    return next(error);
+  }
+}
+
 module.exports = {
   login,
   getMe,
+  getProfile,
+  updateProfile,
 };
