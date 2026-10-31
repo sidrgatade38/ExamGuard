@@ -429,7 +429,6 @@ async function getMyQuestionPapers(teacherId) {
       scheduled_delivery_date,
       created_at,
       updated_at,
-      department,
       review_status,
       reviewer_id,
       reviewed_at,
@@ -479,7 +478,11 @@ async function getMyQuestionPapers(teacherId) {
     throw dbErr;
   }
 
-  return papers || [];
+  // Ensure department is consistently Department of Computer Engineering
+  return (papers || []).map((p) => ({
+    ...p,
+    department: 'Department of Computer Engineering',
+  }));
 }
 
 /**
@@ -511,7 +514,6 @@ async function getQuestionPaperById(paperId, requesterId, requesterRole) {
       scheduled_delivery_date,
       created_at,
       updated_at,
-      department,
       review_status,
       reviewer_id,
       reviewed_at,
@@ -622,7 +624,10 @@ async function getQuestionPaperById(paperId, requesterId, requesterRole) {
     throw forbiddenErr;
   }
 
-  return paper;
+  return {
+    ...paper,
+    department: 'Department of Computer Engineering',
+  };
 }
 
 /**
@@ -970,7 +975,6 @@ async function getAssignedQuestionPapers(facultyId) {
       scheduled_delivery_date,
       created_at,
       updated_at,
-      department,
       review_status,
       reviewer_id,
       reviewed_at,
@@ -1031,6 +1035,7 @@ async function getAssignedQuestionPapers(facultyId) {
         academicYear: paper.academic_year,
         examType: paper.exam_type,
         examDate: paper.exam_date,
+        department: 'Department of Computer Engineering',
         status: paper.status,
         submittedAt: paper.submitted_at,
         scheduledDeliveryDate: deliveryDate,
@@ -1655,7 +1660,6 @@ async function getAdminQuestionPapers({ status, reviewStatus, adminStatus, searc
       scheduled_delivery_date,
       created_at,
       updated_at,
-      department,
       review_status,
       reviewer_id,
       reviewed_at,
@@ -1718,7 +1722,10 @@ async function getAdminQuestionPapers({ status, reviewStatus, adminStatus, searc
   }
 
   return {
-    papers: data || [],
+    papers: (data || []).map((p) => ({
+      ...p,
+      department: 'Department of Computer Engineering',
+    })),
     pagination: {
       total: count || (data ? data.length : 0),
       page: parseInt(page, 10),

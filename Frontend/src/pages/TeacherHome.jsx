@@ -35,6 +35,7 @@ import {
   Building,
   History,
   Award,
+  Save,
 } from 'lucide-react';
 import QuestionPaperGeneratorWizard from '../components/QuestionPaperGeneratorWizard';
 import DeletePaperModal from '../components/DeletePaperModal';
