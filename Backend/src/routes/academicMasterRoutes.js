@@ -4,7 +4,7 @@
 
 const express = require('express');
 const { authenticateToken } = require('../middleware/authMiddleware');
-const { authorizeRoles } = require('../middleware/rbacMiddleware');
+const { authorizeRoles } = require('../middleware/roleMiddleware');
 const {
   getDepartments,
   getCourses,
