@@ -29,10 +29,15 @@ import {
   UserX,
   Lock,
   Menu,
+  BookOpen,
+  Plus,
+  Trash2,
+  Edit,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import auditLogService from '../services/auditLogService';
 import adminService from '../services/adminService';
+import academicService from '../services/academicService';
 
 export default function AdminHome() {
   const { user, logout } = useAuth();
@@ -417,6 +422,147 @@ export default function AdminHome() {
     }
   };
 
+  // ==========================================
+  // SECTION D: Academic Master Configuration CRUD (Part 3)
+  // ==========================================
+  const [academicConfigSubTab, setAcademicConfigSubTab] = useState('titles'); // 'titles' | 'patterns' | 'subjects' | 'courses'
+  const [paperTitles, setPaperTitles] = useState([]);
+  const [academicPatterns, setAcademicPatterns] = useState([]);
+  const [academicSubjects, setAcademicSubjects] = useState([]);
+  const [academicCourses, setAcademicCourses] = useState([]);
+  const [loadingConfig, setLoadingConfig] = useState(false);
+
+  // Modal / form states for Academic CRUD
+  const [academicModalOpen, setAcademicModalOpen] = useState(false);
+  const [academicModalType, setAcademicModalType] = useState('title'); // 'title' | 'pattern' | 'subject' | 'course'
+  const [academicEditingItem, setAcademicEditingItem] = useState(null);
+  const [academicForm, setAcademicForm] = useState({});
+
+  const fetchAcademicConfigs = useCallback(async () => {
+    setLoadingConfig(true);
+    try {
+      const [tRes, pRes, sRes, cRes] = await Promise.all([
+        academicService.getPaperTitles().catch(() => ({ data: [] })),
+        academicService.getPatterns().catch(() => ({ data: [] })),
+        academicService.getSubjects().catch(() => ({ data: [] })),
+        academicService.getCourses().catch(() => ({ data: [] })),
+      ]);
+      setPaperTitles(tRes.data || []);
+      setAcademicPatterns(pRes.data || []);
+      setAcademicSubjects(sRes.data || []);
+      setAcademicCourses(cRes.data || []);
+    } catch (err) {
+      console.warn('Failed loading academic configurations:', err);
+    } finally {
+      setLoadingConfig(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'academic') {
+      fetchAcademicConfigs();
+    }
+  }, [activeTab, fetchAcademicConfigs]);
+
+  const handleOpenAcademicModal = (type, item = null) => {
+    setAcademicModalType(type);
+    setAcademicEditingItem(item);
+    if (type === 'title') {
+      setAcademicForm({
+        title: item?.title || '',
+        code: item?.code || '',
+      });
+    } else if (type === 'pattern') {
+      setAcademicForm({
+        name: item?.name || '',
+        code: item?.code || '',
+        revisionYear: item?.revisionYear || item?.revision_year || new Date().getFullYear(),
+      });
+    } else if (type === 'subject') {
+      setAcademicForm({
+        title: item?.title || '',
+        code: item?.code || '',
+        shortName: item?.shortName || item?.short_name || '',
+        semester: item?.semester || 'Semester 5',
+        totalMarks: item?.totalMarks || item?.total_marks || 70,
+        durationHours: item?.durationHours || item?.duration_hours || 2.5,
+      });
+    } else if (type === 'course') {
+      setAcademicForm({
+        name: item?.name || '',
+        code: item?.code || '',
+        degree: item?.degree || 'B.E.',
+      });
+    }
+    setAcademicModalOpen(true);
+  };
+
+  const handleSaveAcademicItem = async (e) => {
+    e.preventDefault();
+    setUserActionError(null);
+    setUserActionSuccess(null);
+    try {
+      if (academicModalType === 'title') {
+        if (academicEditingItem) {
+          await academicService.updatePaperTitle(academicEditingItem.id, academicForm);
+          setUserActionSuccess(`Paper title updated successfully.`);
+        } else {
+          await academicService.createPaperTitle(academicForm);
+          setUserActionSuccess(`New paper title added successfully.`);
+        }
+      } else if (academicModalType === 'pattern') {
+        if (academicEditingItem) {
+          await academicService.updatePattern(academicEditingItem.id, academicForm);
+          setUserActionSuccess(`Academic pattern updated successfully.`);
+        } else {
+          await academicService.createPattern(academicForm);
+          setUserActionSuccess(`New academic pattern added successfully.`);
+        }
+      } else if (academicModalType === 'subject') {
+        if (academicEditingItem) {
+          await academicService.updateSubject(academicEditingItem.id, academicForm);
+          setUserActionSuccess(`Subject updated successfully.`);
+        } else {
+          await academicService.createSubject(academicForm);
+          setUserActionSuccess(`New subject added successfully.`);
+        }
+      } else if (academicModalType === 'course') {
+        if (academicEditingItem) {
+          await academicService.updateCourse(academicEditingItem.id, academicForm);
+          setUserActionSuccess(`Course updated successfully.`);
+        } else {
+          await academicService.createCourse(academicForm);
+          setUserActionSuccess(`New course added successfully.`);
+        }
+      }
+      setAcademicModalOpen(false);
+      fetchAcademicConfigs();
+    } catch (err) {
+      setUserActionError(err.response?.data?.message || err.message || 'Operation failed');
+    }
+  };
+
+  const handleDeleteAcademicItem = async (type, item) => {
+    if (!window.confirm(`Are you sure you want to delete "${item.title || item.name}"?`)) return;
+    setUserActionError(null);
+    setUserActionSuccess(null);
+    try {
+      if (type === 'title') {
+        await academicService.deletePaperTitle(item.id);
+      } else if (type === 'pattern') {
+        await academicService.deletePattern(item.id);
+      } else if (type === 'subject') {
+        await academicService.deleteSubject(item.id);
+      } else if (type === 'course') {
+        await academicService.deleteCourse(item.id);
+      }
+      setUserActionSuccess(`Deleted successfully.`);
+      fetchAcademicConfigs();
+    } catch (err) {
+      setUserActionError(err.response?.data?.message || err.message || 'Delete failed');
+    }
+  };
+
   const formatTimestamp = (isoStr) => {
     if (!isoStr) return 'N/A';
     try {
@@ -566,6 +712,20 @@ export default function AdminHome() {
 
               <button
                 onClick={() => {
+                  setActiveTab('academic');
+                  setMobileMenuOpen(false);
+                }}
+                style={{
+                  ...styles.mobileNavBtn,
+                  ...(activeTab === 'academic' ? styles.mobileNavBtnActive : {}),
+                }}
+              >
+                <BookOpen size={18} />
+                <span>Academic &amp; Paper Config</span>
+              </button>
+
+              <button
+                onClick={() => {
                   setActiveTab('audit');
                   setMobileMenuOpen(false);
                 }}
@@ -611,6 +771,17 @@ export default function AdminHome() {
         >
           <FileText size={18} style={{ marginRight: '0.5rem' }} />
           <span>Paper Approvals</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('academic')}
+          style={{
+            ...styles.tabBtn,
+            ...(activeTab === 'academic' ? styles.tabBtnActive : {}),
+          }}
+        >
+          <BookOpen size={18} style={{ marginRight: '0.5rem' }} />
+          <span>Academic &amp; Paper Config</span>
         </button>
 
         <button
@@ -1162,6 +1333,302 @@ export default function AdminHome() {
                 </div>
               )}
             </section>
+          </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* TAB 4: ACADEMIC & QUESTION PAPER CONFIGURATION CRUD (Part 3)  */}
+        {/* ============================================================== */}
+        {activeTab === 'academic' && (
+          <div>
+            {/* Header info */}
+            <section style={{ ...styles.filterCard, marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.15rem', color: 'var(--color-structure)' }}>
+                  Academic &amp; Question Paper Configuration Control
+                </h3>
+                <p style={{ margin: '4px 0 0 0', fontSize: '0.82rem', color: 'var(--color-text-muted)' }}>
+                  Exclusively for Department of Computer Engineering. Manage titles, patterns, courses, and subjects dynamically.
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => handleOpenAcademicModal(academicConfigSubTab === 'titles' ? 'title' : academicConfigSubTab === 'patterns' ? 'pattern' : academicConfigSubTab === 'courses' ? 'course' : 'subject')}
+                  style={{ ...styles.submitBtn, width: 'auto', display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '0.55rem 1rem' }}
+                >
+                  <Plus size={16} />
+                  <span>
+                    Add {academicConfigSubTab === 'titles' ? 'Paper Title' : academicConfigSubTab === 'patterns' ? 'Academic Pattern' : academicConfigSubTab === 'courses' ? 'Course' : 'Subject'}
+                  </span>
+                </button>
+              </div>
+            </section>
+
+            {/* Sub-tab navigation */}
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '1.2rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.5rem' }}>
+              <button
+                type="button"
+                onClick={() => setAcademicConfigSubTab('titles')}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: '6px',
+                  fontWeight: 600,
+                  fontSize: '0.85rem',
+                  border: 'none',
+                  cursor: 'pointer',
+                  backgroundColor: academicConfigSubTab === 'titles' ? 'var(--color-primary)' : 'var(--color-surface)',
+                  color: academicConfigSubTab === 'titles' ? '#ffffff' : 'var(--color-structure)',
+                }}
+              >
+                Paper Titles ({paperTitles.length})
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setAcademicConfigSubTab('patterns')}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: '6px',
+                  fontWeight: 600,
+                  fontSize: '0.85rem',
+                  border: 'none',
+                  cursor: 'pointer',
+                  backgroundColor: academicConfigSubTab === 'patterns' ? 'var(--color-primary)' : 'var(--color-surface)',
+                  color: academicConfigSubTab === 'patterns' ? '#ffffff' : 'var(--color-structure)',
+                }}
+              >
+                Academic Patterns ({academicPatterns.length})
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setAcademicConfigSubTab('subjects')}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: '6px',
+                  fontWeight: 600,
+                  fontSize: '0.85rem',
+                  border: 'none',
+                  cursor: 'pointer',
+                  backgroundColor: academicConfigSubTab === 'subjects' ? 'var(--color-primary)' : 'var(--color-surface)',
+                  color: academicConfigSubTab === 'subjects' ? '#ffffff' : 'var(--color-structure)',
+                }}
+              >
+                Subjects &amp; Codes ({academicSubjects.length})
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setAcademicConfigSubTab('courses')}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: '6px',
+                  fontWeight: 600,
+                  fontSize: '0.85rem',
+                  border: 'none',
+                  cursor: 'pointer',
+                  backgroundColor: academicConfigSubTab === 'courses' ? 'var(--color-primary)' : 'var(--color-surface)',
+                  color: academicConfigSubTab === 'courses' ? '#ffffff' : 'var(--color-structure)',
+                }}
+              >
+                Courses / Degrees ({academicCourses.length})
+              </button>
+            </div>
+
+            {/* Sub-tab 1: Paper Titles */}
+            {academicConfigSubTab === 'titles' && (
+              <section style={styles.tableCard}>
+                <table style={styles.table}>
+                  <thead>
+                    <tr style={styles.thRow}>
+                      <th style={styles.th}>Title Option</th>
+                      <th style={styles.th}>Code Identifier</th>
+                      <th style={styles.th}>Status</th>
+                      <th style={{ ...styles.th, textAlign: 'center' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paperTitles.map((t) => (
+                      <tr key={t.id} style={styles.tr}>
+                        <td style={styles.td}>
+                          <strong>{t.title}</strong>
+                        </td>
+                        <td style={styles.td}>
+                          <span style={{ fontFamily: 'var(--font-jetbrains)', fontSize: '0.8rem', color: '#64748b' }}>
+                            {t.code || t.title.toUpperCase().replace(/\s+/g, '_')}
+                          </span>
+                        </td>
+                        <td style={styles.td}>
+                          <span style={{ fontSize: '0.75rem', fontWeight: 700, padding: '2px 8px', borderRadius: '4px', backgroundColor: '#dcfce7', color: '#166534' }}>
+                            ACTIVE
+                          </span>
+                        </td>
+                        <td style={{ ...styles.td, textAlign: 'center' }}>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenAcademicModal('title', t)}
+                            style={{ ...styles.iconBtn, marginRight: '6px' }}
+                            title="Edit Title"
+                          >
+                            <Edit size={14} color="#0284c7" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteAcademicItem('title', t)}
+                            style={styles.iconBtn}
+                            title="Delete Title"
+                          >
+                            <Trash2 size={14} color="#dc2626" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </section>
+            )}
+
+            {/* Sub-tab 2: Patterns */}
+            {academicConfigSubTab === 'patterns' && (
+              <section style={styles.tableCard}>
+                <table style={styles.table}>
+                  <thead>
+                    <tr style={styles.thRow}>
+                      <th style={styles.th}>Pattern Name</th>
+                      <th style={styles.th}>Code</th>
+                      <th style={styles.th}>Revision Year</th>
+                      <th style={{ ...styles.th, textAlign: 'center' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {academicPatterns.map((p) => (
+                      <tr key={p.id} style={styles.tr}>
+                        <td style={styles.td}><strong>{p.name}</strong></td>
+                        <td style={styles.td}><span style={{ fontFamily: 'var(--font-jetbrains)', fontSize: '0.8rem' }}>{p.code}</span></td>
+                        <td style={styles.td}>{p.revisionYear || p.revision_year || 'N/A'}</td>
+                        <td style={{ ...styles.td, textAlign: 'center' }}>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenAcademicModal('pattern', p)}
+                            style={{ ...styles.iconBtn, marginRight: '6px' }}
+                            title="Edit Pattern"
+                          >
+                            <Edit size={14} color="#0284c7" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteAcademicItem('pattern', p)}
+                            style={styles.iconBtn}
+                            title="Delete Pattern"
+                          >
+                            <Trash2 size={14} color="#dc2626" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </section>
+            )}
+
+            {/* Sub-tab 3: Subjects */}
+            {academicConfigSubTab === 'subjects' && (
+              <section style={styles.tableCard}>
+                <table style={styles.table}>
+                  <thead>
+                    <tr style={styles.thRow}>
+                      <th style={styles.th}>Subject Title</th>
+                      <th style={styles.th}>Code / Acronym</th>
+                      <th style={styles.th}>Semester</th>
+                      <th style={styles.th}>Marks &amp; Duration</th>
+                      <th style={{ ...styles.th, textAlign: 'center' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {academicSubjects.map((s) => (
+                      <tr key={s.id} style={styles.tr}>
+                        <td style={styles.td}><strong>{s.title}</strong></td>
+                        <td style={styles.td}>
+                          <span style={{ fontFamily: 'var(--font-jetbrains)', fontWeight: 600 }}>{s.code}</span>
+                          {s.shortName && <span style={{ marginLeft: '6px', fontSize: '0.75rem', color: '#64748b' }}>({s.shortName})</span>}
+                        </td>
+                        <td style={styles.td}>{s.semester}</td>
+                        <td style={styles.td}>{s.totalMarks} Marks • {s.durationHours}h</td>
+                        <td style={{ ...styles.td, textAlign: 'center' }}>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenAcademicModal('subject', s)}
+                            style={{ ...styles.iconBtn, marginRight: '6px' }}
+                            title="Edit Subject"
+                          >
+                            <Edit size={14} color="#0284c7" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteAcademicItem('subject', s)}
+                            style={styles.iconBtn}
+                            title="Delete Subject"
+                          >
+                            <Trash2 size={14} color="#dc2626" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </section>
+            )}
+
+            {/* Sub-tab 4: Courses */}
+            {academicConfigSubTab === 'courses' && (
+              <section style={styles.tableCard}>
+                <table style={styles.table}>
+                  <thead>
+                    <tr style={styles.thRow}>
+                      <th style={styles.th}>Course Name</th>
+                      <th style={styles.th}>Code</th>
+                      <th style={styles.th}>Degree</th>
+                      <th style={styles.th}>Department</th>
+                      <th style={{ ...styles.th, textAlign: 'center' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {academicCourses.map((c) => (
+                      <tr key={c.id} style={styles.tr}>
+                        <td style={styles.td}><strong>{c.name}</strong></td>
+                        <td style={styles.td}><span style={{ fontFamily: 'var(--font-jetbrains)', fontSize: '0.8rem' }}>{c.code}</span></td>
+                        <td style={styles.td}>{c.degree || 'B.E.'}</td>
+                        <td style={styles.td}>
+                          <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#0369a1', backgroundColor: '#e0f2fe', padding: '2px 8px', borderRadius: '4px' }}>
+                            Computer Engineering
+                          </span>
+                        </td>
+                        <td style={{ ...styles.td, textAlign: 'center' }}>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenAcademicModal('course', c)}
+                            style={{ ...styles.iconBtn, marginRight: '6px' }}
+                            title="Edit Course"
+                          >
+                            <Edit size={14} color="#0284c7" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteAcademicItem('course', c)}
+                            style={styles.iconBtn}
+                            title="Delete Course"
+                          >
+                            <Trash2 size={14} color="#dc2626" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </section>
+            )}
           </div>
         )}
 
@@ -2017,6 +2484,198 @@ export default function AdminHome() {
                   ) : (
                     `Confirm Decision (${approvalAction})`
                   )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* ============================================================== */}
+      {/* MODAL 5: ACADEMIC CONFIGURATION MODAL (Part 3)                  */}
+      {/* ============================================================== */}
+      {academicModalOpen && (
+        <div style={styles.modalOverlay}>
+          <div style={styles.modalCard}>
+            <div style={styles.modalHeader}>
+              <h3 style={styles.modalTitle}>
+                {academicEditingItem ? 'Edit' : 'Add New'}{' '}
+                {academicModalType === 'title' ? 'Paper Title' : academicModalType === 'pattern' ? 'Academic Pattern' : academicModalType === 'course' ? 'Course' : 'Subject'}
+              </h3>
+              <button onClick={() => setAcademicModalOpen(false)} style={styles.modalCloseBtn}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveAcademicItem}>
+              <div style={styles.modalBody}>
+                {academicModalType === 'title' && (
+                  <>
+                    <div style={styles.formField}>
+                      <label style={styles.formLabel}>Title Name <span style={{ color: '#ef4444' }}>*</span></label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Open Book Test, CCE Exam, End Sem Exam"
+                        value={academicForm.title || ''}
+                        onChange={(e) => setAcademicForm({ ...academicForm, title: e.target.value })}
+                        style={styles.formInput}
+                      />
+                    </div>
+                    <div style={styles.formField}>
+                      <label style={styles.formLabel}>Code Identifier</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. OBT, CCE, END_SEM"
+                        value={academicForm.code || ''}
+                        onChange={(e) => setAcademicForm({ ...academicForm, code: e.target.value })}
+                        style={styles.formInput}
+                      />
+                    </div>
+                  </>
+                )}
+
+                {academicModalType === 'pattern' && (
+                  <>
+                    <div style={styles.formField}>
+                      <label style={styles.formLabel}>Pattern Name <span style={{ color: '#ef4444' }}>*</span></label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. 2019, 2024, 2025"
+                        value={academicForm.name || ''}
+                        onChange={(e) => setAcademicForm({ ...academicForm, name: e.target.value })}
+                        style={styles.formInput}
+                      />
+                    </div>
+                    <div style={styles.formField}>
+                      <label style={styles.formLabel}>Code</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. PAT_2019, PAT_2024"
+                        value={academicForm.code || ''}
+                        onChange={(e) => setAcademicForm({ ...academicForm, code: e.target.value })}
+                        style={styles.formInput}
+                      />
+                    </div>
+                    <div style={styles.formField}>
+                      <label style={styles.formLabel}>Revision Year</label>
+                      <input
+                        type="number"
+                        placeholder="e.g. 2024"
+                        value={academicForm.revisionYear || ''}
+                        onChange={(e) => setAcademicForm({ ...academicForm, revisionYear: parseInt(e.target.value, 10) })}
+                        style={styles.formInput}
+                      />
+                    </div>
+                  </>
+                )}
+
+                {academicModalType === 'subject' && (
+                  <>
+                    <div style={styles.formField}>
+                      <label style={styles.formLabel}>Subject Title <span style={{ color: '#ef4444' }}>*</span></label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Advanced Artificial Intelligence"
+                        value={academicForm.title || ''}
+                        onChange={(e) => setAcademicForm({ ...academicForm, title: e.target.value })}
+                        style={styles.formInput}
+                      />
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                      <div style={styles.formField}>
+                        <label style={styles.formLabel}>Subject Code</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. 410250"
+                          value={academicForm.code || ''}
+                          onChange={(e) => setAcademicForm({ ...academicForm, code: e.target.value })}
+                          style={styles.formInput}
+                        />
+                      </div>
+                      <div style={styles.formField}>
+                        <label style={styles.formLabel}>Short Name / Acronym</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. AAI"
+                          value={academicForm.shortName || ''}
+                          onChange={(e) => setAcademicForm({ ...academicForm, shortName: e.target.value })}
+                          style={styles.formInput}
+                        />
+                      </div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                      <div style={styles.formField}>
+                        <label style={styles.formLabel}>Semester</label>
+                        <select
+                          value={academicForm.semester || 'Semester 5'}
+                          onChange={(e) => setAcademicForm({ ...academicForm, semester: e.target.value })}
+                          style={styles.formSelect}
+                        >
+                          {[1,2,3,4,5,6,7,8].map(s => <option key={s} value={`Semester ${s}`}>Semester {s}</option>)}
+                        </select>
+                      </div>
+                      <div style={styles.formField}>
+                        <label style={styles.formLabel}>Total Marks</label>
+                        <input
+                          type="number"
+                          value={academicForm.totalMarks || 70}
+                          onChange={(e) => setAcademicForm({ ...academicForm, totalMarks: parseInt(e.target.value, 10) })}
+                          style={styles.formInput}
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {academicModalType === 'course' && (
+                  <>
+                    <div style={styles.formField}>
+                      <label style={styles.formLabel}>Course Name <span style={{ color: '#ef4444' }}>*</span></label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. B.E. (Computer Engineering)"
+                        value={academicForm.name || ''}
+                        onChange={(e) => setAcademicForm({ ...academicForm, name: e.target.value })}
+                        style={styles.formInput}
+                      />
+                    </div>
+                    <div style={styles.formField}>
+                      <label style={styles.formLabel}>Course Code</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. BE_COMP"
+                        value={academicForm.code || ''}
+                        onChange={(e) => setAcademicForm({ ...academicForm, code: e.target.value })}
+                        style={styles.formInput}
+                      />
+                    </div>
+                    <div style={styles.formField}>
+                      <label style={styles.formLabel}>Degree Level</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. B.E. / M.E."
+                        value={academicForm.degree || 'B.E.'}
+                        onChange={(e) => setAcademicForm({ ...academicForm, degree: e.target.value })}
+                        style={styles.formInput}
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div style={styles.modalFooter}>
+                <button
+                  type="button"
+                  onClick={() => setAcademicModalOpen(false)}
+                  style={styles.modalDismissBtn}
+                >
+                  Cancel
+                </button>
+                <button type="submit" style={styles.modalSubmitBtn}>
+                  Save Configuration
                 </button>
               </div>
             </form>

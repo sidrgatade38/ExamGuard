@@ -18,9 +18,9 @@ const FALLBACK_ACADEMIC_DATA = {
     { id: 'course-be-comp', departmentCode: 'COMP', code: 'BE_COMP', name: 'B.E. (Computer Engineering)', degree: 'B.E.' },
   ],
   patterns: [
-    { id: 'pat-2019', code: 'PAT_2019', name: '2019 Pattern', revisionYear: 2019, maxQuestions: 30 },
-    { id: 'pat-2024', code: 'PAT_2024_NEP', name: '2024 NEP Pattern', revisionYear: 2024, maxQuestions: 30 },
-    { id: 'pat-2015', code: 'PAT_2015', name: '2015 Pattern (Backlog)', revisionYear: 2015, maxQuestions: 30 },
+    { id: 'pat-2019', code: 'PAT_2019', name: '2019', revisionYear: 2019, maxQuestions: 50 },
+    { id: 'pat-2024', code: 'PAT_2024_NEP', name: '2024', revisionYear: 2024, maxQuestions: 50 },
+    { id: 'pat-2025', code: 'PAT_2025', name: '2025', revisionYear: 2025, maxQuestions: 50 },
   ],
   semesters: [
     { number: 1, label: 'Semester 1' },
@@ -235,6 +235,8 @@ async function getPatterns() {
     const { data, error } = await supabase
       .from('academic_patterns')
       .select('id, code, name, revision_year')
+      .neq('code', 'PAT_2015')
+      .neq('revision_year', 2015)
       .eq('is_active', true)
       .order('revision_year', { ascending: false });
     if (!error && data && data.length > 0) {
@@ -243,7 +245,7 @@ async function getPatterns() {
         code: d.code,
         name: d.name,
         revisionYear: d.revision_year,
-        maxQuestions: 30,
+        maxQuestions: 50,
       }));
     }
   } catch (_) {}
@@ -401,13 +403,289 @@ async function getTeacherProfileWithSubjects(userId) {
   };
 }
 
+// Paper Titles in-memory / fallback store
+const FALLBACK_PAPER_TITLES = [
+  { id: 'title-obt', title: 'Open Book Test', code: 'OBT', is_active: true },
+  { id: 'title-cce', title: 'CCE Exam', code: 'CCE', is_active: true },
+  { id: 'title-endsem', title: 'End Sem Exam', code: 'END_SEM', is_active: true },
+];
+
+let inMemoryPaperTitles = [...FALLBACK_PAPER_TITLES];
+let inMemoryPatterns = [...FALLBACK_ACADEMIC_DATA.patterns];
+let inMemoryCourses = [...FALLBACK_ACADEMIC_DATA.courses];
+let inMemorySubjects = [...FALLBACK_ACADEMIC_DATA.subjects];
+
+async function getPaperTitles() {
+  try {
+    const { data, error } = await supabase
+      .from('academic_paper_titles')
+      .select('*')
+      .eq('is_active', true)
+      .order('id');
+    if (!error && data && data.length > 0) return data;
+  } catch (_) {}
+  return inMemoryPaperTitles.filter(t => t.is_active);
+}
+
+async function createPaperTitle({ title, code }) {
+  const newTitle = {
+    id: `title-${Date.now()}`,
+    title: title.trim(),
+    code: (code || title).trim().toUpperCase().replace(/\s+/g, '_'),
+    is_active: true,
+  };
+  try {
+    const { data, error } = await supabase
+      .from('academic_paper_titles')
+      .insert([newTitle])
+      .select()
+      .maybeSingle();
+    if (!error && data) return data;
+  } catch (_) {}
+  inMemoryPaperTitles.push(newTitle);
+  return newTitle;
+}
+
+async function updatePaperTitle(id, { title, code, is_active }) {
+  try {
+    const { data, error } = await supabase
+      .from('academic_paper_titles')
+      .update({ title, code, is_active })
+      .eq('id', id)
+      .select()
+      .maybeSingle();
+    if (!error && data) return data;
+  } catch (_) {}
+  const idx = inMemoryPaperTitles.findIndex(t => t.id === id);
+  if (idx !== -1) {
+    inMemoryPaperTitles[idx] = {
+      ...inMemoryPaperTitles[idx],
+      ...(title !== undefined && { title }),
+      ...(code !== undefined && { code }),
+      ...(is_active !== undefined && { is_active }),
+    };
+    return inMemoryPaperTitles[idx];
+  }
+  throw new Error('Paper title not found');
+}
+
+async function deletePaperTitle(id) {
+  try {
+    const { error } = await supabase
+      .from('academic_paper_titles')
+      .delete()
+      .eq('id', id);
+    if (!error) return { success: true };
+  } catch (_) {}
+  const idx = inMemoryPaperTitles.findIndex(t => t.id === id);
+  if (idx !== -1) {
+    inMemoryPaperTitles.splice(idx, 1);
+    return { success: true };
+  }
+  return { success: true };
+}
+
+// Pattern CRUD
+async function createPattern({ name, code, revisionYear }) {
+  const newPat = {
+    id: `pat-${Date.now()}`,
+    code: code || `PAT_${revisionYear || name}`,
+    name: name.trim(),
+    revision_year: parseInt(revisionYear, 10) || new Date().getFullYear(),
+    revisionYear: parseInt(revisionYear, 10) || new Date().getFullYear(),
+    is_active: true,
+    maxQuestions: 50,
+  };
+  try {
+    const { data, error } = await supabase
+      .from('academic_patterns')
+      .insert([newPat])
+      .select()
+      .maybeSingle();
+    if (!error && data) return data;
+  } catch (_) {}
+  inMemoryPatterns.push(newPat);
+  return newPat;
+}
+
+async function updatePattern(id, { name, code, revisionYear, is_active }) {
+  try {
+    const { data, error } = await supabase
+      .from('academic_patterns')
+      .update({ name, code, revision_year: revisionYear, is_active })
+      .eq('id', id)
+      .select()
+      .maybeSingle();
+    if (!error && data) return data;
+  } catch (_) {}
+  const idx = inMemoryPatterns.findIndex(p => p.id === id || p.code === id);
+  if (idx !== -1) {
+    inMemoryPatterns[idx] = {
+      ...inMemoryPatterns[idx],
+      ...(name !== undefined && { name }),
+      ...(code !== undefined && { code }),
+      ...(revisionYear !== undefined && { revisionYear, revision_year: revisionYear }),
+      ...(is_active !== undefined && { is_active }),
+    };
+    return inMemoryPatterns[idx];
+  }
+  throw new Error('Pattern not found');
+}
+
+async function deletePattern(id) {
+  try {
+    const { error } = await supabase
+      .from('academic_patterns')
+      .delete()
+      .eq('id', id);
+    if (!error) return { success: true };
+  } catch (_) {}
+  const idx = inMemoryPatterns.findIndex(p => p.id === id || p.code === id);
+  if (idx !== -1) {
+    inMemoryPatterns.splice(idx, 1);
+    return { success: true };
+  }
+  return { success: true };
+}
+
+// Subject CRUD
+async function createSubject(subjectData) {
+  const newSub = {
+    id: `sub-${Date.now()}`,
+    departmentCode: 'COMP',
+    courseCode: subjectData.courseCode || 'TE_COMP',
+    patternCode: subjectData.patternCode || 'PAT_2019',
+    patternName: subjectData.patternName || '2019',
+    semester: subjectData.semester || 'Semester 5',
+    code: subjectData.code || `COMP-${Date.now().toString().slice(-4)}`,
+    shortName: subjectData.shortName || subjectData.short_name || 'SUB',
+    title: subjectData.title,
+    totalMarks: subjectData.totalMarks || 70,
+    durationHours: subjectData.durationHours || 2.5,
+    is_active: true,
+  };
+  try {
+    const { data, error } = await supabase
+      .from('academic_subjects')
+      .insert([newSub])
+      .select()
+      .maybeSingle();
+    if (!error && data) return data;
+  } catch (_) {}
+  inMemorySubjects.push(newSub);
+  return newSub;
+}
+
+async function updateSubject(id, updates) {
+  try {
+    const { data, error } = await supabase
+      .from('academic_subjects')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .maybeSingle();
+    if (!error && data) return data;
+  } catch (_) {}
+  const idx = inMemorySubjects.findIndex(s => s.id === id || s.code === id);
+  if (idx !== -1) {
+    inMemorySubjects[idx] = { ...inMemorySubjects[idx], ...updates };
+    return inMemorySubjects[idx];
+  }
+  throw new Error('Subject not found');
+}
+
+async function deleteSubject(id) {
+  try {
+    const { error } = await supabase
+      .from('academic_subjects')
+      .delete()
+      .eq('id', id);
+    if (!error) return { success: true };
+  } catch (_) {}
+  const idx = inMemorySubjects.findIndex(s => s.id === id || s.code === id);
+  if (idx !== -1) {
+    inMemorySubjects.splice(idx, 1);
+    return { success: true };
+  }
+  return { success: true };
+}
+
+// Course CRUD
+async function createCourse(courseData) {
+  const newCourse = {
+    id: `course-${Date.now()}`,
+    departmentCode: 'COMP',
+    code: courseData.code || `COMP_${Date.now().toString().slice(-3)}`,
+    name: courseData.name,
+    degree: courseData.degree || 'B.E.',
+    is_active: true,
+  };
+  try {
+    const { data, error } = await supabase
+      .from('academic_courses')
+      .insert([newCourse])
+      .select()
+      .maybeSingle();
+    if (!error && data) return data;
+  } catch (_) {}
+  inMemoryCourses.push(newCourse);
+  return newCourse;
+}
+
+async function updateCourse(id, updates) {
+  try {
+    const { data, error } = await supabase
+      .from('academic_courses')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .maybeSingle();
+    if (!error && data) return data;
+  } catch (_) {}
+  const idx = inMemoryCourses.findIndex(c => c.id === id || c.code === id);
+  if (idx !== -1) {
+    inMemoryCourses[idx] = { ...inMemoryCourses[idx], ...updates };
+    return inMemoryCourses[idx];
+  }
+  throw new Error('Course not found');
+}
+
+async function deleteCourse(id) {
+  try {
+    const { error } = await supabase
+      .from('academic_courses')
+      .delete()
+      .eq('id', id);
+    if (!error) return { success: true };
+  } catch (_) {}
+  const idx = inMemoryCourses.findIndex(c => c.id === id || c.code === id);
+  if (idx !== -1) {
+    inMemoryCourses.splice(idx, 1);
+    return { success: true };
+  }
+  return { success: true };
+}
+
 module.exports = {
   getDepartments,
   getCourses,
+  createCourse,
+  updateCourse,
+  deleteCourse,
   getPatterns,
+  createPattern,
+  updatePattern,
+  deletePattern,
   getSemesters,
   getSubjects,
+  createSubject,
+  updateSubject,
+  deleteSubject,
   getUnitsForSubject,
   getOutcomes,
   getTeacherProfileWithSubjects,
+  getPaperTitles,
+  createPaperTitle,
+  updatePaperTitle,
+  deletePaperTitle,
 };

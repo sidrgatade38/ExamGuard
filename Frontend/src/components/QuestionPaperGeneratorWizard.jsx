@@ -28,6 +28,7 @@ import {
   Save,
   Check,
   X,
+  Edit3,
   Image as ImageIcon,
   UploadCloud,
 } from 'lucide-react';
@@ -55,19 +56,19 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
   const [blueprint, setBlueprint] = useState(() => {
     if (initialDraft?.blueprint) {
       return {
-        title: '',
+        title: 'End Sem Exam',
         classYear: 'TE',
         totalMarks: 70,
         ...initialDraft.blueprint,
       };
     }
     return {
-      title: '', // Empty input for teacher to enter; no fixed title prefilled
+      title: 'End Sem Exam',
       subject: 'Systems Programming and Operating System',
       course: 'T.E. (Computer Engineering)',
       classYear: 'TE',
       semester: 'Semester 5',
-      academicPattern: '2019 Pattern',
+      academicPattern: '2019',
       subjectCode: '310243',
       durationHours: 2.5,
       totalMarks: 70,
@@ -89,11 +90,16 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
 
   // Question Bank State
-  const MAX_QUESTIONS_LIMIT = 30;
   const [questions, setQuestions] = useState([]);
   const [loadingBank, setLoadingBank] = useState(false);
   const [bankError, setBankError] = useState('');
   const [newQuestionModalOpen, setNewQuestionModalOpen] = useState(false);
+  const [editingQuestionId, setEditingQuestionId] = useState(null);
+  const [paperTitlesList, setPaperTitlesList] = useState([
+    { id: 'obt', title: 'Open Book Test' },
+    { id: 'cce', title: 'CCE Exam' },
+    { id: 'endsem', title: 'End Sem Exam' },
+  ]);
   const [subjectSearch, setSubjectSearch] = useState('');
   const [teacherProfile, setTeacherProfile] = useState(null);
   const [outcomes, setOutcomes] = useState({
@@ -251,24 +257,31 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
     async function loadAcademicCatalogs() {
       try {
         setLoadingAcademic(true);
-        const [deptsData, coursesData, patternsData, semestersData, outcomesData, profileData] = await Promise.all([
+        const [deptsData, coursesData, patternsData, semestersData, outcomesData, profileData, titlesData] = await Promise.all([
           academicService.getDepartments().catch(() => ({ data: [] })),
           academicService.getCourses().catch(() => ({ data: [] })),
           academicService.getPatterns().catch(() => ({ data: [] })),
           academicService.getSemesters().catch(() => ({ data: [] })),
           academicService.getOutcomes().catch(() => ({ data: null })),
           academicService.getTeacherProfile().catch(() => ({ data: null })),
+          academicService.getPaperTitles().catch(() => ({ data: [] })),
         ]);
 
         const deptsList = deptsData.data || [];
         const coursesList = coursesData.data || [];
-        const patternsList = patternsData.data || [];
+        const patternsList = (patternsData.data || []).filter(p => !p.name.includes('2015') && p.code !== 'PAT_2015');
         const semsList = semestersData.data || [];
+        const titlesList = (titlesData.data && titlesData.data.length > 0) ? titlesData.data : [
+          { id: 'obt', title: 'Open Book Test' },
+          { id: 'cce', title: 'CCE Exam' },
+          { id: 'endsem', title: 'End Sem Exam' },
+        ];
 
         setDepartments(deptsList);
         setCourses(coursesList);
         setPatterns(patternsList);
         setSemesters(semsList);
+        setPaperTitlesList(titlesList);
 
         if (outcomesData?.data) {
           setOutcomes(outcomesData.data);
@@ -406,23 +419,33 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
     }
   }, [step, blueprint.subject]);
 
-  // Add custom question for this subject
-  const handleCreateQuestion = async (e) => {
+  // Add or Edit custom question for this subject
+  const handleSaveQuestion = async (e) => {
     e.preventDefault();
-    if (questions.length >= MAX_QUESTIONS_LIMIT) {
-      alert(`Maximum question limit of ${MAX_QUESTIONS_LIMIT} questions reached for this examination pattern.`);
-      return;
-    }
     try {
-      await questionBankService.createQuestion({
-        ...newQuestionForm,
-        unitTitle: `Unit ${newQuestionForm.unitNumber}`,
-        subject: blueprint.subject,
-        course: blueprint.course,
-        semester: blueprint.semester,
-        academicPattern: blueprint.academicPattern,
-      });
+      if (editingQuestionId) {
+        // Update existing question
+        await questionBankService.updateQuestion(editingQuestionId, {
+          ...newQuestionForm,
+          unitTitle: `Unit ${newQuestionForm.unitNumber}`,
+          subject: blueprint.subject,
+          course: blueprint.course,
+          semester: blueprint.semester,
+          academicPattern: blueprint.academicPattern,
+        });
+      } else {
+        // Create new question
+        await questionBankService.createQuestion({
+          ...newQuestionForm,
+          unitTitle: `Unit ${newQuestionForm.unitNumber}`,
+          subject: blueprint.subject,
+          course: blueprint.course,
+          semester: blueprint.semester,
+          academicPattern: blueprint.academicPattern,
+        });
+      }
       setNewQuestionModalOpen(false);
+      setEditingQuestionId(null);
       setNewQuestionForm((prev) => ({
         ...prev,
         topic: '',
@@ -437,8 +460,46 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
       }));
       await loadQuestions();
     } catch (err) {
-      alert(err.response?.data?.message || err.message || 'Failed to add question');
+      alert(err.response?.data?.message || err.message || 'Failed to save question');
     }
+  };
+
+  const handleOpenEditQuestion = (q) => {
+    setEditingQuestionId(q.id);
+    setNewQuestionForm({
+      unitNumber: q.unitNumber || 1,
+      unitTitle: q.unitTitle || `Unit ${q.unitNumber || 1}`,
+      topic: q.topic || '',
+      questionText: q.questionText || q.text || '',
+      questionType: q.questionType || 'DESCRIPTIVE',
+      marks: q.marks || 8,
+      difficulty: q.difficulty || 'MEDIUM',
+      courseOutcome: q.courseOutcome || q.course_outcome || 'CO1',
+      programOutcome: q.programOutcome || q.program_outcome || 'PO1',
+      bloomTaxonomy: q.bloomTaxonomy || q.bloom_taxonomy || 'L2 - Understand',
+      answerScheme: q.answerScheme || '',
+      image: q.image ? (typeof q.image === 'string' ? { dataUrl: q.image, name: 'Attached Diagram' } : q.image) : null,
+    });
+    setNewQuestionModalOpen(true);
+  };
+
+  const handleOpenCreateQuestion = () => {
+    setEditingQuestionId(null);
+    setNewQuestionForm({
+      unitNumber: 1,
+      unitTitle: 'Unit 1',
+      topic: '',
+      questionText: '',
+      questionType: 'DESCRIPTIVE',
+      marks: 8,
+      difficulty: 'MEDIUM',
+      courseOutcome: 'CO1',
+      programOutcome: 'PO1',
+      bloomTaxonomy: 'L2 - Understand',
+      answerScheme: '',
+      image: null,
+    });
+    setNewQuestionModalOpen(true);
   };
 
   // Build standard dynamic university OR sections based on total marks
@@ -830,18 +891,22 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
           </div>
 
           <div style={styles.grid2}>
-            {/* Paper Title (Clean, flexible, empty by default without prefilled fixed title) */}
+            {/* Paper Title Dropdown (Strict Module 7.1 Requirement: Open Book Test, CCE Exam, End Sem Exam) */}
             <div style={{ gridColumn: 'span 2' }}>
               <label style={styles.label}>
-                Paper Title (Optional custom title)
+                Paper Title <span style={{ color: '#ef4444' }}>*</span>
               </label>
-              <input
-                type="text"
-                placeholder="e.g. End Semester Examination - May 2026 (Leave empty to use course & subject title)"
-                style={styles.input}
-                value={blueprint.title || ''}
+              <select
+                style={styles.select}
+                value={blueprint.title || 'End Sem Exam'}
                 onChange={(e) => setBlueprint({ ...blueprint, title: e.target.value })}
-              />
+              >
+                {paperTitlesList.map((t) => (
+                  <option key={t.id} value={t.title}>
+                    {t.title}
+                  </option>
+                ))}
+              </select>
             </div>
 
             {/* Academic Department (Strict Module 1 Requirement: Fixed to Computer Engineering) */}
@@ -910,24 +975,25 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
               </select>
             </div>
 
-            {/* Academic Pattern Selection */}
+            {/* Academic Pattern Selection (Strict Module 7.2: 2019, 2024, 2025; no 2015) */}
             <div>
-              <label style={styles.label}>Academic Pattern</label>
+              <label style={styles.label}>Academic Pattern <span style={{ color: '#ef4444' }}>*</span></label>
               <select
                 style={styles.select}
                 value={blueprint.academicPattern}
                 onChange={(e) => setBlueprint({ ...blueprint, academicPattern: e.target.value })}
               >
-                {patterns.map((p) => (
-                  <option key={p.id} value={p.name}>
-                    {p.name}
-                  </option>
-                ))}
-                {patterns.length === 0 && (
+                {patterns.length > 0 ? (
+                  patterns.map((p) => (
+                    <option key={p.id} value={p.name}>
+                      {p.name}
+                    </option>
+                  ))
+                ) : (
                   <>
-                    <option value="2019 Pattern">2019 Pattern</option>
-                    <option value="2024 NEP Pattern">2024 NEP Pattern</option>
-                    <option value="2015 Pattern (Backlog)">2015 Pattern (Backlog)</option>
+                    <option value="2019">2019</option>
+                    <option value="2024">2024</option>
+                    <option value="2025">2025</option>
                   </>
                 )}
               </select>
@@ -1182,32 +1248,20 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
                     borderRadius: '8px',
                     fontSize: '12px',
                     fontWeight: 600,
-                    backgroundColor: questions.length >= MAX_QUESTIONS_LIMIT ? '#fee2e2' : '#ecfdf5',
-                    color: questions.length >= MAX_QUESTIONS_LIMIT ? '#991b1b' : '#065f46',
-                    border: `1px solid ${questions.length >= MAX_QUESTIONS_LIMIT ? '#fca5a5' : '#a7f3d0'}`,
+                    backgroundColor: '#ecfdf5',
+                    color: '#065f46',
+                    border: '1px solid #a7f3d0',
                   }}
                 >
                   <Database size={14} />
-                  <span>Pool: <strong>{questions.length} / {MAX_QUESTIONS_LIMIT}</strong> Questions</span>
-                  <span>• {Math.max(0, MAX_QUESTIONS_LIMIT - questions.length)} remaining capacity</span>
+                  <span>Pool: <strong>{questions.length}</strong> Questions Available</span>
                 </div>
 
                 <button
                   type="button"
-                  style={{
-                    ...styles.actionBtnPrimary,
-                    opacity: questions.length >= MAX_QUESTIONS_LIMIT ? 0.6 : 1,
-                    cursor: questions.length >= MAX_QUESTIONS_LIMIT ? 'not-allowed' : 'pointer',
-                  }}
-                  onClick={() => {
-                    if (questions.length >= MAX_QUESTIONS_LIMIT) {
-                      alert(`Maximum limit of ${MAX_QUESTIONS_LIMIT} questions reached for this examination pattern pool.`);
-                      return;
-                    }
-                    setNewQuestionModalOpen(true);
-                  }}
-                  disabled={questions.length >= MAX_QUESTIONS_LIMIT}
-                  title={questions.length >= MAX_QUESTIONS_LIMIT ? 'Maximum question pool limit reached' : 'Add Question'}
+                  style={styles.actionBtnPrimary}
+                  onClick={handleOpenCreateQuestion}
+                  title="Add Question"
                 >
                   <Plus size={16} />
                   <span>Add Question</span>
@@ -1258,6 +1312,7 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
                     <th style={styles.th}>CO / PO / Bloom</th>
                     <th style={styles.th}>Difficulty</th>
                     <th style={styles.th}>Status</th>
+                    <th style={{ ...styles.th, textAlign: 'center' }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1304,6 +1359,29 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
                       </td>
                       <td style={styles.td}>
                         <span style={styles.badgeApproved}>APPROVED</span>
+                      </td>
+                      <td style={{ ...styles.td, textAlign: 'center' }}>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditQuestion(q)}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            padding: '4px 10px',
+                            backgroundColor: '#f1f5f9',
+                            color: '#0f172a',
+                            border: '1px solid #cbd5e1',
+                            borderRadius: '6px',
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                          }}
+                          title="Edit / Replace Question Content"
+                        >
+                          <Edit3 size={13} color="#2563eb" />
+                          <span>Edit</span>
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -1871,13 +1949,15 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
       )}
 
       {/* --------------------------------------------------------------------- */}
-      {/* MODAL: ADD CUSTOM QUESTION                                            */}
+      {/* MODAL: ADD / EDIT QUESTION                                            */}
       {/* --------------------------------------------------------------------- */}
       {newQuestionModalOpen && (
         <div style={styles.modalOverlay}>
           <div style={styles.modalCard}>
-            <h3 style={styles.modalTitle}>Add Question for {blueprint.subject}</h3>
-            <form onSubmit={handleCreateQuestion}>
+            <h3 style={styles.modalTitle}>
+              {editingQuestionId ? 'Edit / Replace Question' : 'Add Question'} for {blueprint.subject}
+            </h3>
+            <form onSubmit={handleSaveQuestion}>
               <div style={styles.grid2}>
                 <div>
                   <label style={styles.label}>Unit Selector</label>

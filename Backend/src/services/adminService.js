@@ -330,6 +330,23 @@ async function createUser(
     throw dbErr;
   }
 
+  // 7.5 If the newly created user is a TEACHER, initialize their teacher profile immediately
+  if (resolvedRole.name === 'TEACHER') {
+    try {
+      const authService = require('./authService');
+      await authService.getOrCreateTeacherProfile(newUser.id, {
+        id: newUser.id,
+        name: cleanName,
+        email: cleanEmail,
+        is_active: true,
+        created_at: newUser.created_at,
+        role: 'TEACHER',
+      });
+    } catch (profileErr) {
+      console.warn('[AdminService] Note: Teacher profile initialization deferred to first login:', profileErr.message);
+    }
+  }
+
   const safeUser = sanitizeUser(newUser, resolvedRole.name);
 
   // 8. Record audit event
