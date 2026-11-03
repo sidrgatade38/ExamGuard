@@ -245,6 +245,38 @@ async function deleteCourse(req, res, next) {
   }
 }
 
+async function getDesignations(req, res, next) {
+  try {
+    const data = await academicService.getDesignations();
+    return res.status(200).json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function createDesignation(req, res, next) {
+  try {
+    const { name } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ success: false, message: 'Designation name is required' });
+    }
+    const data = await academicService.createDesignation(name);
+    return res.status(201).json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function deleteDesignation(req, res, next) {
+  try {
+    const { name } = req.params;
+    await academicService.deleteDesignation(name);
+    return res.status(200).json({ success: true, message: 'Designation deleted' });
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   getDepartments,
   getCourses,
@@ -267,4 +299,7 @@ module.exports = {
   createPaperTitle,
   updatePaperTitle,
   deletePaperTitle,
+  getDesignations,
+  createDesignation,
+  deleteDesignation,
 };

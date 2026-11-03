@@ -271,24 +271,32 @@ async function getOrCreateTeacherProfile(userId, userRecord = null) {
 /**
  * Updates a teacher's profile.
  * Department is strictly locked to "Department of Computer Engineering".
+ * Faculty ID is immutable for ordinary users.
  */
-async function updateTeacherProfile(userId, profileData) {
-  const { facultyId, designation, specialization, phone } = profileData || {};
+async function updateTeacherProfile(userId, profileData, requesterRole) {
+  const existing = await getOrCreateTeacherProfile(userId);
+  const { designation, phone } = profileData || {};
 
-  const cleanFacultyId = (facultyId && facultyId.trim())
-    ? facultyId.trim().toUpperCase()
-    : `COMP-FAC-${userId.replace(/-/g, '').slice(0, 6).toUpperCase()}`;
+  // Faculty ID is immutable for ordinary faculty
+  const cleanFacultyId = (requesterRole === 'ADMIN' && profileData?.facultyId && profileData.facultyId.trim())
+    ? profileData.facultyId.trim().toUpperCase()
+    : existing.facultyId;
 
-  const cleanDesignation = (designation && designation.trim()) ? designation.trim() : 'Assistant Professor';
-  const cleanSpecialization = specialization ? specialization.trim() : 'Computer Engineering';
+  // Validate contact number if provided
   const cleanPhone = phone ? phone.trim() : '';
+  if (cleanPhone && !/^\+?[0-9\s\-()]{7,15}$/.test(cleanPhone)) {
+    const err = new Error('Invalid contact number format. Please provide a valid phone number.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const cleanDesignation = (designation && designation.trim()) ? designation.trim() : (existing.designation || 'Assistant Professor');
 
   const updatePayload = {
     user_id: userId,
     faculty_id: cleanFacultyId,
     department: 'Department of Computer Engineering',
     designation: cleanDesignation,
-    specialization: cleanSpecialization,
     phone: cleanPhone,
     is_profile_complete: true,
     updated_at: new Date().toISOString(),
@@ -309,12 +317,10 @@ async function updateTeacherProfile(userId, profileData) {
   }
 
   // Update memory fallback
-  const existing = await getOrCreateTeacherProfile(userId);
   const merged = {
     ...existing,
     facultyId: cleanFacultyId,
     designation: cleanDesignation,
-    specialization: cleanSpecialization,
     phone: cleanPhone,
     isProfileComplete: true,
   };

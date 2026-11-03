@@ -27,6 +27,9 @@ const {
   createPaperTitle,
   updatePaperTitle,
   deletePaperTitle,
+  getDesignations,
+  createDesignation,
+  deleteDesignation,
 } = require('../controllers/academicMasterController');
 
 const router = express.Router();
@@ -43,8 +46,12 @@ router.get('/subjects/:subjectCode/units', getUnits);
 router.get('/outcomes', getOutcomes);
 router.get('/teacher-profile', getTeacherProfile);
 router.get('/paper-titles', getPaperTitles);
+router.get('/designations', getDesignations);
 
 // Admin-only CRUD operations
+router.post('/designations', authorizeRoles('ADMIN'), createDesignation);
+router.delete('/designations/:name', authorizeRoles('ADMIN'), deleteDesignation);
+
 router.post('/paper-titles', authorizeRoles('ADMIN'), createPaperTitle);
 router.put('/paper-titles/:id', authorizeRoles('ADMIN'), updatePaperTitle);
 router.delete('/paper-titles/:id', authorizeRoles('ADMIN'), deletePaperTitle);

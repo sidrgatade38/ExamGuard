@@ -110,6 +110,22 @@ const academicService = {
     const res = await api.delete(`/academic/courses/${encodeURIComponent(id)}`);
     return res.data;
   },
+
+  // Designations CRUD
+  getDesignations: async () => {
+    const res = await api.get('/academic/designations');
+    return res.data;
+  },
+
+  createDesignation: async (name) => {
+    const res = await api.post('/academic/designations', { name });
+    return res.data;
+  },
+
+  deleteDesignation: async (name) => {
+    const res = await api.delete(`/academic/designations/${encodeURIComponent(name)}`);
+    return res.data;
+  },
 };
 
 export default academicService;

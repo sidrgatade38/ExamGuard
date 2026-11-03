@@ -14,6 +14,8 @@ const FALLBACK_ACADEMIC_DATA = {
     { id: 'dept-comp', code: 'COMP', name: 'Department of Computer Engineering' },
   ],
   courses: [
+    { id: 'course-fe-comp', departmentCode: 'COMP', code: 'FE_COMP', name: 'F.E. (Computer Engineering)', degree: 'B.E.' },
+    { id: 'course-se-comp', departmentCode: 'COMP', code: 'SE_COMP', name: 'S.E. (Computer Engineering)', degree: 'B.E.' },
     { id: 'course-te-comp', departmentCode: 'COMP', code: 'TE_COMP', name: 'T.E. (Computer Engineering)', degree: 'B.E.' },
     { id: 'course-be-comp', departmentCode: 'COMP', code: 'BE_COMP', name: 'B.E. (Computer Engineering)', degree: 'B.E.' },
   ],
@@ -32,89 +34,56 @@ const FALLBACK_ACADEMIC_DATA = {
     { number: 7, label: 'Semester 7' },
     { number: 8, label: 'Semester 8' },
   ],
+  designations: [
+    'Professor',
+    'Associate Professor',
+    'Assistant Professor',
+    'Lecturer',
+  ],
   subjects: [
-    // COMP Sem 5
-    {
-      id: 'sub-spos',
-      departmentCode: 'COMP',
-      courseCode: 'TE_COMP',
-      patternCode: 'PAT_2019',
-      patternName: '2019 Pattern',
-      semester: 'Semester 5',
-      code: '310243',
-      shortName: 'SPOS',
-      title: 'Systems Programming and Operating System',
-      totalMarks: 70,
-      durationHours: 2.5,
-    },
-    {
-      id: 'sub-dbms',
-      departmentCode: 'COMP',
-      courseCode: 'TE_COMP',
-      patternCode: 'PAT_2019',
-      patternName: '2019 Pattern',
-      semester: 'Semester 5',
-      code: '310241',
-      shortName: 'DBMS',
-      title: 'Database Management Systems',
-      totalMarks: 70,
-      durationHours: 2.5,
-    },
-    {
-      id: 'sub-cns',
-      departmentCode: 'COMP',
-      courseCode: 'TE_COMP',
-      patternCode: 'PAT_2019',
-      patternName: '2019 Pattern',
-      semester: 'Semester 5',
-      code: '310242',
-      shortName: 'CNS',
-      title: 'Computer Networks and Security',
-      totalMarks: 70,
-      durationHours: 2.5,
-    },
-    // COMP Sem 6
-    {
-      id: 'sub-wt',
-      departmentCode: 'COMP',
-      courseCode: 'TE_COMP',
-      patternCode: 'PAT_2019',
-      patternName: '2019 Pattern',
-      semester: 'Semester 6',
-      code: '310252',
-      shortName: 'WT',
-      title: 'Web Technology',
-      totalMarks: 70,
-      durationHours: 2.5,
-    },
-    // COMP Sem 7 - DAA
-    {
-      id: 'sub-daa',
-      departmentCode: 'COMP',
-      courseCode: 'BE_COMP',
-      patternCode: 'PAT_2019',
-      patternName: '2019 Pattern',
-      semester: 'Semester 7',
-      code: '410241',
-      shortName: 'DAA',
-      title: 'Design and Analysis of Algorithms',
-      totalMarks: 70,
-      durationHours: 2.5,
-    },
-    // COMP 2024 NEP Pattern
-    {
-      id: 'sub-nep-os',
-      departmentCode: 'COMP',
-      courseCode: 'TE_COMP',
-      patternCode: 'PAT_2024_NEP',
-      patternName: '2024 NEP Pattern',
-      semester: 'Semester 5',
-      code: 'NEP-301',
-      shortName: 'OSSA',
-      title: 'Operating Systems & System Architecture',
-      totalMarks: 70,
-      durationHours: 2.5,
-    },
+    // FE Sem 1
+    { id: 'sub-107001', departmentCode: 'COMP', courseCode: 'FE_COMP', patternCode: 'PAT_2019', patternName: '2019 Pattern', semester: 'Semester 1', code: '107001', shortName: 'M1', title: 'Engineering Mathematics-I', totalMarks: 70, durationHours: 2.5 },
+    { id: 'sub-107002', departmentCode: 'COMP', courseCode: 'FE_COMP', patternCode: 'PAT_2019', patternName: '2019 Pattern', semester: 'Semester 1', code: '107002', shortName: 'PHY', title: 'Engineering Physics', totalMarks: 70, durationHours: 2.5 },
+    { id: 'sub-104010', departmentCode: 'COMP', courseCode: 'FE_COMP', patternCode: 'PAT_2019', patternName: '2019 Pattern', semester: 'Semester 1', code: '104010', shortName: 'BXEE', title: 'Basic Electronics Engineering', totalMarks: 70, durationHours: 2.5 },
+    { id: 'sub-110005', departmentCode: 'COMP', courseCode: 'FE_COMP', patternCode: 'PAT_2019', patternName: '2019 Pattern', semester: 'Semester 1', code: '110005', shortName: 'PPS', title: 'Programming and Problem Solving', totalMarks: 70, durationHours: 2.5 },
+    // FE Sem 2
+    { id: 'sub-107008', departmentCode: 'COMP', courseCode: 'FE_COMP', patternCode: 'PAT_2019', patternName: '2019 Pattern', semester: 'Semester 2', code: '107008', shortName: 'M2', title: 'Engineering Mathematics-II', totalMarks: 70, durationHours: 2.5 },
+    { id: 'sub-107009', departmentCode: 'COMP', courseCode: 'FE_COMP', patternCode: 'PAT_2019', patternName: '2019 Pattern', semester: 'Semester 2', code: '107009', shortName: 'CHEM', title: 'Engineering Chemistry', totalMarks: 70, durationHours: 2.5 },
+    { id: 'sub-101011', departmentCode: 'COMP', courseCode: 'FE_COMP', patternCode: 'PAT_2019', patternName: '2019 Pattern', semester: 'Semester 2', code: '101011', shortName: 'EM', title: 'Engineering Mechanics', totalMarks: 70, durationHours: 2.5 },
+    { id: 'sub-103004', departmentCode: 'COMP', courseCode: 'FE_COMP', patternCode: 'PAT_2019', patternName: '2019 Pattern', semester: 'Semester 2', code: '103004', shortName: 'BEEE', title: 'Basic Electrical Engineering', totalMarks: 70, durationHours: 2.5 },
+    { id: 'sub-110013', departmentCode: 'COMP', courseCode: 'FE_COMP', patternCode: 'PAT_2019', patternName: '2019 Pattern', semester: 'Semester 2', code: '110013', shortName: 'BCE', title: 'Basic Computer Engineering', totalMarks: 70, durationHours: 2.5 },
+    // SE Sem 3
+    { id: 'sub-210241', departmentCode: 'COMP', courseCode: 'SE_COMP', patternCode: 'PAT_2019', patternName: '2019 Pattern', semester: 'Semester 3', code: '210241', shortName: 'DM', title: 'Discrete Mathematics', totalMarks: 70, durationHours: 2.5 },
+    { id: 'sub-210242', departmentCode: 'COMP', courseCode: 'SE_COMP', patternCode: 'PAT_2019', patternName: '2019 Pattern', semester: 'Semester 3', code: '210242', shortName: 'FDS', title: 'Fundamentals of Data Structures', totalMarks: 70, durationHours: 2.5 },
+    { id: 'sub-210243', departmentCode: 'COMP', courseCode: 'SE_COMP', patternCode: 'PAT_2019', patternName: '2019 Pattern', semester: 'Semester 3', code: '210243', shortName: 'OOP', title: 'Object Oriented Programming', totalMarks: 70, durationHours: 2.5 },
+    { id: 'sub-210244', departmentCode: 'COMP', courseCode: 'SE_COMP', patternCode: 'PAT_2019', patternName: '2019 Pattern', semester: 'Semester 3', code: '210244', shortName: 'CG', title: 'Computer Graphics', totalMarks: 70, durationHours: 2.5 },
+    { id: 'sub-210245', departmentCode: 'COMP', courseCode: 'SE_COMP', patternCode: 'PAT_2019', patternName: '2019 Pattern', semester: 'Semester 3', code: '210245', shortName: 'DELD', title: 'Digital Electronics and Logic Design', totalMarks: 70, durationHours: 2.5 },
+    // SE Sem 4
+    { id: 'sub-207003', departmentCode: 'COMP', courseCode: 'SE_COMP', patternCode: 'PAT_2019', patternName: '2019 Pattern', semester: 'Semester 4', code: '207003', shortName: 'M3', title: 'Engineering Mathematics-III', totalMarks: 70, durationHours: 2.5 },
+    { id: 'sub-210252', departmentCode: 'COMP', courseCode: 'SE_COMP', patternCode: 'PAT_2019', patternName: '2019 Pattern', semester: 'Semester 4', code: '210252', shortName: 'DSA', title: 'Data Structures and Algorithms', totalMarks: 70, durationHours: 2.5 },
+    { id: 'sub-210253', departmentCode: 'COMP', courseCode: 'SE_COMP', patternCode: 'PAT_2019', patternName: '2019 Pattern', semester: 'Semester 4', code: '210253', shortName: 'SE', title: 'Software Engineering', totalMarks: 70, durationHours: 2.5 },
+    { id: 'sub-210254', departmentCode: 'COMP', courseCode: 'SE_COMP', patternCode: 'PAT_2019', patternName: '2019 Pattern', semester: 'Semester 4', code: '210254', shortName: 'MP', title: 'Microprocessor', totalMarks: 70, durationHours: 2.5 },
+    { id: 'sub-210255', departmentCode: 'COMP', courseCode: 'SE_COMP', patternCode: 'PAT_2019', patternName: '2019 Pattern', semester: 'Semester 4', code: '210255', shortName: 'PPL', title: 'Principles of Programming Languages', totalMarks: 70, durationHours: 2.5 },
+    // TE Sem 5
+    { id: 'sub-spos', departmentCode: 'COMP', courseCode: 'TE_COMP', patternCode: 'PAT_2019', patternName: '2019 Pattern', semester: 'Semester 5', code: '310243', shortName: 'SPOS', title: 'Systems Programming and Operating System', totalMarks: 70, durationHours: 2.5 },
+    { id: 'sub-dbms', departmentCode: 'COMP', courseCode: 'TE_COMP', patternCode: 'PAT_2019', patternName: '2019 Pattern', semester: 'Semester 5', code: '310241', shortName: 'DBMS', title: 'Database Management Systems', totalMarks: 70, durationHours: 2.5 },
+    { id: 'sub-cns', departmentCode: 'COMP', courseCode: 'TE_COMP', patternCode: 'PAT_2019', patternName: '2019 Pattern', semester: 'Semester 5', code: '310242', shortName: 'CNS', title: 'Computer Networks and Security', totalMarks: 70, durationHours: 2.5 },
+    { id: 'sub-310244', departmentCode: 'COMP', courseCode: 'TE_COMP', patternCode: 'PAT_2019', patternName: '2019 Pattern', semester: 'Semester 5', code: '310244', shortName: 'TOC', title: 'Theory of Computation', totalMarks: 70, durationHours: 2.5 },
+    { id: 'sub-nep-os', departmentCode: 'COMP', courseCode: 'TE_COMP', patternCode: 'PAT_2024_NEP', patternName: '2024 NEP Pattern', semester: 'Semester 5', code: 'NEP-301', shortName: 'OSSA', title: 'Operating Systems & System Architecture', totalMarks: 70, durationHours: 2.5 },
+    // TE Sem 6
+    { id: 'sub-310251', departmentCode: 'COMP', courseCode: 'TE_COMP', patternCode: 'PAT_2019', patternName: '2019 Pattern', semester: 'Semester 6', code: '310251', shortName: 'DSBDA', title: 'Data Science and Big Data Analytics', totalMarks: 70, durationHours: 2.5 },
+    { id: 'sub-wt', departmentCode: 'COMP', courseCode: 'TE_COMP', patternCode: 'PAT_2019', patternName: '2019 Pattern', semester: 'Semester 6', code: '310252', shortName: 'WT', title: 'Web Technology', totalMarks: 70, durationHours: 2.5 },
+    { id: 'sub-310253', departmentCode: 'COMP', courseCode: 'TE_COMP', patternCode: 'PAT_2019', patternName: '2019 Pattern', semester: 'Semester 6', code: '310253', shortName: 'AI', title: 'Artificial Intelligence', totalMarks: 70, durationHours: 2.5 },
+    { id: 'sub-310254', departmentCode: 'COMP', courseCode: 'TE_COMP', patternCode: 'PAT_2019', patternName: '2019 Pattern', semester: 'Semester 6', code: '310254', shortName: 'IS', title: 'Information Security', totalMarks: 70, durationHours: 2.5 },
+    // BE Sem 7
+    { id: 'sub-daa', departmentCode: 'COMP', courseCode: 'BE_COMP', patternCode: 'PAT_2019', patternName: '2019 Pattern', semester: 'Semester 7', code: '410241', shortName: 'DAA', title: 'Design and Analysis of Algorithms', totalMarks: 70, durationHours: 2.5 },
+    { id: 'sub-410242', departmentCode: 'COMP', courseCode: 'BE_COMP', patternCode: 'PAT_2019', patternName: '2019 Pattern', semester: 'Semester 7', code: '410242', shortName: 'ML', title: 'Machine Learning', totalMarks: 70, durationHours: 2.5 },
+    { id: 'sub-410243', departmentCode: 'COMP', courseCode: 'BE_COMP', patternCode: 'PAT_2019', patternName: '2019 Pattern', semester: 'Semester 7', code: '410243', shortName: 'BT', title: 'Blockchain Technology', totalMarks: 70, durationHours: 2.5 },
+    { id: 'sub-410244', departmentCode: 'COMP', courseCode: 'BE_COMP', patternCode: 'PAT_2019', patternName: '2019 Pattern', semester: 'Semester 7', code: '410244', shortName: 'HPC', title: 'High Performance Computing', totalMarks: 70, durationHours: 2.5 },
+    // BE Sem 8
+    { id: 'sub-410251', departmentCode: 'COMP', courseCode: 'BE_COMP', patternCode: 'PAT_2019', patternName: '2019 Pattern', semester: 'Semester 8', code: '410251', shortName: 'DL', title: 'Deep Learning', totalMarks: 70, durationHours: 2.5 },
+    { id: 'sub-410252', departmentCode: 'COMP', courseCode: 'BE_COMP', patternCode: 'PAT_2019', patternName: '2019 Pattern', semester: 'Semester 8', code: '410252', shortName: 'NLP', title: 'Natural Language Processing', totalMarks: 70, durationHours: 2.5 },
+    { id: 'sub-410253', departmentCode: 'COMP', courseCode: 'BE_COMP', patternCode: 'PAT_2019', patternName: '2019 Pattern', semester: 'Semester 8', code: '410253', shortName: 'CC', title: 'Cloud Computing', totalMarks: 70, durationHours: 2.5 },
   ],
   units: {
     '310243': [
@@ -192,14 +161,80 @@ const FALLBACK_ACADEMIC_DATA = {
 
 // Subject acronym lookup helper
 const SHORT_NAME_MAP = {
+  // FE
+  '107001': 'M1',
+  '107002': 'PHY',
+  '104010': 'BXEE',
+  '110005': 'PPS',
+  '107008': 'M2',
+  '107009': 'CHEM',
+  '101011': 'EM',
+  '103004': 'BEEE',
+  '110013': 'BCE',
+  // SE
+  '210241': 'DM',
+  '210242': 'FDS',
+  '210243': 'OOP',
+  '210244': 'CG',
+  '210245': 'DELD',
+  '207003': 'M3',
+  '210252': 'DSA',
+  '210253': 'SE',
+  '210254': 'MP',
+  '210255': 'PPL',
+  // TE
   '310243': 'SPOS',
   '310241': 'DBMS',
   '310242': 'CNS',
-  '310252': 'WT',
-  '410241': 'DAA',
+  '310244': 'TOC',
   'NEP-301': 'OSSA',
-  '314443': 'OSV',
+  '310251': 'DSBDA',
+  '310252': 'WT',
+  '310253': 'AI',
+  '310254': 'IS',
+  // BE
+  '410241': 'DAA',
+  '410242': 'ML',
+  '410243': 'BT',
+  '410244': 'HPC',
+  '410251': 'DL',
+  '410252': 'NLP',
+  '410253': 'CC',
 };
+
+let inMemoryDesignations = [...FALLBACK_ACADEMIC_DATA.designations];
+
+async function getDesignations() {
+  try {
+    const { data, error } = await supabase
+      .from('academic_designations')
+      .select('name')
+      .eq('is_active', true);
+    if (!error && data && data.length > 0) return data.map(d => d.name);
+  } catch (_) {}
+  return inMemoryDesignations;
+}
+
+async function createDesignation(name) {
+  const cleanName = (name || '').trim();
+  if (!cleanName) throw new Error('Designation name is required');
+  if (!inMemoryDesignations.includes(cleanName)) {
+    inMemoryDesignations.push(cleanName);
+  }
+  try {
+    await supabase.from('academic_designations').insert([{ name: cleanName, is_active: true }]);
+  } catch (_) {}
+  return { success: true, name: cleanName };
+}
+
+async function deleteDesignation(name) {
+  const cleanName = (name || '').trim();
+  inMemoryDesignations = inMemoryDesignations.filter(d => d.toLowerCase() !== cleanName.toLowerCase());
+  try {
+    await supabase.from('academic_designations').update({ is_active: false }).eq('name', cleanName);
+  } catch (_) {}
+  return { success: true };
+}
 
 async function getDepartments() {
   try {
@@ -688,4 +723,7 @@ module.exports = {
   createPaperTitle,
   updatePaperTitle,
   deletePaperTitle,
+  getDesignations,
+  createDesignation,
+  deleteDesignation,
 };

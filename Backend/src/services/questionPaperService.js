@@ -1403,16 +1403,23 @@ async function reviewQuestionPaper({ paperId, coordinatorId, coordinatorName, ac
   }
 
   const now = new Date().toISOString();
-  let newReviewStatus = 'REVIEWED';
-  let newPaperStatus = paper.status;
+  let newReviewStatus = 'APPROVED';
+  let newPaperStatus = 'APPROVED';
+  let adminStatus = 'APPROVED';
 
-  if (normalizedAction === 'RETURN') {
+  if (normalizedAction === 'RETURN' || normalizedAction === 'REVISION') {
     newReviewStatus = 'RETURNED';
+    newPaperStatus = 'NEEDS_REVISION';
+    adminStatus = 'RETURNED';
   } else if (normalizedAction === 'REJECT') {
     newReviewStatus = 'REJECTED';
-    newPaperStatus = 'ARCHIVED';
+    newPaperStatus = 'REJECTED';
+    adminStatus = 'REJECTED';
   } else {
-    newReviewStatus = 'REVIEWED';
+    // APPROVE / RECOMMEND -> Exam Coordinator verified and approved
+    newReviewStatus = 'APPROVED';
+    newPaperStatus = 'APPROVED';
+    adminStatus = 'APPROVED';
   }
 
   // Persist review transition
@@ -1421,6 +1428,7 @@ async function reviewQuestionPaper({ paperId, coordinatorId, coordinatorName, ac
     .update({
       review_status: newReviewStatus,
       status: newPaperStatus,
+      admin_approval_status: adminStatus,
       reviewer_id: coordinatorId,
       reviewed_at: now,
       review_comments: comments ? comments.trim() : null,
@@ -1454,38 +1462,23 @@ async function reviewQuestionPaper({ paperId, coordinatorId, coordinatorName, ac
     console.warn('[QuestionPaperService] Note: paper_verifications logging:', verifErr.message);
   }
 
-  // Send Notifications
-  if (newReviewStatus === 'REVIEWED') {
-    try {
-      const { data: admins } = await supabase
-        .from('users')
-        .select('id, roles!inner(name)')
-        .eq('roles.name', 'ADMIN')
-        .eq('is_active', true);
+  // Send Direct Notification to Authoring Faculty
+  try {
+    const statusLabel =
+      newReviewStatus === 'APPROVED'
+        ? 'Verified & Approved'
+        : newReviewStatus === 'RETURNED'
+        ? 'Returned for Revision'
+        : 'Rejected';
 
-      if (admins && admins.length > 0) {
-        for (const admin of admins) {
-          await notificationService.createWorkflowNotification({
-            recipientId: admin.id,
-            questionPaperId: paperId,
-            type: 'SYSTEM',
-            subject: `Admin Approval Required: ${paper.title} (${paper.subject})`,
-            message: `Exam Coordinator ${coordUser.name || 'Coordinator'} has reviewed and recommended question paper "${paper.title}" (${paper.subject}). Administrative approval is now required. Notes: ${comments || 'None'}`,
-          }).catch(() => {});
-        }
-      }
-    } catch (_) {}
-  } else if (newReviewStatus === 'RETURNED' || newReviewStatus === 'REJECTED') {
-    try {
-      await notificationService.createWorkflowNotification({
-        recipientId: paper.teacher_id,
-        questionPaperId: paperId,
-        type: 'SYSTEM',
-        subject: `Question Paper ${newReviewStatus === 'RETURNED' ? 'Returned for Revision' : 'Rejected'}: ${paper.title}`,
-        message: `Your question paper "${paper.title}" (${paper.subject}) has been ${newReviewStatus.toLowerCase()} by Exam Coordinator ${coordUser.name || 'Coordinator'}. Review comments: ${comments || 'No specific comments provided.'}`,
-      }).catch(() => {});
-    } catch (_) {}
-  }
+    await notificationService.createWorkflowNotification({
+      recipientId: paper.teacher_id,
+      questionPaperId: paperId,
+      type: 'SYSTEM',
+      subject: `Question Paper ${statusLabel}: ${paper.title}`,
+      message: `Your examination paper "${paper.title}" (${paper.subject}) has been ${statusLabel.toLowerCase()} by Exam Coordinator ${coordUser.name || 'Coordinator'}. Coordinator Notes: ${comments || 'Verified in compliance with university academic standards.'}`,
+    }).catch(() => {});
+  } catch (_) {}
 
   // Audit log
   await auditLogService.logAuditEvent({

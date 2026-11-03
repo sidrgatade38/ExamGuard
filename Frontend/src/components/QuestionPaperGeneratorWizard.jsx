@@ -52,28 +52,50 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
   const [savingDraft, setSavingDraft] = useState(false);
   const [draftSavedNotice, setDraftSavedNotice] = useState('');
 
-  // Blueprint State
+  // In-wizard notification toast
+  const [wizardNotification, setWizardNotification] = useState({ type: '', message: '' });
+  const showNotification = (message, type = 'error') => {
+    setWizardNotification({ type, message });
+    setTimeout(() => setWizardNotification({ type: '', message: '' }), 6000);
+  };
+
+  // Blueprint State - Pristine Clean Initial State for New Paper
   const [blueprint, setBlueprint] = useState(() => {
-    if (initialDraft?.blueprint) {
+    if (initialDraft?.blueprint || (initialDraft && initialDraft.subject)) {
+      const bp = initialDraft.blueprint || initialDraft;
       return {
-        title: 'End Sem Exam',
-        classYear: 'TE',
-        totalMarks: 70,
-        ...initialDraft.blueprint,
+        title: bp.title || initialDraft.title || 'End Sem Exam',
+        subject: bp.subject || initialDraft.subject || '',
+        course: bp.course || initialDraft.course || 'B.E. (Computer Engineering)',
+        classYear: bp.classYear || initialDraft.classYear || 'TE',
+        semester: bp.semester || initialDraft.semester || 'Semester 5',
+        academicPattern: bp.academicPattern || initialDraft.academicPattern || '2019',
+        subjectCode: bp.subjectCode || initialDraft.subjectCode || '',
+        durationHours: bp.durationHours ?? initialDraft.durationHours ?? 2.5,
+        totalMarks: bp.totalMarks ?? initialDraft.totalMarks ?? 70,
+        instructions: bp.instructions || initialDraft.instructions || [
+          'Answer all compulsory questions or choose alternatives where specified.',
+          'Neat diagrams must be drawn wherever necessary.',
+          'Figures to the right indicate full marks.',
+          'Assume suitable data if necessary.',
+        ],
+        numSets: bp.numSets ?? initialDraft.numSets ?? 2,
+        maxOverlapPercentage: bp.maxOverlapPercentage ?? initialDraft.maxOverlapPercentage ?? 40,
+        sections: bp.sections || initialDraft.sections || [],
       };
     }
     return {
-      title: 'End Sem Exam',
-      subject: 'Systems Programming and Operating System',
-      course: 'T.E. (Computer Engineering)',
-      classYear: 'TE',
-      semester: 'Semester 5',
-      academicPattern: '2019',
-      subjectCode: '310243',
+      title: '',
+      subject: '',
+      course: 'B.E. (Computer Engineering)',
+      classYear: '',
+      semester: '',
+      academicPattern: '',
+      subjectCode: '',
       durationHours: 2.5,
       totalMarks: 70,
       instructions: [
-        'Answer Q1 or Q2, Q3 or Q4, Q5 or Q6, Q7 or Q8.',
+        'Answer all compulsory questions or choose alternatives where specified.',
         'Neat diagrams must be drawn wherever necessary.',
         'Figures to the right indicate full marks.',
         'Assume suitable data if necessary.',
@@ -246,7 +268,7 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
       setDraftSavedNotice(`Draft saved successfully (ID: ${savedId ? String(savedId).slice(0, 8) : 'saved'}) at ${new Date().toLocaleTimeString()}`);
       setTimeout(() => setDraftSavedNotice(''), 6000);
     } catch (err) {
-      alert(err.response?.data?.message || err.message || 'Failed to save draft');
+      showNotification(err.response?.data?.message || err.message || 'Failed to save draft', 'error');
     } finally {
       setSavingDraft(false);
     }
@@ -303,15 +325,15 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
 
         setSubjects(subsList);
 
-        if (subsList.length > 0) {
-          const firstSub = subsList[0];
+        if (initialDraft && subsList.length > 0) {
+          const firstSub = subsList.find(s => s.title === initialDraft.subject || s.code === initialDraft.subjectCode) || subsList[0];
           setBlueprint((prev) => ({
             ...prev,
-            title: prev.title || '',
+            title: prev.title || 'End Sem Exam',
             subject: prev.subject || firstSub.title,
             subjectCode: prev.subjectCode || firstSub.code,
             semester: prev.semester || firstSub.semester || 'Semester 5',
-            academicPattern: prev.academicPattern || firstSub.patternName || '2019 Pattern',
+            academicPattern: prev.academicPattern || firstSub.patternName || '2019',
           }));
 
           const unitsRes = await academicService.getUnitsForSubject(firstSub.code).catch(() => ({ data: [] }));
@@ -460,7 +482,7 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
       }));
       await loadQuestions();
     } catch (err) {
-      alert(err.response?.data?.message || err.message || 'Failed to save question');
+      showNotification(err.response?.data?.message || err.message || 'Failed to save question', 'error');
     }
   };
 
@@ -626,61 +648,61 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
       ];
     }
 
-    // Default: 70 Marks (4 units, 17+17+18+18)
-    return [
-      {
-        groupOrder: 1,
-        groupLabel: `Group 1 (${units[0]?.unitTitle || 'Unit 1'})`,
-        primaryQuestionNumber: 1,
-        alternativeQuestionNumber: 2,
-        targetMarks: 17,
-        targetUnit: 1,
+    // Dynamic Generator for any positive integer total marks (e.g. 70, 40, 50, 80, 100, etc.)
+    const numGroups = tm <= 30 ? 2 : 4;
+    const baseGroupMarks = Math.floor(tm / numGroups);
+    const remainder = tm % numGroups;
+
+    const dynamicGroups = [];
+    for (let g = 0; g < numGroups; g++) {
+      const gMarks = baseGroupMarks + (g >= numGroups - remainder ? 1 : 0);
+      const sub1 = Math.floor(gMarks / 2);
+      const sub2 = gMarks - sub1;
+      const uIndex = g % units.length;
+      const uTitle = units[uIndex]?.unitTitle || `Unit ${uIndex + 1}`;
+
+      dynamicGroups.push({
+        groupOrder: g + 1,
+        groupLabel: `Group ${g + 1} (${uTitle})`,
+        primaryQuestionNumber: g * 2 + 1,
+        alternativeQuestionNumber: g * 2 + 2,
+        targetMarks: gMarks,
+        targetUnit: uIndex + 1,
         subquestionsConfig: [
-          { subPart: 'a', marks: 8, difficulty: 'MEDIUM', questionType: 'DESCRIPTIVE', unit: 1 },
-          { subPart: 'b', marks: 9, difficulty: 'HARD', questionType: 'DESCRIPTIVE', unit: 1 },
+          { subPart: 'a', marks: sub1 > 0 ? sub1 : 1, difficulty: 'MEDIUM', questionType: 'DESCRIPTIVE', unit: uIndex + 1 },
+          { subPart: 'b', marks: sub2 > 0 ? sub2 : 1, difficulty: 'HARD', questionType: 'DESCRIPTIVE', unit: uIndex + 1 },
         ],
-      },
-      {
-        groupOrder: 2,
-        groupLabel: `Group 2 (${units[1]?.unitTitle || 'Unit 2'})`,
-        primaryQuestionNumber: 3,
-        alternativeQuestionNumber: 4,
-        targetMarks: 17,
-        targetUnit: 2,
-        subquestionsConfig: [
-          { subPart: 'a', marks: 8, difficulty: 'EASY', questionType: 'DESCRIPTIVE', unit: 2 },
-          { subPart: 'b', marks: 9, difficulty: 'MEDIUM', questionType: 'DESCRIPTIVE', unit: 2 },
-        ],
-      },
-      {
-        groupOrder: 3,
-        groupLabel: `Group 3 (${units[2]?.unitTitle || 'Unit 3'})`,
-        primaryQuestionNumber: 5,
-        alternativeQuestionNumber: 6,
-        targetMarks: 18,
-        targetUnit: 3,
-        subquestionsConfig: [
-          { subPart: 'a', marks: 9, difficulty: 'MEDIUM', questionType: 'DESCRIPTIVE', unit: 3 },
-          { subPart: 'b', marks: 9, difficulty: 'HARD', questionType: 'DESCRIPTIVE', unit: 3 },
-        ],
-      },
-      {
-        groupOrder: 4,
-        groupLabel: `Group 4 (${units[3]?.unitTitle || 'Unit 4'})`,
-        primaryQuestionNumber: 7,
-        alternativeQuestionNumber: 8,
-        targetMarks: 18,
-        targetUnit: 4,
-        subquestionsConfig: [
-          { subPart: 'a', marks: 9, difficulty: 'MEDIUM', questionType: 'DESCRIPTIVE', unit: 4 },
-          { subPart: 'b', marks: 9, difficulty: 'HARD', questionType: 'DESCRIPTIVE', unit: 4 },
-        ],
-      },
-    ];
+      });
+    }
+    return dynamicGroups;
   };
 
   // Step 1 -> 2: Save / Create Blueprint
   const handleProceedToBank = async () => {
+    if (!blueprint.title) {
+      showNotification('Please select or specify an Examination Paper Title (e.g. End Sem Exam, CCE Exam, Open Book Test).', 'error');
+      return;
+    }
+    if (!blueprint.classYear) {
+      showNotification('Please select the Class / Year (FE, SE, TE, or BE).', 'error');
+      return;
+    }
+    if (!blueprint.academicPattern) {
+      showNotification('Please select the Academic Pattern (e.g. 2019, 2024, 2025).', 'error');
+      return;
+    }
+    if (!blueprint.semester) {
+      showNotification('Please select the Semester for this examination.', 'error');
+      return;
+    }
+    if (!blueprint.subject) {
+      showNotification('Please select the Subject for this question paper.', 'error');
+      return;
+    }
+    if (!blueprint.totalMarks || blueprint.totalMarks <= 0) {
+      showNotification('Please enter a valid positive whole-number for Total Examination Marks.', 'error');
+      return;
+    }
     try {
       const dynamicSections = getDynamicSections();
       const payload = {
@@ -693,7 +715,7 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
       }
       setStep(2);
     } catch (err) {
-      alert(err.response?.data?.message || err.message || 'Blueprint validation error');
+      showNotification(err.response?.data?.message || err.message || 'Blueprint validation error', 'error');
     }
   };
 
@@ -878,11 +900,65 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
         </div>
       </div>
 
+      {/* Notification Toast Alert */}
+      {wizardNotification.message && (
+        <div
+          style={{
+            margin: '0 1.5rem 1rem 1.5rem',
+            padding: '10px 16px',
+            borderRadius: '8px',
+            backgroundColor: wizardNotification.type === 'success' ? '#ecfdf5' : '#fef2f2',
+            border: `1px solid ${wizardNotification.type === 'success' ? '#a7f3d0' : '#fecaca'}`,
+            color: wizardNotification.type === 'success' ? '#065f46' : '#991b1b',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            fontSize: '13px',
+            fontWeight: '600',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {wizardNotification.type === 'success' ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
+            <span>{wizardNotification.message}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setWizardNotification({ type: '', message: '' })}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit' }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
       {/* --------------------------------------------------------------------- */}
       {/* STEP 1: DYNAMIC ACADEMIC CONTEXT & BLUEPRINT CONFIGURATION            */}
       {/* --------------------------------------------------------------------- */}
       {step === 1 && (
         <div style={styles.stepContent}>
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '14px' }}>
+            <button
+              type="button"
+              onClick={onCancel}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 14px',
+                backgroundColor: '#ffffff',
+                border: '1px solid #cbd5e1',
+                borderRadius: '6px',
+                color: '#334155',
+                fontSize: '13px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+              }}
+            >
+              <ArrowLeft size={16} />
+              <span>Back to Dashboard</span>
+            </button>
+          </div>
           <div style={styles.cardHeader}>
             <h3 style={styles.cardTitle}>Step 1: Academic Structure &amp; Exam Blueprint</h3>
             <p style={styles.cardSubtitle}>
@@ -1230,6 +1306,29 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
       {/* --------------------------------------------------------------------- */}
       {step === 2 && (
         <div style={styles.stepContent}>
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '14px' }}>
+            <button
+              type="button"
+              onClick={() => setStep(1)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 14px',
+                backgroundColor: '#ffffff',
+                border: '1px solid #cbd5e1',
+                borderRadius: '6px',
+                color: '#334155',
+                fontSize: '13px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+              }}
+            >
+              <ArrowLeft size={16} />
+              <span>Back to Step 1 (Blueprint)</span>
+            </button>
+          </div>
           <div style={styles.cardHeader}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
               <div>
@@ -1414,6 +1513,29 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
       {/* --------------------------------------------------------------------- */}
       {step === 3 && (
         <div style={styles.stepContent}>
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '14px' }}>
+            <button
+              type="button"
+              onClick={() => setStep(2)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 14px',
+                backgroundColor: '#ffffff',
+                border: '1px solid #cbd5e1',
+                borderRadius: '6px',
+                color: '#334155',
+                fontSize: '13px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+              }}
+            >
+              <ArrowLeft size={16} />
+              <span>Back to Step 2 (Question Bank)</span>
+            </button>
+          </div>
           <div style={styles.cardHeader}>
             <h3 style={styles.cardTitle}>Step 3: Multi-Set Feasibility Validation</h3>
             <p style={styles.cardSubtitle}>
@@ -1481,9 +1603,13 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
                           <td style={styles.td}>{p.requiredCount} questions</td>
                           <td style={styles.td}>
                             {p.sufficient ? (
-                              <span style={{ color: '#059669', fontWeight: 600 }}>✓ Ready</span>
+                              <span style={{ color: '#059669', fontWeight: 600, backgroundColor: '#dcfce7', padding: '2px 8px', borderRadius: '4px' }}>
+                                ✓ Ready
+                              </span>
                             ) : (
-                              <span style={{ color: '#dc2626', fontWeight: 600 }}>✗ Insufficient</span>
+                              <span style={{ color: '#dc2626', fontWeight: 600, backgroundColor: '#fee2e2', padding: '2px 8px', borderRadius: '4px' }}>
+                                ✗ {Math.max(0, p.requiredCount - p.availableCount)} Missing
+                              </span>
                             )}
                           </td>
                         </tr>
@@ -1519,6 +1645,29 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
       {/* --------------------------------------------------------------------- */}
       {step === 4 && activeSet && (
         <div style={styles.stepContent}>
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '14px' }}>
+            <button
+              type="button"
+              onClick={() => setStep(3)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 14px',
+                backgroundColor: '#ffffff',
+                border: '1px solid #cbd5e1',
+                borderRadius: '6px',
+                color: '#334155',
+                fontSize: '13px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+              }}
+            >
+              <ArrowLeft size={16} />
+              <span>Back to Step 3 (Feasibility)</span>
+            </button>
+          </div>
           {/* Generation Success & Stable Record ID Banner */}
           <div
             style={{
@@ -1835,6 +1984,29 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
       {/* --------------------------------------------------------------------- */}
       {step === 5 && activeSet && (
         <div style={styles.stepContent}>
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '14px' }}>
+            <button
+              type="button"
+              onClick={() => setStep(4)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 14px',
+                backgroundColor: '#ffffff',
+                border: '1px solid #cbd5e1',
+                borderRadius: '6px',
+                color: '#334155',
+                fontSize: '13px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+              }}
+            >
+              <ArrowLeft size={16} />
+              <span>Back to Step 4 (Validation & Sets)</span>
+            </button>
+          </div>
           <div style={styles.cardHeader}>
             <h3 style={styles.cardTitle}>Step 5: Teacher Submission &amp; Examination Cell Sealing</h3>
             <p style={styles.cardSubtitle}>

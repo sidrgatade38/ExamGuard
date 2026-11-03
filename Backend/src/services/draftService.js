@@ -32,50 +32,98 @@ function isTableMissingError(error) {
 /**
  * Saves a new draft or updates an existing draft.
  */
-async function saveDraft({
-  draftId,
-  teacherId,
-  title,
-  subject,
-  subjectCode,
-  course,
-  department,
-  classYear = 'TE',
-  academicPattern,
-  semester,
-  durationHours = 2.5,
-  totalMarks = 70,
-  step = 1,
-  blueprintId = null,
-  formData = {},
-  sections = [],
-  generatedSets = null,
-  status = 'DRAFT',
-}) {
+async function saveDraft(payload) {
+  const {
+    id,
+    draftId,
+    teacherId,
+    title,
+    subject,
+    subjectCode,
+    course,
+    department,
+    classYear,
+    academicPattern,
+    semester,
+    durationHours,
+    totalMarks,
+    step = 1,
+    blueprintId = null,
+    formData = {},
+    sections = [],
+    generatedSets = null,
+    generatedPaperData = null,
+    status = 'DRAFT',
+    blueprint = null,
+  } = payload || {};
+
   if (!teacherId) throw new Error('Teacher ID is required to save draft.');
 
-  const effectiveTitle = (title && title.trim()) ? title.trim() : `Untitled Draft (${subject || 'Examination'})`;
-  const effectiveSubject = subject || 'General Subject';
-  const idToUse = draftId || crypto.randomUUID();
+  const effectiveId = draftId || id || crypto.randomUUID();
+  const bp = blueprint || {};
+  const fd = formData || {};
+
+  const effectiveSubject = subject || bp.subject || fd.subject || 'General Subject';
+  const effectiveTitle = (title && title.trim())
+    ? title.trim()
+    : bp.title || `Draft: ${effectiveSubject} (${bp.totalMarks || totalMarks || 70}M)`;
+
+  const effectiveClassYear = classYear || bp.classYear || fd.classYear || 'TE';
+  const effectivePattern = academicPattern || bp.academicPattern || fd.academicPattern || '2019 Pattern';
+  const effectiveSemester = semester || bp.semester || fd.semester || 'Semester 5';
+  const effectiveSubjectCode = subjectCode || bp.subjectCode || fd.subjectCode || null;
+  const effectiveCourse = course || bp.course || fd.course || 'T.E. (Computer Engineering)';
+  const effectiveTotalMarks = totalMarks !== undefined && !isNaN(parseInt(totalMarks, 10))
+    ? parseInt(totalMarks, 10)
+    : (bp.totalMarks !== undefined && !isNaN(parseInt(bp.totalMarks, 10))
+      ? parseInt(bp.totalMarks, 10)
+      : (fd.totalMarks !== undefined && !isNaN(parseInt(fd.totalMarks, 10))
+        ? parseInt(fd.totalMarks, 10)
+        : 70));
+
+  const effectiveDurationHours = durationHours !== undefined && !isNaN(parseFloat(durationHours))
+    ? parseFloat(durationHours)
+    : (bp.durationHours !== undefined && !isNaN(parseFloat(bp.durationHours))
+      ? parseFloat(bp.durationHours)
+      : (fd.durationHours !== undefined && !isNaN(parseFloat(fd.durationHours))
+        ? parseFloat(fd.durationHours)
+        : 2.5));
+
+  const effectiveSections = (sections && sections.length > 0)
+    ? sections
+    : (bp.sections && bp.sections.length > 0 ? bp.sections : []);
+
+  const mergedFormData = {
+    ...fd,
+    classYear: effectiveClassYear,
+    academicPattern: effectivePattern,
+    semester: effectiveSemester,
+    subject: effectiveSubject,
+    subjectCode: effectiveSubjectCode,
+    course: effectiveCourse,
+    totalMarks: effectiveTotalMarks,
+    durationHours: effectiveDurationHours,
+    title: effectiveTitle,
+  };
 
   const record = {
-    id: idToUse,
+    id: effectiveId,
     teacher_id: teacherId,
     title: effectiveTitle,
     subject: effectiveSubject,
-    subject_code: subjectCode || null,
-    course: course || 'Computer Engineering',
+    subject_code: effectiveSubjectCode,
+    course: effectiveCourse,
     department: 'Department of Computer Engineering',
-    class_year: classYear || 'TE',
-    academic_pattern: academicPattern || '2019 Pattern',
-    semester: semester || 'Semester 5',
-    duration_hours: parseFloat(durationHours) || 2.5,
-    total_marks: parseInt(totalMarks, 10) || 70,
+    class_year: effectiveClassYear,
+    academic_pattern: effectivePattern,
+    semester: effectiveSemester,
+    duration_hours: effectiveDurationHours,
+    total_marks: effectiveTotalMarks,
     step: parseInt(step, 10) || 1,
-    blueprint_id: blueprintId || null,
-    form_data: formData || {},
-    sections: sections || [],
-    generated_sets: generatedSets || null,
+    blueprint_id: blueprintId || bp.id || null,
+    form_data: mergedFormData,
+    sections: effectiveSections,
+    generated_sets: generatedSets || generatedPaperData || null,
     status: status || 'DRAFT',
     updated_at: new Date().toISOString(),
   };
@@ -323,24 +371,60 @@ async function deleteDraft(id, teacherId, role) {
 
 function formatDraftRecord(row) {
   if (!row) return null;
+  const fd = row.form_data || row.formData || {};
+  const cYear = row.class_year || row.classYear || fd.classYear || 'TE';
+  const sem = row.semester || fd.semester || 'Semester 5';
+  const pat = row.academic_pattern || row.academicPattern || fd.academicPattern || '2019 Pattern';
+  const sub = row.subject || fd.subject || 'Systems Programming and Operating System';
+  const subCode = row.subject_code || row.subjectCode || fd.subjectCode || null;
+  const crs = row.course || fd.course || 'T.E. (Computer Engineering)';
+  const tMarks = parseInt(row.total_marks || row.totalMarks || fd.totalMarks || 70, 10);
+  const durHours = parseFloat(row.duration_hours || row.durationHours || fd.durationHours || 2.5);
+  const sects = (row.sections && row.sections.length > 0)
+    ? row.sections
+    : (fd.sections || (fd.blueprint && fd.blueprint.sections) || []);
+
+  const reconstructedBlueprint = {
+    title: row.title,
+    subject: sub,
+    subjectCode: subCode,
+    course: crs,
+    classYear: cYear,
+    semester: sem,
+    academicPattern: pat,
+    totalMarks: tMarks,
+    durationHours: durHours,
+    sections: sects,
+    instructions: fd.instructions || [
+      'Answer Q1 or Q2, Q3 or Q4, Q5 or Q6, Q7 or Q8.',
+      'Neat diagrams must be drawn wherever necessary.',
+      'Figures to the right indicate full marks.',
+      'Assume suitable data if necessary.',
+    ],
+    numSets: fd.numSets || 2,
+    maxOverlapPercentage: fd.maxOverlapPercentage || 40,
+  };
+
   return {
     id: row.id,
     teacherId: row.teacher_id || row.teacherId,
     title: row.title,
-    subject: row.subject,
-    subjectCode: row.subject_code || row.subjectCode,
-    course: row.course,
-    department: row.department,
-    classYear: row.class_year || row.classYear || 'TE',
-    academicPattern: row.academic_pattern || row.academicPattern,
-    semester: row.semester,
-    durationHours: parseFloat(row.duration_hours || row.durationHours || 2.5),
-    totalMarks: parseInt(row.total_marks || row.totalMarks || 70, 10),
+    subject: sub,
+    subjectCode: subCode,
+    course: crs,
+    department: 'Department of Computer Engineering',
+    classYear: cYear,
+    academicPattern: pat,
+    semester: sem,
+    durationHours: durHours,
+    totalMarks: tMarks,
     step: parseInt(row.step || 1, 10),
     blueprintId: row.blueprint_id || row.blueprintId,
-    formData: row.form_data || row.formData || {},
-    sections: row.sections || [],
+    formData: fd,
+    sections: sects,
     generatedSets: row.generated_sets || row.generatedSets || null,
+    generatedPaperData: row.generated_sets || row.generatedSets || null,
+    blueprint: reconstructedBlueprint,
     status: row.status || 'DRAFT',
     createdAt: row.created_at || row.createdAt,
     updatedAt: row.updated_at || row.updatedAt,
@@ -352,4 +436,5 @@ module.exports = {
   getTeacherDrafts,
   getDraftById,
   deleteDraft,
+  formatDraftRecord,
 };

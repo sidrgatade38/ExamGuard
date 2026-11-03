@@ -201,6 +201,7 @@ async function logAuditEvent(eventParams) {
       return null;
     }
 
+    cachedSummary = null; // Invalidate cached summary metrics on new event
     return mapAuditLogRecord(data);
   } catch (err) {
     console.warn('[AuditLogService] Warning: Unexpected error recording audit log:', err.message);
@@ -373,6 +374,9 @@ async function getAuditLogById(logId) {
   return mapAuditLogRecord(data);
 }
 
+let cachedSummary = null;
+let cachedSummaryExpiry = 0;
+
 /**
  * Returns aggregated audit log metrics and counts.
  *
@@ -380,6 +384,12 @@ async function getAuditLogById(logId) {
  * @returns {Promise<Object>}
  */
 async function getAuditLogSummary({ startDate = null, endDate = null } = {}) {
+  // If no date filters and cache is still fresh (< 30s), return immediately
+  const now = Date.now();
+  if (!startDate && !endDate && cachedSummary && now < cachedSummaryExpiry) {
+    return cachedSummary;
+  }
+
   // Query total count
   let totalQuery = supabase.from('activity_logs').select('*', { count: 'exact', head: true });
   let successQuery = supabase.from('activity_logs').select('*', { count: 'exact', head: true }).eq('details->>outcome', 'SUCCESS');
@@ -415,12 +425,19 @@ async function getAuditLogSummary({ startDate = null, endDate = null } = {}) {
     deniedQuery,
   ]);
 
-  return {
+  const summary = {
     totalEvents: totalRes.count || 0,
     successCount: successRes.count || 0,
     failureCount: failureRes.count || 0,
     deniedCount: deniedRes.count || 0,
   };
+
+  if (!startDate && !endDate) {
+    cachedSummary = summary;
+    cachedSummaryExpiry = now + 30000; // 30s TTL
+  }
+
+  return summary;
 }
 
 module.exports = {

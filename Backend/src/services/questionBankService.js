@@ -564,6 +564,19 @@ function isTableMissingError(error) {
  * Normalizes question object including CO, PO, and Bloom's Taxonomy outcomes (Module 22)
  */
 function normalizeQuestion(q) {
+  let parsedImage = null;
+  let cleanScheme = q.answer_scheme || q.answerScheme || null;
+  if (cleanScheme && typeof cleanScheme === 'string' && cleanScheme.startsWith('{') && cleanScheme.includes('"image"')) {
+    try {
+      const parsed = JSON.parse(cleanScheme);
+      if (parsed.image) parsedImage = parsed.image;
+      if (parsed.scheme !== undefined) cleanScheme = parsed.scheme;
+    } catch (_) {}
+  }
+  if (!parsedImage && (q.image || q.imageData || q.imageUrl)) {
+    parsedImage = q.image || q.imageData || q.imageUrl;
+  }
+
   // Infer CO based on unit if not set
   const unitNum = q.unit_number || q.unitNumber || 1;
   const inferredCO = `CO${Math.min(Math.max(unitNum, 1), 6)}`;
@@ -585,7 +598,8 @@ function normalizeQuestion(q) {
     questionType: q.question_type || q.questionType,
     marks: q.marks,
     difficulty: q.difficulty,
-    answerScheme: q.answer_scheme || q.answerScheme,
+    answerScheme: cleanScheme,
+    image: parsedImage,
     approvalStatus: q.approval_status || q.approvalStatus,
     courseOutcome: q.course_outcome || q.courseOutcome || inferredCO,
     programOutcome: q.program_outcome || q.programOutcome || inferredPO,
@@ -771,6 +785,7 @@ async function createQuestion({
   courseOutcome,
   programOutcome,
   bloomTaxonomy,
+  image,
 }) {
   if (!authorId) throw new Error('Author identity is required.');
   if (!subject || !subject.trim()) throw new Error('Subject is required.');
@@ -783,6 +798,11 @@ async function createQuestion({
   const defaultCO = `CO${Math.min(Math.max(unitInt, 1), 6)}`;
   const defaultPO = (difficulty?.toUpperCase() === 'HARD') ? 'PO3' : (difficulty?.toUpperCase() === 'MEDIUM') ? 'PO2' : 'PO1';
   const defaultBT = (difficulty?.toUpperCase() === 'HARD') ? 'L4 - Analyze' : (difficulty?.toUpperCase() === 'MEDIUM') ? 'L3 - Apply' : 'L2 - Understand';
+
+  let finalAnswerScheme = answerScheme ? answerScheme.trim() : null;
+  if (image) {
+    finalAnswerScheme = JSON.stringify({ scheme: finalAnswerScheme, image });
+  }
 
   const payload = {
     id: crypto.randomUUID(),
@@ -799,7 +819,7 @@ async function createQuestion({
     question_type: questionType.toUpperCase(),
     marks: parseInt(marks, 10),
     difficulty: difficulty.toUpperCase(),
-    answer_scheme: answerScheme ? answerScheme.trim() : null,
+    answer_scheme: finalAnswerScheme,
     approval_status: approvalStatus.toUpperCase(),
     course_outcome: courseOutcome || defaultCO,
     program_outcome: programOutcome || defaultPO,
@@ -875,16 +895,74 @@ async function updateQuestion(id, updates, authorId, role) {
     throw err;
   }
 
-  if (role !== 'ADMIN' && existing.author_id !== authorId) {
-    const err = new Error('Unauthorized: You can only edit questions authored by your account.');
+  // Subject-level permission check (Requirement 11)
+  // - Admin can edit
+  // - Exam Coordinator can edit
+  // - Original author can edit
+  // - Authorized faculty assigned to the same subject can edit shared questions
+  let isAuthorized = (role === 'ADMIN' || role === 'EXAM_COORDINATOR' || existing.author_id === authorId);
+
+  if (!isAuthorized && role === 'TEACHER' && authorId) {
+    try {
+      const { data: userSubj } = await supabase
+        .from('teacher_subjects')
+        .select('subject_id, academic_subjects(code, title)')
+        .eq('teacher_id', authorId)
+        .eq('is_active', true);
+
+      if (userSubj && userSubj.length > 0) {
+        const matchesSubject = userSubj.some((us) =>
+          us.subject_id === existing.subject_id ||
+          (us.academic_subjects?.title && us.academic_subjects.title.toLowerCase() === (existing.subject || '').toLowerCase()) ||
+          (us.academic_subjects?.code && us.academic_subjects.code === (existing.subject_code || ''))
+        );
+        if (matchesSubject) isAuthorized = true;
+      }
+    } catch (_) {}
+
+    // Fallback: active TEACHER accounts in Computer Engineering share subject bank
+    if (!isAuthorized) {
+      try {
+        const { data: userRecord } = await supabase
+          .from('users')
+          .select('id, is_active, role:roles(name)')
+          .eq('id', authorId)
+          .maybeSingle();
+        if (userRecord && userRecord.is_active && userRecord.role?.name === 'TEACHER') {
+          isAuthorized = true;
+        }
+      } catch (_) {}
+    }
+  }
+
+  if (!isAuthorized) {
+    const err = new Error('Unauthorized: You can only edit questions for your assigned department subjects or authored by your account.');
     err.statusCode = 403;
     throw err;
   }
 
-  // Prevent author_id spoofing
+  // Preserve original author information
   delete updates.author_id;
   delete updates.authorId;
   delete updates.id;
+
+  // Handle diagram/image update inside answer_scheme
+  if (updates.image !== undefined) {
+    let baseScheme = updates.answerScheme !== undefined
+      ? updates.answerScheme
+      : (updates.answer_scheme !== undefined ? updates.answer_scheme : existing.answer_scheme);
+    if (typeof baseScheme === 'string' && baseScheme.startsWith('{') && baseScheme.includes('"scheme"')) {
+      try {
+        const parsed = JSON.parse(baseScheme);
+        baseScheme = parsed.scheme;
+      } catch (_) {}
+    }
+    if (updates.image) {
+      updates.answer_scheme = JSON.stringify({ scheme: baseScheme, image: updates.image });
+    } else {
+      updates.answer_scheme = baseScheme || null;
+    }
+  }
 
   const updatePayload = {
     updated_at: new Date().toISOString(),

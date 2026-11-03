@@ -101,7 +101,7 @@ export default function ExamCoordinatorHome() {
 
   // Review & Workflow State (Module 22)
   const [reviewModalPaper, setReviewModalPaper] = useState(null);
-  const [reviewAction, setReviewAction] = useState('RECOMMEND');
+  const [reviewAction, setReviewAction] = useState('APPROVE');
   const [reviewComments, setReviewComments] = useState('');
   const [submittingReview, setSubmittingReview] = useState(false);
 
@@ -1254,7 +1254,7 @@ export default function ExamCoordinatorHome() {
                                 <button
                                   onClick={() => {
                                     setReviewModalPaper(paper);
-                                    setReviewAction('RECOMMEND');
+                                    setReviewAction('APPROVE');
                                     setReviewComments(paper.reviewComments || '');
                                   }}
                                   style={{
@@ -1263,7 +1263,7 @@ export default function ExamCoordinatorHome() {
                                     color: '#ffffff',
                                     borderColor: '#0369a1',
                                   }}
-                                  title="Review question paper and recommend to Admin, return, or reject"
+                                  title="Review question paper and approve, return for revision, or reject"
                                 >
                                   <ClipboardCheck size={14} />
                                   <span>Review</span>
@@ -2023,24 +2023,24 @@ export default function ExamCoordinatorHome() {
 
                 <div style={{ ...styles.modalSection, marginTop: '1rem' }}>
                   <div style={styles.modalSectionTitle}>Coordinator Review Decision</div>
-                  <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem', marginBottom: '1rem' }}>
+                  <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.875rem' }}>
                       <input
                         type="radio"
                         name="reviewAction"
-                        value="RECOMMEND"
-                        checked={reviewAction === 'RECOMMEND'}
+                        value="APPROVE"
+                        checked={reviewAction === 'APPROVE'}
                         onChange={(e) => setReviewAction(e.target.value)}
                       />
-                      <span style={{ color: '#86efac', fontWeight: 600 }}>Recommend to Admin</span>
+                      <span style={{ color: '#86efac', fontWeight: 600 }}>Approve (Verified &amp; Approved)</span>
                     </label>
 
                     <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.875rem' }}>
                       <input
                         type="radio"
                         name="reviewAction"
-                        value="RETURN"
-                        checked={reviewAction === 'RETURN'}
+                        value="REVISION"
+                        checked={reviewAction === 'REVISION' || reviewAction === 'RETURN'}
                         onChange={(e) => setReviewAction(e.target.value)}
                       />
                       <span style={{ color: '#fde047', fontWeight: 600 }}>Return for Revision</span>
@@ -2060,7 +2060,7 @@ export default function ExamCoordinatorHome() {
 
                   <div>
                     <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: '0.4rem' }}>
-                      Review Comments / Guidance (Visible to Admin and Teacher)
+                      Review Comments &amp; Revision Guidance (Visible to Faculty Setter)
                     </label>
                     <textarea
                       value={reviewComments}
@@ -2095,11 +2095,11 @@ export default function ExamCoordinatorHome() {
                   disabled={submittingReview}
                   style={{
                     ...styles.modalDownloadBtn,
-                    backgroundColor: reviewAction === 'RECOMMEND' ? '#059669' : reviewAction === 'RETURN' ? '#d97706' : '#dc2626',
+                    backgroundColor: reviewAction === 'APPROVE' ? '#059669' : (reviewAction === 'REVISION' || reviewAction === 'RETURN') ? '#d97706' : '#dc2626',
                   }}
                 >
                   {submittingReview ? <Loader2 size={15} style={{ animation: 'spin 1s linear infinite' }} /> : <ClipboardCheck size={16} />}
-                  <span>Confirm Decision ({reviewAction})</span>
+                  <span>Confirm Decision ({reviewAction === 'APPROVE' ? 'Verified & Approved' : reviewAction === 'REVISION' ? 'Return for Revision' : 'Reject'})</span>
                 </button>
               </div>
             </form>
