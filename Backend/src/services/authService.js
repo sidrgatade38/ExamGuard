@@ -35,14 +35,34 @@ async function loginUser(email, password) {
   const normalizedEmail = email.trim().toLowerCase();
 
   // Query user attributes including is_deleted and role
-  const { data: user, error } = await supabase
-    .from('users')
-    .select('id, name, email, password_hash, role_id, is_active, is_deleted, phone, created_at, roles(id, name)')
-    .eq('email', normalizedEmail)
-    .maybeSingle();
+  let user = null;
+  let fetchError = null;
 
-  if (error) {
-    console.error('[AuthService] Supabase user query error:', error.message);
+  try {
+    const res = await supabase
+      .from('users')
+      .select('id, name, email, password_hash, role_id, is_active, is_deleted, created_at, roles(id, name)')
+      .eq('email', normalizedEmail)
+      .maybeSingle();
+    user = res.data;
+    fetchError = res.error;
+  } catch (err) {
+    fetchError = err;
+  }
+
+  // Graceful fallback if is_deleted column is not present
+  if (fetchError && (fetchError.message?.includes('is_deleted') || fetchError.code === '42703')) {
+    const resFallback = await supabase
+      .from('users')
+      .select('id, name, email, password_hash, role_id, is_active, created_at, roles(id, name)')
+      .eq('email', normalizedEmail)
+      .maybeSingle();
+    user = resFallback.data;
+    fetchError = resFallback.error;
+  }
+
+  if (fetchError) {
+    console.error('[AuthService] Supabase user query error:', fetchError.message || fetchError);
     const dbErr = new Error('Authentication service temporarily unavailable');
     dbErr.statusCode = 500;
     throw dbErr;
@@ -94,12 +114,15 @@ async function loginUser(email, password) {
     roleId: user.role_id,
     role: roleName,
     department: 'Department of Computer Engineering',
-    phone: user.phone || null,
+    phone: null,
   };
 
   if (roleName === 'TEACHER') {
     try {
       safeUser.profile = await getOrCreateTeacherProfile(user.id, user);
+      if (safeUser.profile?.mobileNumber || safeUser.profile?.phone) {
+        safeUser.phone = safeUser.profile.mobileNumber || safeUser.profile.phone;
+      }
     } catch (_) {
       safeUser.profile = {
         userId: user.id,
@@ -111,8 +134,8 @@ async function loginUser(email, password) {
         specialization: 'Computer Engineering & System Architecture',
         qualification: 'M.E. (Computer Engineering)',
         experienceYears: 5.0,
-        phone: user.phone || '',
-        mobileNumber: user.phone || '',
+        phone: '',
+        mobileNumber: '',
         isActive: true,
         isProfileComplete: true,
         createdAt: user.created_at,
@@ -216,10 +239,9 @@ async function registerTeacher({
         role_id: teacherRole.id,
         is_active: true,
         is_deleted: false,
-        phone: contactNumber || null,
       },
     ])
-    .select('id, name, email, role_id, is_active, phone, created_at')
+    .select('id, name, email, role_id, is_active, created_at')
     .single();
 
   if (userError || !newUser) {
@@ -303,7 +325,7 @@ async function registerTeacher({
 async function getUserById(userId) {
   const { data: user, error } = await supabase
     .from('users')
-    .select('id, name, email, role_id, is_active, phone, created_at, roles(id, name)')
+    .select('id, name, email, role_id, is_active, created_at, roles(id, name)')
     .eq('id', userId)
     .maybeSingle();
 
@@ -320,7 +342,7 @@ async function getUserById(userId) {
     roleId: user.role_id,
     role: roleName,
     department: 'Department of Computer Engineering',
-    phone: user.phone || null,
+    phone: null,
     createdAt: user.created_at,
   };
 }
@@ -336,7 +358,7 @@ async function getOrCreateTeacherProfile(userId, preloadedUser = null) {
     if (!user) {
       const { data: fetchedUser } = await supabase
         .from('users')
-        .select('id, name, email, is_active, phone, created_at, updated_at, roles(name)')
+        .select('id, name, email, is_active, created_at, updated_at, roles(name)')
         .eq('id', userId)
         .maybeSingle();
       user = fetchedUser;
@@ -462,12 +484,13 @@ async function updateTeacherProfile(userId, profileData, requesterRole) {
     }
   }
 
-  // Update user name and phone in users table if changed
+  // Update user name in users table if changed
   try {
     const userUpdates = { updated_at: new Date().toISOString() };
     if (name && typeof name === 'string' && name.trim()) userUpdates.name = name.trim();
-    if (cleanPhone) userUpdates.phone = cleanPhone;
-    await supabase.from('users').update(userUpdates).eq('id', userId);
+    if (Object.keys(userUpdates).length > 1) {
+      await supabase.from('users').update(userUpdates).eq('id', userId);
+    }
   } catch (_) {}
 
   // Faculty ID is immutable for ordinary faculty

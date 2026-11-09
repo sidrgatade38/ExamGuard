@@ -143,7 +143,7 @@ async function listUsers({
   // Build Supabase query
   let query = supabase
     .from('users')
-    .select('id, name, email, role_id, is_active, is_deleted, deleted_at, phone, created_at, updated_at, roles!role_id (id, name)', {
+    .select('id, name, email, role_id, is_active, is_deleted, created_at, updated_at, roles!role_id (id, name)', {
       count: 'exact',
     });
 
@@ -182,6 +182,29 @@ async function listUsers({
     const dbErr = new Error('Failed to retrieve users');
     dbErr.statusCode = 500;
     throw dbErr;
+  }
+
+  // Enrich phone numbers from teacher_profiles for faculty
+  if (users && users.length > 0) {
+    try {
+      const userIds = users.map((u) => u.id);
+      const { data: profiles } = await supabase
+        .from('teacher_profiles')
+        .select('user_id, phone, mobile_number')
+        .in('user_id', userIds);
+
+      if (profiles && profiles.length > 0) {
+        const phoneMap = new Map();
+        profiles.forEach((p) => {
+          phoneMap.set(p.user_id, p.mobile_number || p.phone);
+        });
+        users.forEach((u) => {
+          if (phoneMap.has(u.id)) {
+            u.phone = phoneMap.get(u.id);
+          }
+        });
+      }
+    } catch (_) {}
   }
 
   // Filter in-memory by role name if specified
@@ -837,13 +860,12 @@ async function deleteUser(targetUserId, adminUserId, clientContext = {}) {
     .update({
       is_active: false,
       is_deleted: true,
-      deleted_at: now,
       deleted_by: adminUserId,
       password_hash: revokedPasswordHash,
       updated_at: now,
     })
     .eq('id', targetUserId.trim())
-    .select('id, name, email, role_id, is_active, is_deleted, deleted_at, phone, created_at, updated_at, roles!role_id (id, name)')
+    .select('id, name, email, role_id, is_active, is_deleted, created_at, updated_at, roles!role_id (id, name)')
     .single();
 
   if (updateErr) {
@@ -940,7 +962,19 @@ async function updateUser(targetUserId, updateData, adminUserId, clientContext =
   }
 
   if (phone !== undefined) {
-    updates.phone = phone ? phone.trim() : null;
+    try {
+      await supabase
+        .from('teacher_profiles')
+        .upsert(
+          {
+            user_id: targetUserId.trim(),
+            phone: phone ? phone.trim() : '',
+            mobile_number: phone ? phone.trim() : '',
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'user_id' }
+        );
+    } catch (_) {}
   }
 
   if (role && typeof role === 'string' && role.trim()) {
@@ -952,7 +986,7 @@ async function updateUser(targetUserId, updateData, adminUserId, clientContext =
     .from('users')
     .update(updates)
     .eq('id', targetUserId.trim())
-    .select('id, name, email, role_id, is_active, is_deleted, deleted_at, phone, created_at, updated_at, roles!role_id (id, name)')
+    .select('id, name, email, role_id, is_active, is_deleted, created_at, updated_at, roles!role_id (id, name)')
     .single();
 
   if (updateErr) {
