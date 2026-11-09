@@ -48,23 +48,23 @@ router.get('/teacher-profile', getTeacherProfile);
 router.get('/paper-titles', getPaperTitles);
 router.get('/designations', getDesignations);
 
-// Admin-only CRUD operations
+// Role-authorized CRUD operations (Admin and Teacher can add subjects and academic fields)
 router.post('/designations', authorizeRoles('ADMIN'), createDesignation);
 router.delete('/designations/:name', authorizeRoles('ADMIN'), deleteDesignation);
 
-router.post('/paper-titles', authorizeRoles('ADMIN'), createPaperTitle);
+router.post('/paper-titles', authorizeRoles('ADMIN', 'TEACHER'), createPaperTitle);
 router.put('/paper-titles/:id', authorizeRoles('ADMIN'), updatePaperTitle);
 router.delete('/paper-titles/:id', authorizeRoles('ADMIN'), deletePaperTitle);
 
-router.post('/patterns', authorizeRoles('ADMIN'), createPattern);
+router.post('/patterns', authorizeRoles('ADMIN', 'TEACHER'), createPattern);
 router.put('/patterns/:id', authorizeRoles('ADMIN'), updatePattern);
 router.delete('/patterns/:id', authorizeRoles('ADMIN'), deletePattern);
 
-router.post('/subjects', authorizeRoles('ADMIN'), createSubject);
+router.post('/subjects', authorizeRoles('ADMIN', 'TEACHER'), createSubject);
 router.put('/subjects/:id', authorizeRoles('ADMIN'), updateSubject);
 router.delete('/subjects/:id', authorizeRoles('ADMIN'), deleteSubject);
 
-router.post('/courses', authorizeRoles('ADMIN'), createCourse);
+router.post('/courses', authorizeRoles('ADMIN', 'TEACHER'), createCourse);
 router.put('/courses/:id', authorizeRoles('ADMIN'), updateCourse);
 router.delete('/courses/:id', authorizeRoles('ADMIN'), deleteCourse);
 

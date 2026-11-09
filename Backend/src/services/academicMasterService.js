@@ -300,6 +300,7 @@ async function getOutcomes() {
 
 /**
  * Retrieves subjects with support for acronym search (e.g. DAA), codes, and teacher restrictions.
+ * Combines database records with the complete Computer Engineering academic catalog (FE to BE).
  */
 async function getSubjects({ departmentCode, courseCode, patternCode, semester, search, teacherId } = {}) {
   let authorizedSubjectIds = null;
@@ -318,64 +319,79 @@ async function getSubjects({ departmentCode, courseCode, patternCode, semester, 
     } catch (_) {}
   }
 
+  // Combine database subjects with comprehensive Computer Engineering catalog + inMemorySubjects
+  const subjectMap = new Map();
+
+  // 1. Add all standard Computer Engineering catalog subjects
+  for (const s of inMemorySubjects) {
+    subjectMap.set(s.code, {
+      id: s.id,
+      code: s.code,
+      shortName: s.shortName || SHORT_NAME_MAP[s.code] || s.code,
+      title: s.title,
+      semester: s.semester,
+      totalMarks: s.totalMarks || 70,
+      durationHours: s.durationHours || 2.5,
+      departmentCode: s.departmentCode || 'COMP',
+      courseCode: s.courseCode,
+      patternCode: s.patternCode,
+      patternName: s.patternName,
+    });
+  }
+
+  // 2. Overlay any database subjects
   try {
-    const { data, error } = await supabase
+    const { data: dbData } = await supabase
       .from('academic_subjects')
-      .select('id, code, title, semester_label, total_marks, duration_hours, department_id, course_id, pattern_id')
+      .select('id, code, title, semester_label, total_marks, duration_hours')
       .eq('is_active', true);
 
-    if (!error && data && data.length > 0) {
-      let mapped = data.map((s) => ({
-        id: s.id,
-        code: s.code,
-        shortName: SHORT_NAME_MAP[s.code] || s.code,
-        title: s.title,
-        semester: s.semester_label,
-        totalMarks: s.total_marks,
-        durationHours: s.duration_hours,
-      }));
-
-      // Filter by teacher authorization if scoped
-      if (authorizedSubjectIds) {
-        mapped = mapped.filter((s) => authorizedSubjectIds.has(s.id));
-      }
-
-      // Filter by search term (handles full name, code, or short name like DAA)
-      if (search && search.trim()) {
-        const term = search.trim().toLowerCase();
-        mapped = mapped.filter((s) => {
-          const matchTitle = s.title.toLowerCase().includes(term);
-          const matchCode = s.code.toLowerCase().includes(term);
-          const matchShort = (s.shortName || '').toLowerCase().includes(term);
-          return matchTitle || matchCode || matchShort;
+    if (dbData && dbData.length > 0) {
+      for (const s of dbData) {
+        const existing = subjectMap.get(s.code) || {};
+        subjectMap.set(s.code, {
+          ...existing,
+          id: s.id,
+          code: s.code,
+          shortName: SHORT_NAME_MAP[s.code] || existing.shortName || s.code,
+          title: s.title,
+          semester: s.semester_label || existing.semester || 'Semester 5',
+          totalMarks: s.total_marks || existing.totalMarks || 70,
+          durationHours: s.duration_hours || existing.durationHours || 2.5,
         });
-      }
-
-      if (semester) {
-        mapped = mapped.filter((s) => s.semester.toLowerCase() === semester.trim().toLowerCase());
-      }
-
-      if (mapped.length > 0) {
-        return mapped;
       }
     }
   } catch (_) {}
 
-  // Filter fallback catalog
-  return FALLBACK_ACADEMIC_DATA.subjects.filter((s) => {
-    if (departmentCode && s.departmentCode.toLowerCase() !== departmentCode.toLowerCase()) return false;
-    if (courseCode && s.courseCode.toLowerCase() !== courseCode.toLowerCase()) return false;
-    if (patternCode && s.patternCode.toLowerCase() !== patternCode.toLowerCase()) return false;
-    if (semester && s.semester.toLowerCase() !== semester.toLowerCase()) return false;
-    if (search && search.trim()) {
-      const term = search.trim().toLowerCase();
-      const matchTitle = s.title.toLowerCase().includes(term);
-      const matchCode = s.code.toLowerCase().includes(term);
-      const matchShort = (s.shortName || '').toLowerCase().includes(term);
-      if (!matchTitle && !matchCode && !matchShort) return false;
+  let allSubjects = Array.from(subjectMap.values());
+
+  // Filter by teacher authorization if scoped and matches exist
+  if (authorizedSubjectIds && authorizedSubjectIds.size > 0) {
+    const authorizedOnly = allSubjects.filter((s) => authorizedSubjectIds.has(s.id) || authorizedSubjectIds.has(s.code));
+    if (authorizedOnly.length > 0) {
+      allSubjects = authorizedOnly;
     }
-    return true;
-  });
+  }
+
+  // Filter by search term
+  if (search && search.trim()) {
+    const term = search.trim().toLowerCase();
+    allSubjects = allSubjects.filter((s) => {
+      const matchTitle = (s.title || '').toLowerCase().includes(term);
+      const matchCode = (s.code || '').toLowerCase().includes(term);
+      const matchShort = (s.shortName || '').toLowerCase().includes(term);
+      return matchTitle || matchCode || matchShort;
+    });
+  }
+
+  if (semester) {
+    const semFiltered = allSubjects.filter((s) => (s.semester || '').toLowerCase() === semester.trim().toLowerCase());
+    if (semFiltered.length > 0) {
+      allSubjects = semFiltered;
+    }
+  }
+
+  return allSubjects;
 }
 
 /**

@@ -1590,50 +1590,6 @@ export default function ExamCoordinatorHome() {
             )}
           </section>
         )}
-
-        {/* SECURITY ARCHITECTURE BANNER */}
-        <section style={styles.securityBanner}>
-          <div style={styles.securityHeader}>
-            <ShieldCheck size={22} color="#10b981" />
-            <div>
-              <span style={styles.securityTitle}>ExamGuard End-to-End Cryptographic Security Guarantees</span>
-              <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: '#64748b' }}>
-                Strict implementation of RBAC, digital signatures, envelope encryption, and audit accountability.
-              </p>
-            </div>
-          </div>
-          <div style={styles.securityGrid}>
-            <div style={styles.securityFeature}>
-              <div style={styles.securityFeatureTitle}>
-                <Lock size={14} color="#38bdf8" style={{ marginRight: '6px' }} />
-                Verify-Before-Decrypt Invariant
-              </div>
-              <p style={styles.securityFeatureDesc}>
-                The server strictly evaluates ciphertext SHA-256 digests and RSA-PSS digital signatures before unwrapping the AES key. If the signature or ciphertext has been altered, decryption fails closed.
-              </p>
-            </div>
-
-            <div style={styles.securityFeature}>
-              <div style={styles.securityFeatureTitle}>
-                <Hash size={14} color="#38bdf8" style={{ marginRight: '6px' }} />
-                Envelope Encryption Scheme
-              </div>
-              <p style={styles.securityFeatureDesc}>
-                Question papers are encrypted with unique AES-256-GCM data encryption keys (DEKs). DEKs are wrapped using 2048-bit RSA-OAEP and stored separately from ciphertext in private storage.
-              </p>
-            </div>
-
-            <div style={styles.securityFeature}>
-              <div style={styles.securityFeatureTitle}>
-                <ShieldCheck size={14} color="#38bdf8" style={{ marginRight: '6px' }} />
-                Zero Secret Leakage
-              </div>
-              <p style={styles.securityFeatureDesc}>
-                Plaintext AES keys, initialization vectors, authentication tags, and RSA private keys are NEVER exposed in any API response or coordinator metadata view.
-              </p>
-            </div>
-          </div>
-        </section>
       </main>
 
       {/* QUESTION PAPER METADATA MODAL */}

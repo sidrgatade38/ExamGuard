@@ -37,6 +37,8 @@ import {
   Filter,
   Search,
   Repeat,
+  Settings,
+  RotateCcw,
 } from 'lucide-react';
 
 export default function QuestionPaperGeneratorWizard({ initialDraft = null, recipients = [], onSuccess, onCancel }) {
@@ -65,20 +67,20 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
     setTimeout(() => setWizardNotification({ type: '', message: '' }), 6000);
   };
 
-  // Blueprint State - Pristine Clean Initial State for New Paper
+  // Blueprint State - Pristine Clean Initial State for New Paper (Zero pre-filled values)
   const [blueprint, setBlueprint] = useState(() => {
     if (initialDraft?.blueprint || (initialDraft && initialDraft.subject)) {
       const bp = initialDraft.blueprint || initialDraft;
       return {
-        title: bp.title || initialDraft.title || 'End Sem Exam',
+        title: bp.title || initialDraft.title || '',
         subject: bp.subject || initialDraft.subject || '',
-        course: bp.course || initialDraft.course || 'B.E. (Computer Engineering)',
-        classYear: bp.classYear || initialDraft.classYear || 'TE',
-        semester: bp.semester || initialDraft.semester || 'Semester 5',
-        academicPattern: bp.academicPattern || initialDraft.academicPattern || '2019',
+        course: bp.course || initialDraft.course || '',
+        classYear: bp.classYear || initialDraft.classYear || '',
+        semester: bp.semester || initialDraft.semester || '',
+        academicPattern: bp.academicPattern || initialDraft.academicPattern || '',
         subjectCode: bp.subjectCode || initialDraft.subjectCode || '',
-        durationHours: bp.durationHours ?? initialDraft.durationHours ?? 2.5,
-        totalMarks: bp.totalMarks ?? initialDraft.totalMarks ?? 70,
+        durationHours: bp.durationHours ?? initialDraft.durationHours ?? '',
+        totalMarks: bp.totalMarks ?? initialDraft.totalMarks ?? '',
         instructions: bp.instructions || initialDraft.instructions || [
           'Answer all compulsory questions or choose alternatives where specified.',
           'Neat diagrams must be drawn wherever necessary.',
@@ -93,13 +95,13 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
     return {
       title: '',
       subject: '',
-      course: 'B.E. (Computer Engineering)',
+      course: '',
       classYear: '',
       semester: '',
       academicPattern: '',
       subjectCode: '',
-      durationHours: 2.5,
-      totalMarks: 70,
+      durationHours: '',
+      totalMarks: '',
       instructions: [
         'Answer all compulsory questions or choose alternatives where specified.',
         'Neat diagrams must be drawn wherever necessary.',
@@ -114,6 +116,33 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
 
   const [blueprintId, setBlueprintId] = useState(initialDraft?.blueprintId || null);
 
+  // Custom Field Toggle States for Step 1
+  const [isCustomTitle, setIsCustomTitle] = useState(false);
+  const [isCustomCourse, setIsCustomCourse] = useState(false);
+  const [isCustomClassYear, setIsCustomClassYear] = useState(false);
+  const [isCustomPattern, setIsCustomPattern] = useState(false);
+  const [isCustomSemester, setIsCustomSemester] = useState(false);
+  const [isCustomMarks, setIsCustomMarks] = useState(false);
+
+  // Marks Structure Customization State
+  const [customStructureModalOpen, setCustomStructureModalOpen] = useState(false);
+  const [customSectionsDraft, setCustomSectionsDraft] = useState([]);
+  const [isStructureCustomized, setIsStructureCustomized] = useState(Boolean(initialDraft?.blueprint?.sections?.length));
+
+  // Add Subject Modal State
+  const [addSubjectModalOpen, setAddSubjectModalOpen] = useState(false);
+  const [newSubjectForm, setNewSubjectForm] = useState({
+    title: '',
+    code: '',
+    shortName: '',
+    classYear: 'TE',
+    semester: 'Semester 5',
+    patternName: '2019',
+    totalMarks: 70,
+    durationHours: 2.5,
+  });
+  const [savingSubject, setSavingSubject] = useState(false);
+
   // Permitted Preview state in Step 4
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
 
@@ -127,6 +156,11 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
     { id: 'obt', title: 'Open Book Test' },
     { id: 'cce', title: 'CCE Exam' },
     { id: 'endsem', title: 'End Sem Exam' },
+    { id: 'insem', title: 'In-Sem Exam' },
+    { id: 'ut1', title: 'Unit Test 1' },
+    { id: 'ut2', title: 'Unit Test 2' },
+    { id: 'prelim', title: 'Preliminary Exam' },
+    { id: 'reexam', title: 'Re-Examination' },
   ]);
   const [subjectSearch, setSubjectSearch] = useState('');
   const [teacherProfile, setTeacherProfile] = useState(null);
@@ -165,17 +199,18 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
     ],
   });
 
+  // Clean initial state for question creation (No pre-selected values)
   const [newQuestionForm, setNewQuestionForm] = useState({
-    unitNumber: 1,
-    unitTitle: 'Unit 1',
+    unitNumber: '',
+    unitTitle: '',
     topic: '',
     questionText: '',
     questionType: 'DESCRIPTIVE',
-    marks: 8,
-    difficulty: 'MEDIUM',
-    courseOutcome: 'CO1',
-    programOutcome: 'PO1',
-    bloomTaxonomy: 'L2 - Understand',
+    marks: '',
+    difficulty: '',
+    courseOutcome: '',
+    programOutcome: '',
+    bloomTaxonomy: '',
     answerScheme: '',
     image: null,
   });
@@ -493,11 +528,11 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
     showNotification('New question section added. Marks and numbering recalculated.', 'success');
   };
 
-  // Final Approval & Submission State
+  // Final Approval & Submission State (Clean initial state)
   const defaultCoord = recipients.find((r) => r.role === 'EXAM_COORDINATOR') || recipients[0];
   const [submissionForm, setSubmissionForm] = useState({
     assignedToUserId: defaultCoord ? defaultCoord.id : '',
-    examDate: new Date(Date.now() + 86400000 * 7).toISOString().split('T')[0],
+    examDate: '',
     confirmedApproval: false,
   });
   const [submitting, setSubmitting] = useState(false);
@@ -539,7 +574,7 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
     }
   };
 
-  // 1. Initial Load of Academic Master Data
+  // 1. Initial Load of Academic Master Data (Pristine catalog load without auto-populating fields)
   useEffect(() => {
     async function loadAcademicCatalogs() {
       try {
@@ -567,11 +602,16 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
 
         const semsList = semestersData.data || [];
 
-        // Canonical Paper Titles strictly: Open Book Test, CCE Exam, End Sem Exam (Section 6)
+        // Canonical Paper Titles strictly: Open Book Test, CCE Exam, End Sem Exam, plus standard exams
         const titlesList = [
           { id: 'obt', title: 'Open Book Test' },
           { id: 'cce', title: 'CCE Exam' },
           { id: 'endsem', title: 'End Sem Exam' },
+          { id: 'insem', title: 'In-Sem Exam' },
+          { id: 'ut1', title: 'Unit Test 1' },
+          { id: 'ut2', title: 'Unit Test 2' },
+          { id: 'prelim', title: 'Preliminary Exam' },
+          { id: 'reexam', title: 'Re-Examination' },
         ];
 
         setDepartments(deptsList);
@@ -587,32 +627,21 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
           setTeacherProfile(profileData.data);
         }
 
-        // Fetch subjects for default selections - use teacher's assigned subjects if available
-        let subsList = [];
-        if (profileData?.data?.subjects && profileData.data.subjects.length > 0) {
-          subsList = profileData.data.subjects;
-        } else {
-          const subsData = await academicService.getSubjects({
-            departmentCode: selectedDept,
-          }).catch(() => ({ data: [] }));
-          subsList = subsData.data || [];
-        }
+        // Fetch ALL subjects for the Computer Engineering Department so the dropdown contains the complete curriculum (35+ subjects)
+        const subsData = await academicService.getSubjects({
+          departmentCode: selectedDept || 'COMP',
+        }).catch(() => ({ data: [] }));
+        const subsList = subsData.data || [];
 
         setSubjects(subsList);
 
+        // If resuming an existing draft, populate matching subject and units
         if (initialDraft && subsList.length > 0) {
-          const firstSub = subsList.find(s => s.title === initialDraft.subject || s.code === initialDraft.subjectCode) || subsList[0];
-          setBlueprint((prev) => ({
-            ...prev,
-            title: prev.title || 'End Sem Exam',
-            subject: prev.subject || firstSub.title,
-            subjectCode: prev.subjectCode || firstSub.code,
-            semester: prev.semester || firstSub.semester || 'Semester 5',
-            academicPattern: prev.academicPattern || firstSub.patternName || '2019',
-          }));
-
-          const unitsRes = await academicService.getUnitsForSubject(firstSub.code).catch(() => ({ data: [] }));
-          setSubjectUnits(unitsRes.data || []);
+          const matchedSub = subsList.find(s => s.title === initialDraft.subject || s.code === initialDraft.subjectCode);
+          if (matchedSub) {
+            const unitsRes = await academicService.getUnitsForSubject(matchedSub.code).catch(() => ({ data: [] }));
+            setSubjectUnits(unitsRes.data || []);
+          }
         }
       } catch (err) {
         console.warn('Academic master catalogs loading notice:', err.message);
@@ -623,7 +652,7 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
     loadAcademicCatalogs();
   }, []);
 
-  // 2. Cascade when Department or Course changes
+  // 2. Cascade when Department or Course changes (Does not force unwanted prefilled data)
   const handleDepartmentChange = async (deptCode) => {
     setSelectedDept(deptCode);
     try {
@@ -631,23 +660,8 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
         academicService.getCourses(deptCode),
         academicService.getSubjects({ departmentCode: deptCode }),
       ]);
-      const newCourses = coursesRes.data || [];
-      const newSubs = subsRes.data || [];
-      setCourses(newCourses);
-      setSubjects(newSubs);
-
-      if (newSubs.length > 0) {
-        const sub = newSubs[0];
-        setBlueprint((prev) => ({
-          ...prev,
-          title: prev.title || '',
-          subject: sub.title,
-          subjectCode: sub.code,
-          course: newCourses[0]?.name || prev.course,
-        }));
-        const unitsRes = await academicService.getUnitsForSubject(sub.code).catch(() => ({ data: [] }));
-        setSubjectUnits(unitsRes.data || []);
-      }
+      setCourses(coursesRes.data || []);
+      setSubjects(subsRes.data || []);
     } catch (err) {
       console.warn('Failed updating department cascade:', err);
     }
@@ -655,6 +669,16 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
 
   // 3. Subject selection handler
   const handleSubjectChange = async (selectedSubTitle) => {
+    if (selectedSubTitle === '__NEW_SUBJECT__') {
+      setAddSubjectModalOpen(true);
+      return;
+    }
+    if (!selectedSubTitle) {
+      setBlueprint((prev) => ({ ...prev, subject: '', subjectCode: '' }));
+      setSubjectUnits([]);
+      return;
+    }
+
     const subObj = subjects.find(
       (s) =>
         s.title === selectedSubTitle ||
@@ -669,29 +693,92 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
 
     setBlueprint((prev) => ({
       ...prev,
-      title: prev.title || '',
       subject: subObj.title,
       subjectCode: subObj.code,
-      totalMarks: prev.totalMarks || subObj.totalMarks || 70,
-      durationHours: subObj.durationHours || prev.durationHours || 2.5,
-      semester: subObj.semester || prev.semester,
-      academicPattern: subObj.patternName || prev.academicPattern,
+      totalMarks: prev.totalMarks || subObj.totalMarks || '',
+      durationHours: prev.durationHours || subObj.durationHours || (prev.totalMarks ? (prev.totalMarks <= 30 ? 1.0 : prev.totalMarks <= 60 ? 2.0 : 2.5) : ''),
+      semester: prev.semester || subObj.semester || '',
+      academicPattern: prev.academicPattern || subObj.patternName || '',
     }));
 
     try {
       const unitsRes = await academicService.getUnitsForSubject(subObj.code);
       const units = unitsRes.data || [];
       setSubjectUnits(units);
-      if (units.length > 0) {
-        setNewQuestionForm((prev) => ({
-          ...prev,
-          unitNumber: units[0].unitNumber,
-          unitTitle: `Unit ${units[0].unitNumber}`,
-        }));
-      }
     } catch (err) {
       console.warn('Failed loading units for subject:', err);
     }
+  };
+
+  // 4. Create Subject Handler for "+ Add Subject" modal
+  const handleCreateSubjectSubmit = async (e) => {
+    e.preventDefault();
+    if (!newSubjectForm.title.trim() || !newSubjectForm.code.trim()) {
+      showNotification('Please enter both subject title and subject code.', 'error');
+      return;
+    }
+    setSavingSubject(true);
+    try {
+      const payload = {
+        title: newSubjectForm.title.trim(),
+        code: newSubjectForm.code.trim().toUpperCase(),
+        shortName: (newSubjectForm.shortName.trim() || newSubjectForm.code.trim()).toUpperCase(),
+        semester: newSubjectForm.semester || 'Semester 5',
+        patternName: newSubjectForm.patternName || '2019',
+        courseCode: 'COMP',
+        totalMarks: Number(newSubjectForm.totalMarks) || 70,
+        durationHours: Number(newSubjectForm.durationHours) || 2.5,
+      };
+      const res = await academicService.createSubject(payload);
+      const created = res.data || res;
+      setSubjects((prev) => [created, ...prev]);
+      setBlueprint((prev) => ({
+        ...prev,
+        subject: created.title,
+        subjectCode: created.code,
+        semester: created.semester || prev.semester,
+        academicPattern: created.patternName || prev.academicPattern,
+        totalMarks: created.totalMarks || prev.totalMarks,
+        durationHours: created.durationHours || prev.durationHours,
+      }));
+      setSubjectUnits([
+        { unitNumber: 1, unitTitle: 'Unit 1: Fundamentals & Theory' },
+        { unitNumber: 2, unitTitle: 'Unit 2: Architecture & Algorithms' },
+        { unitNumber: 3, unitTitle: 'Unit 3: Implementation & Analysis' },
+        { unitNumber: 4, unitTitle: 'Unit 4: Applications & Security' },
+      ]);
+      setAddSubjectModalOpen(false);
+      setNewSubjectForm({
+        title: '',
+        code: '',
+        shortName: '',
+        classYear: 'TE',
+        semester: 'Semester 5',
+        patternName: '2019',
+        totalMarks: 70,
+        durationHours: 2.5,
+      });
+      showNotification(`Subject "${created.title}" successfully created and selected for this question paper!`, 'success');
+    } catch (err) {
+      showNotification(err.response?.data?.message || err.message || 'Failed to add subject', 'error');
+    } finally {
+      setSavingSubject(false);
+    }
+  };
+
+  // 5. Customize Structure Handlers
+  const handleOpenCustomizeStructure = () => {
+    const sectionsToEdit = (blueprint.sections && blueprint.sections.length > 0)
+      ? JSON.parse(JSON.stringify(blueprint.sections))
+      : JSON.parse(JSON.stringify(getDynamicSections()));
+    setCustomSectionsDraft(sectionsToEdit);
+    setCustomStructureModalOpen(true);
+  };
+
+  const handleResetStructure = () => {
+    setBlueprint((prev) => ({ ...prev, sections: [] }));
+    setIsStructureCustomized(false);
+    showNotification('Marks structure reset to standard university template.', 'success');
   };
 
   // Load Question Bank when arriving at Step 2 or 3
@@ -743,18 +830,20 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
       }
       setNewQuestionModalOpen(false);
       setEditingQuestionId(null);
-      setNewQuestionForm((prev) => ({
-        ...prev,
+      setNewQuestionForm({
+        unitNumber: '',
+        unitTitle: '',
         topic: '',
         questionText: '',
-        marks: 8,
-        difficulty: 'MEDIUM',
-        courseOutcome: 'CO1',
-        programOutcome: 'PO1',
-        bloomTaxonomy: 'L2 - Understand',
+        questionType: 'DESCRIPTIVE',
+        marks: '',
+        difficulty: '',
+        courseOutcome: '',
+        programOutcome: '',
+        bloomTaxonomy: '',
         answerScheme: '',
         image: null,
-      }));
+      });
       await loadQuestions();
     } catch (err) {
       showNotification(err.response?.data?.message || err.message || 'Failed to save question', 'error');
@@ -764,16 +853,16 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
   const handleOpenEditQuestion = (q) => {
     setEditingQuestionId(q.id);
     setNewQuestionForm({
-      unitNumber: q.unitNumber || 1,
-      unitTitle: q.unitTitle || `Unit ${q.unitNumber || 1}`,
+      unitNumber: q.unitNumber || '',
+      unitTitle: q.unitTitle || (q.unitNumber ? `Unit ${q.unitNumber}` : ''),
       topic: q.topic || '',
       questionText: q.questionText || q.text || '',
       questionType: q.questionType || 'DESCRIPTIVE',
-      marks: q.marks || 8,
-      difficulty: q.difficulty || 'MEDIUM',
-      courseOutcome: q.courseOutcome || q.course_outcome || 'CO1',
-      programOutcome: q.programOutcome || q.program_outcome || 'PO1',
-      bloomTaxonomy: q.bloomTaxonomy || q.bloom_taxonomy || 'L2 - Understand',
+      marks: q.marks || '',
+      difficulty: q.difficulty || '',
+      courseOutcome: q.courseOutcome || q.course_outcome || '',
+      programOutcome: q.programOutcome || q.program_outcome || '',
+      bloomTaxonomy: q.bloomTaxonomy || q.bloom_taxonomy || '',
       answerScheme: q.answerScheme || '',
       image: q.image ? (typeof q.image === 'string' ? { dataUrl: q.image, name: 'Attached Diagram' } : q.image) : null,
     });
@@ -783,16 +872,16 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
   const handleOpenCreateQuestion = () => {
     setEditingQuestionId(null);
     setNewQuestionForm({
-      unitNumber: 1,
-      unitTitle: 'Unit 1',
+      unitNumber: '',
+      unitTitle: '',
       topic: '',
       questionText: '',
       questionType: 'DESCRIPTIVE',
-      marks: 8,
-      difficulty: 'MEDIUM',
-      courseOutcome: 'CO1',
-      programOutcome: 'PO1',
-      bloomTaxonomy: 'L2 - Understand',
+      marks: '',
+      difficulty: '',
+      courseOutcome: '',
+      programOutcome: '',
+      bloomTaxonomy: '',
       answerScheme: '',
       image: null,
     });
@@ -954,34 +1043,41 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
 
   // Step 1 -> 2: Save / Create Blueprint
   const handleProceedToBank = async () => {
-    if (!blueprint.title) {
+    if (!blueprint.title || !blueprint.title.trim()) {
       showNotification('Please select or specify an Examination Paper Title (e.g. End Sem Exam, CCE Exam, Open Book Test).', 'error');
       return;
     }
-    if (!blueprint.classYear) {
+    if (!blueprint.course || !blueprint.course.trim()) {
+      showNotification('Please select or specify the Course / Degree (e.g. B.E. Computer Engineering).', 'error');
+      return;
+    }
+    if (!blueprint.classYear || !blueprint.classYear.trim()) {
       showNotification('Please select the Class / Year (FE, SE, TE, or BE).', 'error');
       return;
     }
-    if (!blueprint.academicPattern) {
-      showNotification('Please select the Academic Pattern (e.g. 2019, 2024, 2025).', 'error');
+    if (!blueprint.academicPattern || !blueprint.academicPattern.trim()) {
+      showNotification('Please select or specify the Academic Pattern (e.g. 2019, 2024, 2025).', 'error');
       return;
     }
-    if (!blueprint.semester) {
+    if (!blueprint.semester || !blueprint.semester.trim()) {
       showNotification('Please select the Semester for this examination.', 'error');
       return;
     }
-    if (!blueprint.subject) {
+    if (!blueprint.subject || !blueprint.subject.trim()) {
       showNotification('Please select the Subject for this question paper.', 'error');
       return;
     }
-    if (!blueprint.totalMarks || blueprint.totalMarks <= 0) {
-      showNotification('Please enter a valid positive whole-number for Total Examination Marks.', 'error');
+    const tm = Number(blueprint.totalMarks);
+    if (!tm || tm <= 0) {
+      showNotification('Please enter or select a valid positive whole-number for Total Examination Marks.', 'error');
       return;
     }
     try {
       const dynamicSections = getDynamicSections();
       const payload = {
         ...blueprint,
+        durationHours: Number(blueprint.durationHours) || (tm <= 30 ? 1.0 : tm <= 60 ? 2.0 : 2.5),
+        totalMarks: tm,
         sections: dynamicSections,
       };
       const res = await blueprintService.createBlueprint(payload);
@@ -1242,22 +1338,53 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
           </div>
 
           <div style={styles.grid2}>
-            {/* Paper Title Dropdown (Strict Module 7.1 Requirement: Open Book Test, CCE Exam, End Sem Exam) */}
+            {/* Paper Title Dropdown / Custom Field */}
             <div style={{ gridColumn: 'span 2' }}>
-              <label style={styles.label}>
-                Paper Title <span style={{ color: '#ef4444' }}>*</span>
-              </label>
-              <select
-                style={styles.select}
-                value={blueprint.title || 'End Sem Exam'}
-                onChange={(e) => setBlueprint({ ...blueprint, title: e.target.value })}
-              >
-                {paperTitlesList.map((t) => (
-                  <option key={t.id} value={t.title}>
-                    {t.title}
-                  </option>
-                ))}
-              </select>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                <label style={styles.label}>
+                  Paper Title <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCustomTitle(!isCustomTitle);
+                    if (!isCustomTitle) setBlueprint((p) => ({ ...p, title: '' }));
+                  }}
+                  style={{ background: 'none', border: 'none', color: '#0284c7', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
+                >
+                  {isCustomTitle ? '← Choose from Standard Titles' : '+ Add Custom Paper Title'}
+                </button>
+              </div>
+              {isCustomTitle ? (
+                <input
+                  type="text"
+                  style={styles.input}
+                  placeholder="Type custom paper title (e.g. Unit Test 1, Preliminary Examination, Re-Exam)..."
+                  value={blueprint.title}
+                  onChange={(e) => setBlueprint({ ...blueprint, title: e.target.value })}
+                />
+              ) : (
+                <select
+                  style={styles.select}
+                  value={blueprint.title}
+                  onChange={(e) => {
+                    if (e.target.value === '__CUSTOM__') {
+                      setIsCustomTitle(true);
+                      setBlueprint({ ...blueprint, title: '' });
+                    } else {
+                      setBlueprint({ ...blueprint, title: e.target.value });
+                    }
+                  }}
+                >
+                  <option value="">-- Select Paper Title --</option>
+                  {paperTitlesList.map((t) => (
+                    <option key={t.id} value={t.title}>
+                      {t.title}
+                    </option>
+                  ))}
+                  <option value="__CUSTOM__">+ Add Custom Paper Title...</option>
+                </select>
+              )}
             </div>
 
             {/* Academic Department (Strict Module 1 Requirement: Fixed to Computer Engineering) */}
@@ -1295,124 +1422,327 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
 
             {/* Course / Degree Selection */}
             <div>
-              <label style={styles.label}>Course / Degree</label>
-              <select
-                style={styles.select}
-                value={blueprint.course}
-                onChange={(e) => setBlueprint({ ...blueprint, course: e.target.value })}
-              >
-                {courses.map((c) => (
-                  <option key={c.id} value={c.name}>
-                    {c.name} ({c.degree || 'B.E.'})
-                  </option>
-                ))}
-                {courses.length === 0 && <option value="T.E. (Computer Engineering)">T.E. (Computer Engineering)</option>}
-              </select>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                <label style={styles.label}>Course / Degree</label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCustomCourse(!isCustomCourse);
+                    if (!isCustomCourse) setBlueprint((p) => ({ ...p, course: '' }));
+                  }}
+                  style={{ background: 'none', border: 'none', color: '#0284c7', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
+                >
+                  {isCustomCourse ? '← Choose from List' : '+ Add Custom Course'}
+                </button>
+              </div>
+              {isCustomCourse ? (
+                <input
+                  type="text"
+                  style={styles.input}
+                  placeholder="e.g. B.Tech (Artificial Intelligence & Data Science)"
+                  value={blueprint.course}
+                  onChange={(e) => setBlueprint({ ...blueprint, course: e.target.value })}
+                />
+              ) : (
+                <select
+                  style={styles.select}
+                  value={blueprint.course}
+                  onChange={(e) => {
+                    if (e.target.value === '__CUSTOM__') {
+                      setIsCustomCourse(true);
+                      setBlueprint({ ...blueprint, course: '' });
+                    } else {
+                      setBlueprint({ ...blueprint, course: e.target.value });
+                    }
+                  }}
+                >
+                  <option value="">-- Select Course / Degree --</option>
+                  {courses.map((c) => (
+                    <option key={c.id} value={c.name}>
+                      {c.name} ({c.degree || 'B.E.'})
+                    </option>
+                  ))}
+                  {courses.length === 0 && (
+                    <>
+                      <option value="B.E. (Computer Engineering)">B.E. (Computer Engineering)</option>
+                      <option value="B.Tech (Computer Science & Engineering)">B.Tech (Computer Science & Engineering)</option>
+                      <option value="M.E. (Computer Engineering)">M.E. (Computer Engineering)</option>
+                    </>
+                  )}
+                  <option value="__CUSTOM__">+ Add Custom Course...</option>
+                </select>
+              )}
             </div>
 
             {/* Class / Year Selection (FE, SE, TE, BE, ME) */}
             <div>
-              <label style={styles.label}>Class / Year</label>
-              <select
-                style={styles.select}
-                value={blueprint.classYear || 'TE'}
-                onChange={(e) => setBlueprint({ ...blueprint, classYear: e.target.value })}
-              >
-                <option value="FE">FE — First Year Engineering</option>
-                <option value="SE">SE — Second Year Engineering</option>
-                <option value="TE">TE — Third Year Engineering</option>
-                <option value="BE">BE — Final Year Engineering</option>
-                <option value="ME">ME — Master of Engineering (Post-Graduate)</option>
-              </select>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                <label style={styles.label}>Class / Year</label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCustomClassYear(!isCustomClassYear);
+                    if (!isCustomClassYear) setBlueprint((p) => ({ ...p, classYear: '' }));
+                  }}
+                  style={{ background: 'none', border: 'none', color: '#0284c7', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
+                >
+                  {isCustomClassYear ? '← Choose from List' : '+ Add Custom Class'}
+                </button>
+              </div>
+              {isCustomClassYear ? (
+                <input
+                  type="text"
+                  style={styles.input}
+                  placeholder="e.g. FY M.Tech, Third Year Honours"
+                  value={blueprint.classYear}
+                  onChange={(e) => setBlueprint({ ...blueprint, classYear: e.target.value })}
+                />
+              ) : (
+                <select
+                  style={styles.select}
+                  value={blueprint.classYear}
+                  onChange={(e) => {
+                    if (e.target.value === '__CUSTOM__') {
+                      setIsCustomClassYear(true);
+                      setBlueprint({ ...blueprint, classYear: '' });
+                    } else {
+                      setBlueprint({ ...blueprint, classYear: e.target.value });
+                    }
+                  }}
+                >
+                  <option value="">-- Select Class / Year --</option>
+                  <option value="FE">FE — First Year Engineering</option>
+                  <option value="SE">SE — Second Year Engineering</option>
+                  <option value="TE">TE — Third Year Engineering</option>
+                  <option value="BE">BE — Final Year Engineering</option>
+                  <option value="ME">ME — Master of Engineering (Post-Graduate)</option>
+                  <option value="__CUSTOM__">+ Add Custom Class / Year...</option>
+                </select>
+              )}
             </div>
 
-            {/* Academic Pattern Selection (Strict Module 7.2: 2019, 2024, 2025; no 2015) */}
+            {/* Academic Pattern Selection */}
             <div>
-              <label style={styles.label}>Academic Pattern <span style={{ color: '#ef4444' }}>*</span></label>
-              <select
-                style={styles.select}
-                value={blueprint.academicPattern}
-                onChange={(e) => setBlueprint({ ...blueprint, academicPattern: e.target.value })}
-              >
-                {patterns.length > 0 ? (
-                  patterns.map((p) => (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                <label style={styles.label}>
+                  Academic Pattern <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCustomPattern(!isCustomPattern);
+                    if (!isCustomPattern) setBlueprint((p) => ({ ...p, academicPattern: '' }));
+                  }}
+                  style={{ background: 'none', border: 'none', color: '#0284c7', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
+                >
+                  {isCustomPattern ? '← Choose from List' : '+ Add Custom Pattern'}
+                </button>
+              </div>
+              {isCustomPattern ? (
+                <input
+                  type="text"
+                  style={styles.input}
+                  placeholder="e.g. 2026, Autonomous-2024"
+                  value={blueprint.academicPattern}
+                  onChange={(e) => setBlueprint({ ...blueprint, academicPattern: e.target.value })}
+                />
+              ) : (
+                <select
+                  style={styles.select}
+                  value={blueprint.academicPattern}
+                  onChange={(e) => {
+                    if (e.target.value === '__CUSTOM__') {
+                      setIsCustomPattern(true);
+                      setBlueprint({ ...blueprint, academicPattern: '' });
+                    } else {
+                      setBlueprint({ ...blueprint, academicPattern: e.target.value });
+                    }
+                  }}
+                >
+                  <option value="">-- Select Academic Pattern --</option>
+                  {patterns.map((p) => (
                     <option key={p.id} value={p.name}>
                       {p.name}
                     </option>
-                  ))
-                ) : (
-                  <>
-                    <option value="2019">2019</option>
-                    <option value="2024">2024</option>
-                    <option value="2025">2025</option>
-                  </>
-                )}
-              </select>
+                  ))}
+                  {patterns.length === 0 && (
+                    <>
+                      <option value="2019">2019</option>
+                      <option value="2024">2024</option>
+                      <option value="2025">2025</option>
+                    </>
+                  )}
+                  <option value="__CUSTOM__">+ Add Custom Academic Pattern...</option>
+                </select>
+              )}
             </div>
 
             {/* Semester Selection */}
             <div>
-              <label style={styles.label}>Semester</label>
-              <select
-                style={styles.select}
-                value={blueprint.semester}
-                onChange={(e) => setBlueprint({ ...blueprint, semester: e.target.value })}
-              >
-                {semesters.map((s) => (
-                  <option key={s.number} value={s.label}>
-                    {s.label}
-                  </option>
-                ))}
-                {semesters.length === 0 && (
-                  <>
-                    <option value="Semester 5">Semester 5</option>
-                    <option value="Semester 6">Semester 6</option>
-                    <option value="Semester 7">Semester 7</option>
-                    <option value="Semester 8">Semester 8</option>
-                  </>
-                )}
-              </select>
-            </div>
-
-            {/* Total Marks (Offers 20, 30, 60, and 70 dynamically) */}
-            <div>
-              <label style={styles.label}>Total Marks</label>
-              <select
-                style={styles.select}
-                value={blueprint.totalMarks || 70}
-                onChange={(e) => {
-                  const tm = parseInt(e.target.value, 10);
-                  const autoDuration = tm <= 30 ? 1.0 : tm === 60 ? 2.0 : 2.5;
-                  setBlueprint((prev) => ({
-                    ...prev,
-                    totalMarks: tm,
-                    durationHours: autoDuration,
-                  }));
-                }}
-              >
-                <option value={20}>20 Marks (Internal Assessment / Unit Test)</option>
-                <option value={30}>30 Marks (In-Semester Examination)</option>
-                <option value={60}>60 Marks (End-Semester 60M Pattern)</option>
-                <option value={70}>70 Marks (Standard End-Semester 70M Pattern)</option>
-              </select>
-            </div>
-
-            {/* Subject Selection (Searchable & Scoped) */}
-            <div style={{ gridColumn: 'span 2' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                <label style={styles.label}>
-                  Subject (Fast Search by Code, Full Title, or Short Name e.g. DAA, SPOS, DBMS, CNS, WT, OSSA)
-                </label>
-                {teacherProfile?.name && (
-                  <span style={{ fontSize: '11px', color: '#0369a1', background: '#e0f2fe', padding: '2px 8px', borderRadius: '4px' }}>
-                    Faculty Authorized: {teacherProfile.name}
-                  </span>
-                )}
+                <label style={styles.label}>Semester</label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCustomSemester(!isCustomSemester);
+                    if (!isCustomSemester) setBlueprint((p) => ({ ...p, semester: '' }));
+                  }}
+                  style={{ background: 'none', border: 'none', color: '#0284c7', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
+                >
+                  {isCustomSemester ? '← Choose from List' : '+ Add Custom Semester'}
+                </button>
               </div>
+              {isCustomSemester ? (
+                <input
+                  type="text"
+                  style={styles.input}
+                  placeholder="e.g. Semester 1, Trimester 2"
+                  value={blueprint.semester}
+                  onChange={(e) => setBlueprint({ ...blueprint, semester: e.target.value })}
+                />
+              ) : (
+                <select
+                  style={styles.select}
+                  value={blueprint.semester}
+                  onChange={(e) => {
+                    if (e.target.value === '__CUSTOM__') {
+                      setIsCustomSemester(true);
+                      setBlueprint({ ...blueprint, semester: '' });
+                    } else {
+                      setBlueprint({ ...blueprint, semester: e.target.value });
+                    }
+                  }}
+                >
+                  <option value="">-- Select Semester --</option>
+                  {semesters.map((s) => (
+                    <option key={s.number} value={s.label}>
+                      {s.label}
+                    </option>
+                  ))}
+                  {semesters.length === 0 && (
+                    <>
+                      <option value="Semester 1">Semester 1</option>
+                      <option value="Semester 2">Semester 2</option>
+                      <option value="Semester 3">Semester 3</option>
+                      <option value="Semester 4">Semester 4</option>
+                      <option value="Semester 5">Semester 5</option>
+                      <option value="Semester 6">Semester 6</option>
+                      <option value="Semester 7">Semester 7</option>
+                      <option value="Semester 8">Semester 8</option>
+                    </>
+                  )}
+                  <option value="__CUSTOM__">+ Add Custom Semester...</option>
+                </select>
+              )}
+            </div>
+
+            {/* Total Marks */}
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                <label style={styles.label}>Total Marks</label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCustomMarks(!isCustomMarks);
+                    if (!isCustomMarks) setBlueprint((p) => ({ ...p, totalMarks: '' }));
+                  }}
+                  style={{ background: 'none', border: 'none', color: '#0284c7', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
+                >
+                  {isCustomMarks ? '← Choose Standard Marks' : '+ Add Custom Marks'}
+                </button>
+              </div>
+              {isCustomMarks ? (
+                <input
+                  type="number"
+                  min={5}
+                  max={200}
+                  style={styles.input}
+                  placeholder="e.g. 25, 40, 50, 80, 100"
+                  value={blueprint.totalMarks}
+                  onChange={(e) => {
+                    const tm = e.target.value ? parseInt(e.target.value, 10) : '';
+                    const autoDur = tm ? (tm <= 30 ? 1.0 : tm <= 60 ? 2.0 : 2.5) : '';
+                    setBlueprint((prev) => ({
+                      ...prev,
+                      totalMarks: tm,
+                      durationHours: autoDur || prev.durationHours,
+                      sections: [],
+                    }));
+                    setIsStructureCustomized(false);
+                  }}
+                />
+              ) : (
+                <select
+                  style={styles.select}
+                  value={blueprint.totalMarks}
+                  onChange={(e) => {
+                    if (e.target.value === '__CUSTOM__') {
+                      setIsCustomMarks(true);
+                      setBlueprint({ ...blueprint, totalMarks: '' });
+                    } else {
+                      const tm = e.target.value ? parseInt(e.target.value, 10) : '';
+                      const autoDuration = tm ? (tm <= 30 ? 1.0 : tm === 60 ? 2.0 : 2.5) : '';
+                      setBlueprint((prev) => ({
+                        ...prev,
+                        totalMarks: tm,
+                        durationHours: autoDuration || prev.durationHours,
+                        sections: [],
+                      }));
+                      setIsStructureCustomized(false);
+                    }
+                  }}
+                >
+                  <option value="">-- Select Total Marks --</option>
+                  <option value={20}>20 Marks (Internal Assessment / Unit Test)</option>
+                  <option value={30}>30 Marks (In-Semester Examination)</option>
+                  <option value={60}>60 Marks (End-Semester 60M Pattern)</option>
+                  <option value={70}>70 Marks (Standard End-Semester 70M Pattern)</option>
+                  <option value="__CUSTOM__">+ Add Custom Total Marks...</option>
+                </select>
+              )}
+            </div>
+
+            {/* Subject Selection (Searchable, Full Catalog & + Add Subject) */}
+            <div style={{ gridColumn: 'span 2' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', flexWrap: 'wrap', gap: '8px' }}>
+                <label style={styles.label}>
+                  Subject (Fast Search by Code, Full Title, or Short Name) <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {teacherProfile?.name && (
+                    <span style={{ fontSize: '11px', color: '#0369a1', background: '#e0f2fe', padding: '2px 8px', borderRadius: '4px' }}>
+                      Faculty Authorized: {teacherProfile.name}
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setAddSubjectModalOpen(true)}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: '4px 10px',
+                      backgroundColor: '#0284c7',
+                      color: '#ffffff',
+                      borderRadius: '6px',
+                      border: 'none',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                    }}
+                  >
+                    <Plus size={14} />
+                    <span>+ Add Subject</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Subject Search Filter */}
               <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
                 <input
                   type="text"
-                  placeholder="Type to filter subjects: e.g. DAA, 410241, Algorithms, SPOS, DBMS, WT..."
+                  placeholder="Type to filter subjects: e.g. DAA, SPOS, DBMS, CNS, WT, 310243, Algorithms, FE, SE, TE, BE..."
                   value={subjectSearch}
                   onChange={(e) => setSubjectSearch(e.target.value)}
                   style={{ ...styles.input, flex: 1 }}
@@ -1427,21 +1757,19 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
                   </button>
                 )}
               </div>
+
               <select
                 style={styles.select}
                 value={blueprint.subject}
                 onChange={(e) => handleSubjectChange(e.target.value)}
               >
+                <option value="">-- Select Subject ({filteredSubjects.length} available in Department) --</option>
                 {filteredSubjects.map((s) => (
                   <option key={s.id || s.code} value={s.title}>
-                    [{s.code || s.subject_code}] {s.shortName ? `(${s.shortName}) ` : ''}{s.title}
+                    [{s.code || s.subject_code}] {s.shortName ? `(${s.shortName}) ` : ''}{s.title} {s.semester ? `— ${s.semester}` : ''}
                   </option>
                 ))}
-                {filteredSubjects.length === 0 && (
-                  <option value={blueprint.subject}>
-                    {blueprint.subject} [{blueprint.subjectCode}]
-                  </option>
-                )}
+                <option value="__NEW_SUBJECT__">+ Add New Subject to System...</option>
               </select>
             </div>
 
@@ -1451,6 +1779,7 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
               <input
                 type="text"
                 style={styles.input}
+                placeholder="e.g. 310243 or COMP-301"
                 value={blueprint.subjectCode}
                 onChange={(e) => setBlueprint({ ...blueprint, subjectCode: e.target.value })}
               />
@@ -1463,90 +1792,126 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
                 type="number"
                 step="0.5"
                 style={styles.input}
+                placeholder="e.g. 1.0, 2.0, 2.5"
                 value={blueprint.durationHours}
-                onChange={(e) => setBlueprint({ ...blueprint, durationHours: parseFloat(e.target.value) })}
+                onChange={(e) => setBlueprint({ ...blueprint, durationHours: parseFloat(e.target.value) || '' })}
               />
             </div>
           </div>
 
-          {/* Dynamic University Marks Structure Summary */}
-          <div style={styles.summaryBox}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <h4 style={styles.summaryTitle}>
-                University Marks Structure ({blueprint.totalMarks} Marks Pattern)
-              </h4>
-              <span style={{ fontSize: '11px', fontWeight: 600, color: '#0369a1', backgroundColor: '#e0f2fe', padding: '3px 8px', borderRadius: '4px' }}>
-                Configurable Academic Template
-              </span>
-            </div>
+          {/* Dynamic & Fully Customizable University Marks Structure */}
+          {(() => {
+            const activeSections = (blueprint.sections && blueprint.sections.length > 0)
+              ? blueprint.sections
+              : (blueprint.totalMarks ? getDynamicSections() : []);
+            const isCustom = isStructureCustomized || (blueprint.sections && blueprint.sections.length > 0);
 
-            {/* Dynamic Card Breakdown for 20M, 30M, 60M, and 70M */}
-            <div style={styles.groupList}>
-              {blueprint.totalMarks === 20 && (
-                <>
-                  <div style={styles.groupCard}>
-                    <strong>Pair 1 ({subjectUnits[0]?.unitTitle || 'Unit 1'}):</strong> Q1 (5 + 5 = 10M) <span style={styles.orPill}>OR</span> Q2 (5 + 5 = 10M)
+            return (
+              <div style={styles.summaryBox}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <h4 style={styles.summaryTitle}>
+                      University Marks Structure {blueprint.totalMarks ? `(${blueprint.totalMarks} Marks Pattern)` : ''}
+                    </h4>
+                    {isCustom ? (
+                      <span style={{ fontSize: '11px', fontWeight: 700, color: '#15803d', backgroundColor: '#dcfce7', padding: '3px 8px', borderRadius: '4px', border: '1px solid #bbf7d0' }}>
+                        ✓ Custom Layout Active ({activeSections.length} Question Pairs)
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: '11px', fontWeight: 600, color: '#0369a1', backgroundColor: '#e0f2fe', padding: '3px 8px', borderRadius: '4px' }}>
+                        Configurable Academic Template
+                      </span>
+                    )}
                   </div>
-                  <div style={styles.groupCard}>
-                    <strong>Pair 2 ({subjectUnits[1]?.unitTitle || 'Unit 2'}):</strong> Q3 (5 + 5 = 10M) <span style={styles.orPill}>OR</span> Q4 (5 + 5 = 10M)
-                  </div>
-                </>
-              )}
 
-              {blueprint.totalMarks === 30 && (
-                <>
-                  <div style={styles.groupCard}>
-                    <strong>Pair 1 ({subjectUnits[0]?.unitTitle || 'Unit 1'}):</strong> Q1 (7 + 8 = 15M) <span style={styles.orPill}>OR</span> Q2 (8 + 7 = 15M)
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {isCustom && (
+                      <button
+                        type="button"
+                        onClick={handleResetStructure}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          padding: '5px 10px',
+                          borderRadius: '6px',
+                          border: '1px solid #cbd5e1',
+                          backgroundColor: '#ffffff',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          color: '#475569',
+                          cursor: 'pointer',
+                        }}
+                        title="Reset to standard university template"
+                      >
+                        <RotateCcw size={13} />
+                        <span>Reset to Default Template</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleOpenCustomizeStructure}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '6px 14px',
+                        borderRadius: '6px',
+                        border: '1px solid #0284c7',
+                        backgroundColor: '#eff6ff',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        color: '#0284c7',
+                        cursor: 'pointer',
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                      }}
+                    >
+                      <Settings size={14} />
+                      <span>⚙️ Customize Marks Structure</span>
+                    </button>
                   </div>
-                  <div style={styles.groupCard}>
-                    <strong>Pair 2 ({subjectUnits[1]?.unitTitle || 'Unit 2'}):</strong> Q3 (7 + 8 = 15M) <span style={styles.orPill}>OR</span> Q4 (8 + 7 = 15M)
-                  </div>
-                </>
-              )}
+                </div>
 
-              {blueprint.totalMarks === 60 && (
-                <>
-                  <div style={styles.groupCard}>
-                    <strong>Pair 1 ({subjectUnits[0]?.unitTitle || 'Unit 1'}):</strong> Q1 (7 + 8 = 15M) <span style={styles.orPill}>OR</span> Q2 (8 + 7 = 15M)
+                {!blueprint.totalMarks && (!blueprint.sections || blueprint.sections.length === 0) ? (
+                  <div style={{ padding: '20px', textAlign: 'center', color: '#64748b', fontSize: '13px', backgroundColor: '#ffffff', borderRadius: '8px', border: '1px dashed #cbd5e1' }}>
+                    <p style={{ margin: '0 0 8px 0', fontWeight: 600, color: '#334155' }}>
+                      No examination marks pattern pre-applied.
+                    </p>
+                    <p style={{ margin: 0 }}>
+                      Select <strong>Total Marks</strong> above to generate a standard university layout, or click <strong>&ldquo;⚙️ Customize Marks Structure&rdquo;</strong> to design custom question pairs, units, and sub-question allocations.
+                    </p>
                   </div>
-                  <div style={styles.groupCard}>
-                    <strong>Pair 2 ({subjectUnits[1]?.unitTitle || 'Unit 2'}):</strong> Q3 (7 + 8 = 15M) <span style={styles.orPill}>OR</span> Q4 (8 + 7 = 15M)
-                  </div>
-                  <div style={styles.groupCard}>
-                    <strong>Pair 3 ({subjectUnits[2]?.unitTitle || 'Unit 3'}):</strong> Q5 (7 + 8 = 15M) <span style={styles.orPill}>OR</span> Q6 (8 + 7 = 15M)
-                  </div>
-                  <div style={styles.groupCard}>
-                    <strong>Pair 4 ({subjectUnits[3]?.unitTitle || 'Unit 4'}):</strong> Q7 (7 + 8 = 15M) <span style={styles.orPill}>OR</span> Q8 (8 + 7 = 15M)
-                  </div>
-                </>
-              )}
+                ) : (
+                  <>
+                    <div style={styles.groupList}>
+                      {activeSections.map((sec, idx) => {
+                        const pSubs = sec.subquestionsConfig || [];
+                        const pMarksStr = pSubs.length > 0 ? pSubs.map((s) => s.marks).join(' + ') + ` = ${sec.targetMarks}M` : `${sec.targetMarks}M`;
+                        return (
+                          <div key={idx} style={styles.groupCard}>
+                            <strong>Pair {sec.groupOrder || idx + 1} ({sec.groupLabel || `Unit ${sec.targetUnit || idx + 1}`}):</strong>{' '}
+                            Q{sec.primaryQuestionNumber || idx * 2 + 1} ({pMarksStr}){' '}
+                            {sec.alternativeQuestionNumber && (
+                              <>
+                                <span style={styles.orPill}>OR</span>{' '}
+                                Q{sec.alternativeQuestionNumber} ({pMarksStr})
+                              </>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
 
-              {(blueprint.totalMarks === 70 || (blueprint.totalMarks !== 20 && blueprint.totalMarks !== 30 && blueprint.totalMarks !== 60)) && (
-                <>
-                  <div style={styles.groupCard}>
-                    <strong>Pair 1 ({subjectUnits[0]?.unitTitle || 'Unit 1'}):</strong> Q1 (8 + 9 = 17M) <span style={styles.orPill}>OR</span> Q2 (9 + 8 = 17M)
-                  </div>
-                  <div style={styles.groupCard}>
-                    <strong>Pair 2 ({subjectUnits[1]?.unitTitle || 'Unit 2'}):</strong> Q3 (8 + 9 = 17M) <span style={styles.orPill}>OR</span> Q4 (9 + 8 = 17M)
-                  </div>
-                  <div style={styles.groupCard}>
-                    <strong>Pair 3 ({subjectUnits[2]?.unitTitle || 'Unit 3'}):</strong> Q5 (9 + 9 = 18M) <span style={styles.orPill}>OR</span> Q6 (9 + 9 = 18M)
-                  </div>
-                  <div style={styles.groupCard}>
-                    <strong>Pair 4 ({subjectUnits[3]?.unitTitle || 'Unit 4'}):</strong> Q7 (9 + 9 = 18M) <span style={styles.orPill}>OR</span> Q8 (9 + 9 = 18M)
-                  </div>
-                </>
-              )}
-            </div>
-
-            <p style={styles.summaryFooter}>
-              {blueprint.totalMarks === 20 && 'Total Answered Marks: 10 + 10 = 20 Marks. Candidate answers 2 compulsory questions with internal OR alternatives across 2 units.'}
-              {blueprint.totalMarks === 30 && 'Total Answered Marks: 15 + 15 = 30 Marks. Candidate answers 2 compulsory questions with internal OR alternatives across 2 units.'}
-              {blueprint.totalMarks === 60 && 'Total Answered Marks: 15 + 15 + 15 + 15 = 60 Marks. Candidate answers 4 compulsory questions, choosing one question from each alternative OR pair.'}
-              {(blueprint.totalMarks === 70 || (blueprint.totalMarks !== 20 && blueprint.totalMarks !== 30 && blueprint.totalMarks !== 60)) &&
-                `Total Answered Marks: 17 + 17 + 18 + 18 = ${blueprint.totalMarks} Marks. Candidate answers 4 compulsory questions, choosing 1 question from each alternative OR pair.`}
-            </p>
-          </div>
+                    <p style={styles.summaryFooter}>
+                      Total Answered Marks:{' '}
+                      {activeSections.map((s) => s.targetMarks).join(' + ')} = {blueprint.totalMarks || activeSections.reduce((acc, s) => acc + (Number(s.targetMarks) || 0), 0)} Marks.{' '}
+                      Candidate answers {activeSections.length} compulsory questions with internal OR alternatives across {activeSections.length} syllabus units.
+                    </p>
+                  </>
+                )}
+              </div>
+            );
+          })()}
 
 {/* MODAL: REPLACE QUESTION FROM SHARED SUBJECT POOL (Sprint Section 7) */}
           {replacingTarget && (
@@ -3024,53 +3389,66 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
             <form onSubmit={handleSaveQuestion}>
               <div style={styles.grid2}>
                 <div>
-                  <label style={styles.label}>Unit Selector</label>
+                  <label style={styles.label}>Unit Selector <span style={{ color: '#ef4444' }}>*</span></label>
                   <select
                     style={styles.select}
                     value={newQuestionForm.unitNumber}
+                    required
                     onChange={(e) => {
-                      const uNum = parseInt(e.target.value, 10);
+                      const uNum = e.target.value ? parseInt(e.target.value, 10) : '';
                       setNewQuestionForm({
                         ...newQuestionForm,
                         unitNumber: uNum,
-                        unitTitle: `Unit ${uNum}`,
+                        unitTitle: uNum ? `Unit ${uNum}` : '',
                       });
                     }}
                   >
+                    <option value="">-- Select Unit --</option>
                     <option value={1}>Unit 1</option>
                     <option value={2}>Unit 2</option>
                     <option value={3}>Unit 3</option>
                     <option value={4}>Unit 4</option>
+                    <option value={5}>Unit 5</option>
+                    <option value={6}>Unit 6</option>
                   </select>
                 </div>
                 <div>
-                  <label style={styles.label}>Marks</label>
+                  <label style={styles.label}>Marks <span style={{ color: '#ef4444' }}>*</span></label>
                   <select
                     style={styles.select}
                     value={newQuestionForm.marks}
+                    required
                     onChange={(e) =>
-                      setNewQuestionForm({ ...newQuestionForm, marks: parseInt(e.target.value, 10) })
+                      setNewQuestionForm({ ...newQuestionForm, marks: e.target.value ? parseInt(e.target.value, 10) : '' })
                     }
                   >
+                    <option value="">-- Select Question Marks --</option>
+                    <option value={2}>2 Marks</option>
+                    <option value={3}>3 Marks</option>
+                    <option value={4}>4 Marks</option>
                     <option value={5}>5 Marks</option>
+                    <option value={6}>6 Marks</option>
                     <option value={7}>7 Marks</option>
                     <option value={8}>8 Marks</option>
                     <option value={9}>9 Marks</option>
                     <option value={10}>10 Marks</option>
+                    <option value={14}>14 Marks</option>
                     <option value={15}>15 Marks</option>
                     <option value={17}>17 Marks</option>
                     <option value={18}>18 Marks</option>
                   </select>
                 </div>
                 <div>
-                  <label style={styles.label}>Difficulty</label>
+                  <label style={styles.label}>Difficulty <span style={{ color: '#ef4444' }}>*</span></label>
                   <select
                     style={styles.select}
                     value={newQuestionForm.difficulty}
+                    required
                     onChange={(e) =>
                       setNewQuestionForm({ ...newQuestionForm, difficulty: e.target.value })
                     }
                   >
+                    <option value="">-- Select Difficulty --</option>
                     <option value="EASY">EASY</option>
                     <option value="MEDIUM">MEDIUM</option>
                     <option value="HARD">HARD</option>
@@ -3085,6 +3463,7 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
                       setNewQuestionForm({ ...newQuestionForm, questionType: e.target.value })
                     }
                   >
+                    <option value="">-- Select Question Type --</option>
                     <option value="DESCRIPTIVE">DESCRIPTIVE</option>
                     <option value="NUMERICAL">NUMERICAL</option>
                     <option value="ANALYTICAL">ANALYTICAL</option>
@@ -3092,7 +3471,7 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
                 </div>
               </div>
 
-              {/* CO / PO / Bloom's Taxonomy Dropdowns (Module 22 & OBE Compliance) */}
+              {/* CO / PO / Bloom's Taxonomy Dropdowns (OBE Compliance with Prompt Placeholders) */}
               <div style={{ ...styles.grid2, marginTop: '12px' }}>
                 <div>
                   <label style={styles.label}>Course Outcome (CO)</label>
@@ -3103,6 +3482,7 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
                       setNewQuestionForm({ ...newQuestionForm, courseOutcome: e.target.value })
                     }
                   >
+                    <option value="">-- Select Course Outcome (CO) --</option>
                     {(outcomes.courseOutcomes || []).map((co) => (
                       <option key={co.code} value={co.code}>
                         {co.code}: {co.title}
@@ -3130,6 +3510,7 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
                       setNewQuestionForm({ ...newQuestionForm, programOutcome: e.target.value })
                     }
                   >
+                    <option value="">-- Select Program Outcome (PO) --</option>
                     {(outcomes.programOutcomes || []).map((po) => (
                       <option key={po.code} value={po.code}>
                         {po.code}: {po.title}
@@ -3156,6 +3537,7 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
                       setNewQuestionForm({ ...newQuestionForm, bloomTaxonomy: e.target.value })
                     }
                   >
+                    <option value="">-- Select Bloom's Taxonomy Level --</option>
                     {(outcomes.bloomTaxonomyLevels || []).map((bt) => (
                       <option key={bt.code} value={`${bt.code} - ${bt.title}`}>
                         {bt.code} - {bt.title}
@@ -3302,6 +3684,505 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
                 <button type="submit" style={styles.primaryButton}>
                   Save Question
                 </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* --------------------------------------------------------------------- */}
+      {/* MODAL: CUSTOMIZE MARKS STRUCTURE & QUESTION LAYOUT (Requirement 1)     */}
+      {/* --------------------------------------------------------------------- */}
+      {customStructureModalOpen && (
+        <div style={styles.modalOverlay}>
+          <div style={{ ...styles.modalCard, maxWidth: '850px', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px', marginBottom: '16px' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Settings size={20} color="var(--color-primary)" />
+                  <span>Customize Examination Marks Structure &amp; Question Layout</span>
+                </h3>
+                <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#64748b' }}>
+                  Configure question pairs, syllabus units, sub-question marks, and OR alternatives for this examination blueprint.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCustomStructureModalOpen(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* List of Question Pairs */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {customSectionsDraft.map((sec, secIdx) => {
+                const subquestions = sec.subquestionsConfig || [];
+                const primaryMarks = subquestions.reduce((sum, sq) => sum + (Number(sq.marks) || 0), 0);
+                return (
+                  <div
+                    key={secIdx}
+                    style={{
+                      border: '1px solid #cbd5e1',
+                      borderRadius: '8px',
+                      padding: '14px',
+                      backgroundColor: '#f8fafc',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                        <span style={{ fontWeight: 700, fontSize: '14px', color: '#1e293b' }}>
+                          Question Pair #{secIdx + 1}
+                        </span>
+                        <span style={{ fontSize: '12px', backgroundColor: '#e2e8f0', color: '#334155', padding: '2px 8px', borderRadius: '4px', fontWeight: 600 }}>
+                          Q{sec.primaryQuestionNumber || (secIdx * 2 + 1)} OR Q{sec.alternativeQuestionNumber || (secIdx * 2 + 2)}
+                        </span>
+                        <span style={{ fontSize: '12px', backgroundColor: '#dbeafe', color: '#1d4ed8', padding: '2px 8px', borderRadius: '4px', fontWeight: 700 }}>
+                          Target: {primaryMarks} Marks
+                        </span>
+                      </div>
+                      {customSectionsDraft.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = customSectionsDraft.filter((_, i) => i !== secIdx).map((s, idx) => ({
+                              ...s,
+                              groupOrder: idx + 1,
+                              primaryQuestionNumber: idx * 2 + 1,
+                              alternativeQuestionNumber: idx * 2 + 2,
+                            }));
+                            setCustomSectionsDraft(updated);
+                          }}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: '#ef4444',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            fontSize: '12px',
+                            fontWeight: 600,
+                          }}
+                          title="Remove this question pair"
+                        >
+                          <Trash2 size={15} />
+                          <span>Remove Pair</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Pair Details: Group Label & Unit */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '10px' }}>
+                      <div>
+                        <label style={{ fontSize: '12px', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '4px' }}>
+                          Syllabus Unit
+                        </label>
+                        <select
+                          value={sec.targetUnit || ((secIdx % 6) + 1)}
+                          onChange={(e) => {
+                            const u = parseInt(e.target.value, 10);
+                            const updated = [...customSectionsDraft];
+                            updated[secIdx] = {
+                              ...updated[secIdx],
+                              targetUnit: u,
+                              groupLabel: `Group ${secIdx + 1} (Unit ${u})`,
+                              subquestionsConfig: (updated[secIdx].subquestionsConfig || []).map((sq) => ({ ...sq, unit: u })),
+                            };
+                            setCustomSectionsDraft(updated);
+                          }}
+                          style={styles.select}
+                        >
+                          {[1, 2, 3, 4, 5, 6].map((u) => (
+                            <option key={u} value={u}>
+                              Unit {u}{subjectUnits[u - 1]?.unitTitle ? `: ${subjectUnits[u - 1].unitTitle}` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label style={{ fontSize: '12px', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '4px' }}>
+                          Group Label
+                        </label>
+                        <input
+                          type="text"
+                          value={sec.groupLabel || `Pair ${secIdx + 1} (Unit ${sec.targetUnit || secIdx + 1})`}
+                          onChange={(e) => {
+                            const updated = [...customSectionsDraft];
+                            updated[secIdx] = { ...updated[secIdx], groupLabel: e.target.value };
+                            setCustomSectionsDraft(updated);
+                          }}
+                          style={styles.input}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Sub-questions Configuration */}
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                        <label style={{ fontSize: '12px', fontWeight: 600, color: '#475569' }}>
+                          Sub-questions Breakdown (Applies to both Primary and OR Alternative)
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = [...customSectionsDraft];
+                            const curSubs = [...(updated[secIdx].subquestionsConfig || [])];
+                            const nextChar = String.fromCharCode(97 + curSubs.length);
+                            curSubs.push({
+                              subPart: nextChar,
+                              marks: 5,
+                              difficulty: 'MEDIUM',
+                              questionType: 'DESCRIPTIVE',
+                              unit: sec.targetUnit || 1,
+                            });
+                            const newTarget = curSubs.reduce((sum, sq) => sum + (Number(sq.marks) || 0), 0);
+                            updated[secIdx] = {
+                              ...updated[secIdx],
+                              subquestionsConfig: curSubs,
+                              targetMarks: newTarget,
+                            };
+                            setCustomSectionsDraft(updated);
+                          }}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            padding: '2px 8px',
+                            backgroundColor: '#eff6ff',
+                            border: '1px solid #bfdbfe',
+                            borderRadius: '4px',
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            color: '#1d4ed8',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <Plus size={12} />
+                          <span>Add Sub-question</span>
+                        </button>
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        {subquestions.map((sub, subIdx) => (
+                          <div key={subIdx} style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#ffffff', padding: '6px 10px', borderRadius: '6px', border: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
+                            <span style={{ fontWeight: 700, fontSize: '13px', width: '24px', color: '#1e293b' }}>
+                              ({sub.subPart || String.fromCharCode(97 + subIdx)})
+                            </span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span style={{ fontSize: '12px', color: '#64748b' }}>Marks:</span>
+                              <input
+                                type="number"
+                                min={1}
+                                max={50}
+                                value={sub.marks}
+                                onChange={(e) => {
+                                  const updated = [...customSectionsDraft];
+                                  const curSubs = [...(updated[secIdx].subquestionsConfig || [])];
+                                  curSubs[subIdx] = { ...curSubs[subIdx], marks: Number(e.target.value) || 1 };
+                                  const newTarget = curSubs.reduce((sum, sq) => sum + (Number(sq.marks) || 0), 0);
+                                  updated[secIdx] = {
+                                    ...updated[secIdx],
+                                    subquestionsConfig: curSubs,
+                                    targetMarks: newTarget,
+                                  };
+                                  setCustomSectionsDraft(updated);
+                                }}
+                                style={{ ...styles.input, width: '70px', padding: '4px 8px' }}
+                              />
+                            </div>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span style={{ fontSize: '12px', color: '#64748b' }}>Difficulty:</span>
+                              <select
+                                value={sub.difficulty || 'MEDIUM'}
+                                onChange={(e) => {
+                                  const updated = [...customSectionsDraft];
+                                  const curSubs = [...(updated[secIdx].subquestionsConfig || [])];
+                                  curSubs[subIdx] = { ...curSubs[subIdx], difficulty: e.target.value };
+                                  updated[secIdx] = { ...updated[secIdx], subquestionsConfig: curSubs };
+                                  setCustomSectionsDraft(updated);
+                                }}
+                                style={{ ...styles.select, padding: '4px 8px', fontSize: '12px' }}
+                              >
+                                <option value="EASY">EASY</option>
+                                <option value="MEDIUM">MEDIUM</option>
+                                <option value="HARD">HARD</option>
+                              </select>
+                            </div>
+
+                            {subquestions.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = [...customSectionsDraft];
+                                  const curSubs = (updated[secIdx].subquestionsConfig || []).filter((_, i) => i !== subIdx).map((sq, i) => ({
+                                    ...sq,
+                                    subPart: String.fromCharCode(97 + i),
+                                  }));
+                                  const newTarget = curSubs.reduce((sum, sq) => sum + (Number(sq.marks) || 0), 0);
+                                  updated[secIdx] = {
+                                    ...updated[secIdx],
+                                    subquestionsConfig: curSubs,
+                                    targetMarks: newTarget,
+                                  };
+                                  setCustomSectionsDraft(updated);
+                                }}
+                                style={{
+                                  marginLeft: 'auto',
+                                  background: 'none',
+                                  border: 'none',
+                                  color: '#ef4444',
+                                  cursor: 'pointer',
+                                  padding: '4px',
+                                }}
+                                title="Remove sub-question"
+                              >
+                                <X size={16} />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Button to Add New Pair */}
+            <div style={{ marginTop: '14px', display: 'flex', justifyContent: 'flex-start' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  const nextIdx = customSectionsDraft.length + 1;
+                  const targetU = ((nextIdx - 1) % 6) + 1;
+                  const newPair = {
+                    groupOrder: nextIdx,
+                    groupLabel: `Group ${nextIdx} (Unit ${targetU})`,
+                    targetUnit: targetU,
+                    targetMarks: 10,
+                    primaryQuestionNumber: nextIdx * 2 - 1,
+                    alternativeQuestionNumber: nextIdx * 2,
+                    subquestionsConfig: [
+                      { subPart: 'a', marks: 5, difficulty: 'MEDIUM', questionType: 'DESCRIPTIVE', unit: targetU },
+                      { subPart: 'b', marks: 5, difficulty: 'MEDIUM', questionType: 'DESCRIPTIVE', unit: targetU },
+                    ],
+                  };
+                  setCustomSectionsDraft([...customSectionsDraft, newPair]);
+                }}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '8px 14px',
+                  backgroundColor: '#ffffff',
+                  border: '1px dashed #0284c7',
+                  borderRadius: '6px',
+                  color: '#0284c7',
+                  fontWeight: 600,
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                }}
+              >
+                <Plus size={16} />
+                <span>+ Add Question Pair / Group</span>
+              </button>
+            </div>
+
+            {/* Summary Footer */}
+            <div
+              style={{
+                marginTop: '20px',
+                padding: '14px',
+                backgroundColor: '#f1f5f9',
+                borderRadius: '8px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '12px',
+              }}
+            >
+              <div>
+                <div style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>
+                  Total Structure Answered Marks:{' '}
+                  <span style={{ color: 'var(--color-primary)', fontSize: '16px' }}>
+                    {customSectionsDraft.reduce((acc, sec) => acc + (Number(sec.targetMarks) || 0), 0)} Marks
+                  </span>
+                </div>
+                <div style={{ fontSize: '12px', color: '#64748b' }}>
+                  Total Pairs: {customSectionsDraft.length} | Total Questions Configured:{' '}
+                  {customSectionsDraft.length * 2} (compulsory + OR alternatives)
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => setCustomStructureModalOpen(false)}
+                  style={styles.secondaryButton}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const sum = customSectionsDraft.reduce((acc, sec) => acc + (Number(sec.targetMarks) || 0), 0);
+                    const autoDur = sum <= 30 ? 1.0 : sum <= 60 ? 2.0 : 2.5;
+                    setBlueprint((prev) => ({
+                      ...prev,
+                      sections: customSectionsDraft,
+                      totalMarks: sum,
+                      durationHours: prev.durationHours || autoDur,
+                    }));
+                    setIsStructureCustomized(true);
+                    setCustomStructureModalOpen(false);
+                    showNotification(`Custom marks structure applied successfully (${customSectionsDraft.length} pairs, ${sum} Marks).`, 'success');
+                  }}
+                  style={styles.primaryButton}
+                >
+                  Apply Custom Structure
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --------------------------------------------------------------------- */}
+      {/* MODAL: ADD NEW SUBJECT TO SYSTEM (Requirement 3)                       */}
+      {/* --------------------------------------------------------------------- */}
+      {addSubjectModalOpen && (
+        <div style={styles.modalOverlay}>
+          <div style={{ ...styles.modalCard, maxWidth: '580px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px', marginBottom: '16px' }}>
+              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <BookOpen size={20} color="var(--color-primary)" />
+                <span>Add New Subject to Computer Engineering</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setAddSubjectModalOpen(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateSubjectSubmit}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div>
+                  <label style={styles.label}>Subject Full Title <span style={{ color: '#ef4444' }}>*</span></label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Deep Learning and Neural Networks"
+                    value={newSubjectForm.title}
+                    onChange={(e) => setNewSubjectForm({ ...newSubjectForm, title: e.target.value })}
+                    style={styles.input}
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div>
+                    <label style={styles.label}>Subject Code <span style={{ color: '#ef4444' }}>*</span></label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. 410250 or COMP-401"
+                      value={newSubjectForm.code}
+                      onChange={(e) => setNewSubjectForm({ ...newSubjectForm, code: e.target.value })}
+                      style={styles.input}
+                    />
+                  </div>
+                  <div>
+                    <label style={styles.label}>Short Name / Acronym</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. DLNN, CC, CNS"
+                      value={newSubjectForm.shortName}
+                      onChange={(e) => setNewSubjectForm({ ...newSubjectForm, shortName: e.target.value })}
+                      style={styles.input}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div>
+                    <label style={styles.label}>Class / Year <span style={{ color: '#ef4444' }}>*</span></label>
+                    <select
+                      value={newSubjectForm.classYear}
+                      onChange={(e) => setNewSubjectForm({ ...newSubjectForm, classYear: e.target.value })}
+                      style={styles.select}
+                    >
+                      <option value="FE">FE — First Year Engineering</option>
+                      <option value="SE">SE — Second Year Engineering</option>
+                      <option value="TE">TE — Third Year Engineering</option>
+                      <option value="BE">BE — Final Year Engineering</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={styles.label}>Semester <span style={{ color: '#ef4444' }}>*</span></label>
+                    <select
+                      value={newSubjectForm.semester}
+                      onChange={(e) => setNewSubjectForm({ ...newSubjectForm, semester: e.target.value })}
+                      style={styles.select}
+                    >
+                      {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => (
+                        <option key={s} value={`Semester ${s}`}>Semester {s}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div>
+                    <label style={styles.label}>Academic Pattern</label>
+                    <select
+                      value={newSubjectForm.patternName}
+                      onChange={(e) => setNewSubjectForm({ ...newSubjectForm, patternName: e.target.value })}
+                      style={styles.select}
+                    >
+                      <option value="2019">2019 Pattern</option>
+                      <option value="2024">2024 Pattern</option>
+                      <option value="2025">2025 Pattern</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={styles.label}>Standard Total Marks</label>
+                    <select
+                      value={newSubjectForm.totalMarks}
+                      onChange={(e) => setNewSubjectForm({ ...newSubjectForm, totalMarks: parseInt(e.target.value, 10) })}
+                      style={styles.select}
+                    >
+                      <option value={70}>70 Marks</option>
+                      <option value={60}>60 Marks</option>
+                      <option value={30}>30 Marks</option>
+                      <option value={20}>20 Marks</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setAddSubjectModalOpen(false)}
+                    style={styles.secondaryButton}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={savingSubject}
+                    style={styles.primaryButton}
+                  >
+                    {savingSubject ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+                    <span>Save &amp; Select Subject</span>
+                  </button>
+                </div>
               </div>
             </form>
           </div>
