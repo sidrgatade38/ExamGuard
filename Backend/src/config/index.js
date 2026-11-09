@@ -1,7 +1,10 @@
+const path = require('path');
 const dotenv = require('dotenv');
 
-// Load environment variables from .env file
+// Load environment variables from .env file with robust path resolution
 dotenv.config();
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+dotenv.config({ path: path.resolve(__dirname, '../../../Backend/.env') });
 
 const config = {
   port: process.env.PORT || 5000,
@@ -11,6 +14,12 @@ const config = {
     anonKey: process.env.SUPABASE_ANON_KEY || '',
     serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
   },
+  resend: {
+    apiKey: process.env.RESEND_API_KEY || '',
+    fromEmail: process.env.RESEND_FROM_EMAIL || 'ExamGuard <onboarding@resend.dev>',
+    webhookSecret: process.env.RESEND_WEBHOOK_SECRET || '',
+  },
+  frontendUrl: process.env.FRONTEND_URL || 'https://examguardapp.vercel.app',
   jwtSecret: process.env.JWT_SECRET || '',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '1h',
   storageBucket: process.env.STORAGE_BUCKET || 'examguard-storage',

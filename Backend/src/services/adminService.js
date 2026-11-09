@@ -17,8 +17,10 @@
  */
 
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const { supabase } = require('../config/supabase');
 const auditLogService = require('./auditLogService');
+const notificationService = require('./notificationService');
 
 /**
  * Standard RFC 4122 UUID validation regex.
@@ -47,6 +49,9 @@ function sanitizeUser(user, roleName = null) {
     roleId: user.role_id,
     role: resolvedRole.toUpperCase(),
     isActive: Boolean(user.is_active),
+    isDeleted: Boolean(user.is_deleted),
+    deletedAt: user.deleted_at || null,
+    phone: user.phone || null,
     createdAt: user.created_at,
     updatedAt: user.updated_at,
   };
@@ -138,7 +143,7 @@ async function listUsers({
   // Build Supabase query
   let query = supabase
     .from('users')
-    .select('id, name, email, role_id, is_active, created_at, updated_at, roles!role_id (id, name)', {
+    .select('id, name, email, role_id, is_active, is_deleted, deleted_at, phone, created_at, updated_at, roles!role_id (id, name)', {
       count: 'exact',
     });
 
@@ -149,12 +154,18 @@ async function listUsers({
   }
 
   // Apply status filter
-  if (status !== undefined && status !== null && status !== '') {
-    if (status === 'active' || status === true || status === 'true') {
-      query = query.eq('is_active', true);
-    } else if (status === 'inactive' || status === false || status === 'false') {
-      query = query.eq('is_active', false);
-    }
+  const cleanStatus = typeof status === 'string' ? status.trim().toLowerCase() : '';
+  if (cleanStatus === 'active') {
+    query = query.eq('is_active', true).neq('is_deleted', true);
+  } else if (cleanStatus === 'inactive' || cleanStatus === 'blocked') {
+    query = query.eq('is_active', false).neq('is_deleted', true);
+  } else if (cleanStatus === 'deleted' || cleanStatus === 'archived') {
+    query = query.eq('is_deleted', true);
+  } else if (cleanStatus === 'all') {
+    // Show all accounts including deleted/archived
+  } else {
+    // Default: show active and inactive accounts, omitting soft-deleted accounts
+    query = query.neq('is_deleted', true);
   }
 
   // Apply sorting
@@ -349,6 +360,16 @@ async function createUser(
 
   const safeUser = sanitizeUser(newUser, resolvedRole.name);
 
+  // 7.6 Send notification email via Resend
+  try {
+    await notificationService.notifyAccountCreated({
+      user: safeUser,
+      adminName: 'Administrator',
+    });
+  } catch (notifErr) {
+    console.warn('[AdminService] Note: Failed to send user creation email:', notifErr.message);
+  }
+
   // 8. Record audit event
   auditLogService.logAuditEvent({
     userId: adminUserId,
@@ -482,6 +503,17 @@ async function setUserStatus(targetUserId, isActive, adminUserId, clientContext 
   }
 
   const safeUpdated = sanitizeUser(updatedUser);
+
+  // 4.5 Send status notification email via Resend
+  try {
+    await notificationService.notifyAccountStatusChanged({
+      user: safeUpdated,
+      isActive,
+      adminName: 'Administrator',
+    });
+  } catch (notifErr) {
+    console.warn('[AdminService] Note: Failed to send status update email:', notifErr.message);
+  }
 
   // 5. Record audit event
   auditLogService.logAuditEvent({
@@ -701,6 +733,15 @@ async function resetUserPassword(targetUserId, newPassword, adminUserId, clientC
     throw dbErr;
   }
 
+  // 4.5 Send password reset confirmation email via Resend
+  try {
+    await notificationService.notifyPasswordReset({
+      user: { id: targetUser.id, name: targetUser.name, email: targetUser.email },
+    });
+  } catch (notifErr) {
+    console.warn('[AdminService] Note: Failed to send password reset email:', notifErr.message);
+  }
+
   // 5. Record audit event (NEVER include plaintext password or hash!)
   auditLogService.logAuditEvent({
     userId: adminUserId,
@@ -725,6 +766,220 @@ async function resetUserPassword(targetUserId, newPassword, adminUserId, clientC
   };
 }
 
+/**
+ * Permanently revokes user access and soft-deletes/archives account.
+ * Strict safeguards:
+ * - Admin cannot delete their own account.
+ * - Admin cannot delete the last active administrator.
+ * - Does NOT cascade delete question papers, signatures, or audit logs.
+ * - Revokes authentication and prevents future login.
+ * - Sends notification email via Resend.
+ */
+async function deleteUser(targetUserId, adminUserId, clientContext = {}) {
+  if (!isValidUuid(targetUserId)) {
+    const err = new Error('Invalid user ID format');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  // 1. Fetch target user
+  const { data: targetUser, error: fetchErr } = await supabase
+    .from('users')
+    .select('id, name, email, role_id, is_active, is_deleted, roles!role_id (id, name)')
+    .eq('id', targetUserId.trim())
+    .maybeSingle();
+
+  if (fetchErr) {
+    const dbErr = new Error('Failed to retrieve user record');
+    dbErr.statusCode = 500;
+    throw dbErr;
+  }
+
+  if (!targetUser) {
+    const notFoundErr = new Error('User not found');
+    notFoundErr.statusCode = 404;
+    throw notFoundErr;
+  }
+
+  // 2. Safeguard 1: Prevent self-deletion
+  if (targetUserId.trim() === adminUserId) {
+    const lockoutErr = new Error('Administrators cannot delete their own account');
+    lockoutErr.statusCode = 400;
+    throw lockoutErr;
+  }
+
+  // 3. Safeguard 2: Prevent deleting the last active admin
+  const targetRole = targetUser.roles?.name || 'UNKNOWN';
+  if (targetRole.toUpperCase() === 'ADMIN') {
+    const { data: activeAdmins } = await supabase
+      .from('users')
+      .select('id, is_active, is_deleted, roles!role_id (id, name)')
+      .eq('is_active', true)
+      .neq('is_deleted', true);
+
+    const remainingAdmins = (activeAdmins || []).filter(
+      (u) => (u.roles?.name || '').toUpperCase() === 'ADMIN' && u.id !== targetUserId
+    );
+    if (remainingAdmins.length === 0) {
+      const lastAdminErr = new Error('Cannot delete the last remaining active administrator account');
+      lastAdminErr.statusCode = 400;
+      throw lastAdminErr;
+    }
+  }
+
+  // 4. Invalidate credentials and mark as deleted/archived
+  // Randomizing password hash prevents any possible password login
+  const revokedPasswordHash = `$2a$12$revoked_${crypto.randomBytes(24).toString('hex')}`;
+  const now = new Date().toISOString();
+
+  const { data: updatedUser, error: updateErr } = await supabase
+    .from('users')
+    .update({
+      is_active: false,
+      is_deleted: true,
+      deleted_at: now,
+      deleted_by: adminUserId,
+      password_hash: revokedPasswordHash,
+      updated_at: now,
+    })
+    .eq('id', targetUserId.trim())
+    .select('id, name, email, role_id, is_active, is_deleted, deleted_at, phone, created_at, updated_at, roles!role_id (id, name)')
+    .single();
+
+  if (updateErr) {
+    console.error('[AdminService] Error archiving user account:', updateErr.message);
+    const dbErr = new Error('Failed to archive user account');
+    dbErr.statusCode = 500;
+    throw dbErr;
+  }
+
+  // 5. Send notification email via Resend
+  await notificationService.notifyAccountDeleted({
+    user: { id: targetUser.id, name: targetUser.name, email: targetUser.email },
+    adminName: 'Administrator',
+  });
+
+  // 6. Record audit event
+  await auditLogService.logAuditEvent({
+    userId: adminUserId,
+    role: 'ADMIN',
+    action: 'UNAUTHORIZED_ACCESS',
+    resourceType: 'USER',
+    resourceId: targetUserId,
+    outcome: 'SUCCESS',
+    summary: `Admin archived and revoked access for user "${targetUser.email}" (${targetRole})`,
+    ipAddress: clientContext.ipAddress,
+    userAgent: clientContext.userAgent,
+    metadata: {
+      adminAction: 'USER_DELETED_ARCHIVED',
+      targetUserId,
+      targetEmail: targetUser.email,
+      targetRole,
+    },
+  });
+
+  return {
+    success: true,
+    message: `Account for "${targetUser.name}" (${targetUser.email}) was safely archived and login access revoked. Institutional records, question papers, and audit history remain preserved.`,
+    user: sanitizeUser(updatedUser),
+  };
+}
+
+/**
+ * Updates permitted user account information (Name, Email, Phone, Role)
+ */
+async function updateUser(targetUserId, updateData, adminUserId, clientContext = {}) {
+  if (!isValidUuid(targetUserId)) {
+    const err = new Error('Invalid user ID format');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const { name, email, phone, role } = updateData || {};
+
+  const { data: existingUser, error: fetchErr } = await supabase
+    .from('users')
+    .select('id, name, email, role_id, is_active, is_deleted, roles!role_id (id, name)')
+    .eq('id', targetUserId.trim())
+    .maybeSingle();
+
+  if (fetchErr || !existingUser) {
+    const err = new Error('User not found');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const updates = { updated_at: new Date().toISOString() };
+
+  if (name && typeof name === 'string' && name.trim()) {
+    updates.name = name.trim();
+  }
+
+  if (email && typeof email === 'string' && email.trim()) {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail.includes('@') || !cleanEmail.includes('.')) {
+      const err = new Error('Invalid email format');
+      err.statusCode = 400;
+      throw err;
+    }
+    // Check uniqueness if changed
+    if (cleanEmail !== existingUser.email.toLowerCase()) {
+      const { data: dup } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', cleanEmail)
+        .neq('id', targetUserId.trim())
+        .maybeSingle();
+      if (dup) {
+        const err = new Error(`Email "${cleanEmail}" is already in use by another account.`);
+        err.statusCode = 409;
+        throw err;
+      }
+      updates.email = cleanEmail;
+    }
+  }
+
+  if (phone !== undefined) {
+    updates.phone = phone ? phone.trim() : null;
+  }
+
+  if (role && typeof role === 'string' && role.trim()) {
+    const resolvedRole = await resolveRoleByName(role.trim());
+    updates.role_id = resolvedRole.id;
+  }
+
+  const { data: updated, error: updateErr } = await supabase
+    .from('users')
+    .update(updates)
+    .eq('id', targetUserId.trim())
+    .select('id, name, email, role_id, is_active, is_deleted, deleted_at, phone, created_at, updated_at, roles!role_id (id, name)')
+    .single();
+
+  if (updateErr) {
+    const dbErr = new Error('Failed to update user account details');
+    dbErr.statusCode = 500;
+    throw dbErr;
+  }
+
+  await auditLogService.logAuditEvent({
+    userId: adminUserId,
+    role: 'ADMIN',
+    action: 'QUESTION_PAPER_ACCESSED',
+    resourceType: 'USER',
+    resourceId: targetUserId,
+    outcome: 'SUCCESS',
+    summary: `Admin updated account information for user "${existingUser.email}"`,
+    ipAddress: clientContext.ipAddress,
+    userAgent: clientContext.userAgent,
+    metadata: {
+      adminAction: 'USER_UPDATED',
+      updates,
+    },
+  });
+
+  return sanitizeUser(updated);
+}
+
 module.exports = {
   listRoles,
   listUsers,
@@ -733,6 +988,8 @@ module.exports = {
   setUserStatus,
   setUserRole,
   resetUserPassword,
+  deleteUser,
+  updateUser,
   PERMITTED_ROLES,
   sanitizeUser,
 };

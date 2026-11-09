@@ -119,6 +119,16 @@ export const examCoordinatorService = {
     });
     return response.data;
   },
+
+  /**
+   * Safely removes a rejected or obsolete paper assignment from coordinator active list.
+   * @param {string} id - Question paper UUID
+   * @returns {Promise<{ success: boolean, message: string }>}
+   */
+  async removeAssignedPaper(id) {
+    const response = await api.delete(`/exam-coordinator/question-papers/${id}`);
+    return response.data;
+  },
 };
 
 export default examCoordinatorService;

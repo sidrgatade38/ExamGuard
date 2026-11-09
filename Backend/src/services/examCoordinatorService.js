@@ -142,12 +142,35 @@ async function getAvailableQuestionPapers(coordinatorId, options = {}) {
         : paper.digital_signatures;
 
       const deliveryDate = assignment?.scheduled_delivery_date || paper.scheduled_delivery_date;
-      const isDeliverable = !deliveryDate || today >= deliveryDate;
+      const isDeliverableDate = !deliveryDate || today >= deliveryDate;
       const verif = verificationMap.get(paper.id) || null;
       const verificationStatus = verif ? (verif.verified ? 'VERIFIED' : 'FAILED') : 'PENDING';
 
+      const rawDate = paper.exam_date || paper.scheduled_delivery_date;
+      const dStr = rawDate ? (typeof rawDate === 'string' ? rawDate.split('T')[0] : new Date(rawDate).toISOString().split('T')[0]) : null;
+      const tStr = paper.exam_time ? String(paper.exam_time).slice(0, 5) : '10:00';
+      let releaseOpen = false;
+      let releaseTimeIso = null;
+      let examDateTimeIso = null;
+      let releaseNotice = '';
+
+      if (dStr) {
+        const examDt = new Date(`${dStr}T${tStr}:00`);
+        if (!isNaN(examDt.getTime())) {
+          examDateTimeIso = examDt.toISOString();
+          const relDt = new Date(examDt.getTime() - 60 * 60 * 1000);
+          releaseTimeIso = relDt.toISOString();
+          releaseOpen = Date.now() >= relDt.getTime();
+          releaseNotice = releaseOpen
+            ? 'Content Released (1-hour pre-exam window active)'
+            : `Content Locked: Release opens at ${relDt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} on ${relDt.toLocaleDateString()} (1 hr prior to exam)`;
+        }
+      }
+
+      const isDeliverable = releaseOpen && isDeliverableDate;
+
       let effectiveStatus = 'SCHEDULED';
-      if (paper.status === 'ARCHIVED') {
+      if (paper.status === 'ARCHIVED' || assignment?.is_archived || assignment?.is_deleted_by_coordinator) {
         effectiveStatus = 'ARCHIVED';
       } else if (assignment?.delivery_status === 'CANCELLED') {
         effectiveStatus = 'CANCELLED';
@@ -164,7 +187,16 @@ async function getAvailableQuestionPapers(coordinatorId, options = {}) {
         semester: paper.semester,
         academicYear: paper.academic_year,
         examType: paper.exam_type,
-        examDate: paper.exam_date,
+        examDate: dStr,
+        examTime: tStr,
+        finalizedAt: paper.finalized_at || paper.submitted_at || paper.created_at,
+        coordinatorAvailableAt: paper.coordinator_available_at || paper.submitted_at || paper.created_at,
+        releaseWindow: {
+          isReleased: releaseOpen,
+          releaseTime: releaseTimeIso,
+          examDateTime: examDateTimeIso,
+          notice: releaseNotice,
+        },
         status: paper.status,
         effectiveStatus,
         isDeliverable,
@@ -493,7 +525,7 @@ async function downloadAndDecryptQuestionPaper(paperId, coordinatorId) {
   // 1. Fetch paper record (internal lookup with storage_path)
   const { data: paper, error: paperError } = await supabase
     .from('question_papers')
-    .select('id, file_name, storage_path, mime_type, status')
+    .select('id, title, subject, file_name, storage_path, mime_type, status, exam_date, exam_time, scheduled_delivery_date')
     .eq('id', paperId)
     .maybeSingle();
 
@@ -513,7 +545,7 @@ async function downloadAndDecryptQuestionPaper(paperId, coordinatorId) {
   // 2. Verify assignment to this coordinator
   const { data: assignment, error: assignError } = await supabase
     .from('question_paper_assignments')
-    .select('id, delivery_status')
+    .select('id, delivery_status, is_archived, is_deleted_by_coordinator')
     .eq('question_paper_id', paperId)
     .eq('assigned_to_user_id', coordinatorId)
     .maybeSingle();
@@ -539,6 +571,43 @@ async function downloadAndDecryptQuestionPaper(paperId, coordinatorId) {
     const forbiddenErr = new Error('Access forbidden. You are not authorized to download this question paper.');
     forbiddenErr.statusCode = 403;
     throw forbiddenErr;
+  }
+
+  // 2.5 Strict Examination Release Timing Enforcement (Module 9.B)
+  // Actual decrypted question paper content is cryptographically locked until exactly 1 hour prior to scheduled examination.
+  const rawExamDate = paper.exam_date || paper.scheduled_delivery_date;
+  if (!rawExamDate) {
+    const unconfigErr = new Error('Examination date has not been configured in institutional database. Content release cannot occur until exam date is configured.');
+    unconfigErr.statusCode = 400;
+    throw unconfigErr;
+  }
+
+  const examDateStr = typeof rawExamDate === 'string' ? rawExamDate.split('T')[0] : new Date(rawExamDate).toISOString().split('T')[0];
+  const examTimeStr = paper.exam_time ? String(paper.exam_time).slice(0, 5) : '10:00';
+  const examDateTime = new Date(`${examDateStr}T${examTimeStr}:00`);
+
+  if (!isNaN(examDateTime.getTime())) {
+    const releaseDateTime = new Date(examDateTime.getTime() - 60 * 60 * 1000); // 1 hour prior to exam
+    const now = new Date();
+
+    if (now.getTime() < releaseDateTime.getTime()) {
+      await auditLogService.logAuditEvent({
+        userId: coordinatorId,
+        role: 'EXAM_COORDINATOR',
+        action: 'UNAUTHORIZED_ACCESS',
+        resourceType: 'QUESTION_PAPER',
+        resourceId: paperId,
+        outcome: 'DENIED',
+        summary: `Early decryption download blocked by security timing policy. Exam scheduled for ${examDateTime.toLocaleString()}, release unlocks at ${releaseDateTime.toLocaleString()}`,
+        metadata: { paperId, examDateTime: examDateTime.toISOString(), releaseDateTime: releaseDateTime.toISOString() },
+      });
+
+      const earlyErr = new Error(
+        `Access forbidden: Question paper plaintext is locked until 1 hour prior to the scheduled examination (${examDateTime.toLocaleString()}). Content release opens at ${releaseDateTime.toLocaleString()}. Safe metadata, signatures, and review status remain accessible.`
+      );
+      earlyErr.statusCode = 403;
+      throw earlyErr;
+    }
   }
 
   // 3. Storage path security check: prevent directory traversal or foreign object access
@@ -914,6 +983,49 @@ async function getRecentActivity(coordinatorId, limit = 15) {
   }
 }
 
+/**
+ * Safely removes a rejected or obsolete question paper assignment from coordinator active working list.
+ * Preserves teacher ownership, historical papers, verification history, and audit records.
+ */
+async function archiveCoordinatorAssignment(paperId, coordinatorId) {
+  if (!paperId || !coordinatorId) {
+    const err = new Error('Paper ID and Coordinator ID are required.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  // Soft archive the assignment record
+  const { error } = await supabase
+    .from('question_paper_assignments')
+    .update({
+      is_archived: true,
+      is_deleted_by_coordinator: true,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('question_paper_id', paperId)
+    .eq('assigned_to_user_id', coordinatorId);
+
+  if (error) {
+    console.error('[ExamCoordinatorService] Failed to archive assignment:', error.message);
+  }
+
+  // Audit the removal
+  await auditLogService.logAuditEvent({
+    userId: coordinatorId,
+    role: 'EXAM_COORDINATOR',
+    action: 'DELETE',
+    resourceType: 'QUESTION_PAPER_ASSIGNMENT',
+    resourceId: paperId,
+    outcome: 'SUCCESS',
+    summary: `Coordinator removed assignment for paper ${paperId} from active working list. Historical paper and verification records preserved.`,
+  });
+
+  return {
+    success: true,
+    message: 'Question paper assignment removed from active working list.',
+  };
+}
+
 module.exports = {
   getAvailableQuestionPapers,
   getQuestionPaperById,
@@ -921,4 +1033,5 @@ module.exports = {
   verifyQuestionPaperIntegrity,
   getDashboardStats,
   getRecentActivity,
+  archiveCoordinatorAssignment,
 };

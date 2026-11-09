@@ -48,6 +48,29 @@ const adminService = {
   },
 
   /**
+   * Permanently revokes access and safely archives user account.
+   *
+   * @param {string} id - User UUID
+   * @returns {Promise<{ success: boolean, message: string }>}
+   */
+  async deleteUser(id) {
+    const response = await api.delete(`/admin/users/${id}`);
+    return response.data;
+  },
+
+  /**
+   * Updates permitted user account details.
+   *
+   * @param {string} id - User UUID
+   * @param {Object} userData - { name, email, phone, role }
+   * @returns {Promise<{ success: boolean, message: string, user: Object }>}
+   */
+  async updateUser(id, userData) {
+    const response = await api.put(`/admin/users/${id}`, userData);
+    return response.data;
+  },
+
+  /**
    * Updates user account active status.
    *
    * @param {string} id - User UUID

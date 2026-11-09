@@ -9,6 +9,7 @@ const {
   downloadPaper,
   verifyPaperSignature,
   reviewPaper,
+  removePaperAssignment,
 } = require('../controllers/examCoordinatorController');
 const {
   getCoordinatorAnswerKey,
@@ -36,6 +37,9 @@ router.get('/question-papers/:id', getPaperDetails);
 
 // POST /api/exam-coordinator/question-papers/:id/review - Review question paper (RECOMMEND, RETURN, REJECT)
 router.post('/question-papers/:id/review', reviewPaper);
+
+// DELETE /api/exam-coordinator/question-papers/:id - Safely remove obsolete/rejected assignment from coordinator active working list
+router.delete('/question-papers/:id', removePaperAssignment);
 
 // GET /api/exam-coordinator/question-papers/:id/download - Secure download & decrypt (Verify-Before-Decrypt pipeline)
 router.get('/question-papers/:id/download', downloadPaper);

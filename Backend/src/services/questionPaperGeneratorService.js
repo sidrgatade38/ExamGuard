@@ -14,6 +14,7 @@ const blueprintService = require('./blueprintService');
 const pdfRendererService = require('./pdfRendererService');
 const questionPaperService = require('./questionPaperService');
 const auditLogService = require('./auditLogService');
+const notificationService = require('./notificationService');
 
 // In-memory generated papers & sets store fallback
 const memoryGeneratedPapers = new Map();
@@ -333,6 +334,12 @@ async function generateExamSets({ blueprintId, teacherId, role = 'TEACHER' }) {
     outcome: 'SUCCESS',
     summary: `Successfully generated ${generatedSets.length} examination sets for blueprint "${blueprint.title}".`,
   });
+
+  // Dispatch email notification via Resend
+  notificationService.notifyPaperGenerationSuccess({
+    paper: { id: paperId, title: blueprint.title, subject: blueprint.subject },
+    teacher: { id: teacherId },
+  }).catch(() => {});
 
   return {
     paperId,

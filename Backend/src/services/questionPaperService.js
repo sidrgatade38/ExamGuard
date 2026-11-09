@@ -308,6 +308,16 @@ async function submitQuestionPaper({
       console.warn('[QuestionPaperService] Warning: notification creation error:', notifErr.message);
     }
 
+    try {
+      await notificationService.notifyPaperFinalized({
+        paper: createdPaper,
+        teacher: { id: teacherId },
+        coordinator: recipient,
+      });
+    } catch (finalizedErr) {
+      console.warn('[QuestionPaperService] Finalized email notice:', finalizedErr.message);
+    }
+
     // Safe API response - NEVER leaks private keys, AES keys, auth tags, or IVs
     await auditLogService.logAuditEvent({
       userId: teacherId,
@@ -1354,6 +1364,17 @@ async function deleteQuestionPaper(paperId, requesterId, requesterRole, reason =
     },
   });
 
+  // Dispatch paper archived email notification via Resend
+  try {
+    await notificationService.notifyPaperArchived({
+      paper,
+      user: { id: requesterId },
+      reason: reason || 'Authoring faculty requested deletion and archival',
+    });
+  } catch (archErr) {
+    console.warn('[QuestionPaperService] Note: paper archived notification error:', archErr.message);
+  }
+
   return {
     success: true,
     paperId,
@@ -1462,23 +1483,33 @@ async function reviewQuestionPaper({ paperId, coordinatorId, coordinatorName, ac
     console.warn('[QuestionPaperService] Note: paper_verifications logging:', verifErr.message);
   }
 
-  // Send Direct Notification to Authoring Faculty
+  // Send Direct Notification to Authoring Faculty via Resend
   try {
-    const statusLabel =
-      newReviewStatus === 'APPROVED'
-        ? 'Verified & Approved'
-        : newReviewStatus === 'RETURNED'
-        ? 'Returned for Revision'
-        : 'Rejected';
-
-    await notificationService.createWorkflowNotification({
-      recipientId: paper.teacher_id,
-      questionPaperId: paperId,
-      type: 'SYSTEM',
-      subject: `Question Paper ${statusLabel}: ${paper.title}`,
-      message: `Your examination paper "${paper.title}" (${paper.subject}) has been ${statusLabel.toLowerCase()} by Exam Coordinator ${coordUser.name || 'Coordinator'}. Coordinator Notes: ${comments || 'Verified in compliance with university academic standards.'}`,
-    }).catch(() => {});
-  } catch (_) {}
+    if (newReviewStatus === 'APPROVED') {
+      await notificationService.notifyVerificationApproved({
+        paper,
+        teacher: paper.teacher || { id: paper.teacher_id },
+        coordinator: coordUser,
+        comments,
+      });
+    } else if (newReviewStatus === 'RETURNED') {
+      await notificationService.notifyReturnForRevision({
+        paper,
+        teacher: paper.teacher || { id: paper.teacher_id },
+        coordinator: coordUser,
+        comments,
+      });
+    } else if (newReviewStatus === 'REJECTED') {
+      await notificationService.notifyVerificationRejected({
+        paper,
+        teacher: paper.teacher || { id: paper.teacher_id },
+        coordinator: coordUser,
+        comments,
+      });
+    }
+  } catch (err) {
+    console.warn('[QuestionPaperService] Notification dispatch notice:', err.message);
+  }
 
   // Audit log
   await auditLogService.logAuditEvent({

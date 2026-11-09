@@ -217,8 +217,57 @@ async function updateProfile(req, res, next) {
   }
 }
 
+/**
+ * Handles POST /api/auth/register - Teacher self-registration
+ */
+async function register(req, res, next) {
+  try {
+    const { name, email, password, phone, mobileNumber, designation, qualification, specialization, experienceYears } = req.body || {};
+
+    const result = await authService.registerTeacher({
+      name,
+      email,
+      password,
+      phone,
+      mobileNumber,
+      designation,
+      qualification,
+      specialization,
+      experienceYears,
+    });
+
+    await auditLogService.logAuditEvent({
+      userId: result.user.id,
+      role: 'TEACHER',
+      action: 'LOGIN',
+      resourceType: 'USER',
+      resourceId: result.user.id,
+      outcome: 'SUCCESS',
+      summary: `Teacher account registered and logged in: ${result.user.email}`,
+      ipAddress: req.ip || req.headers['x-forwarded-for'],
+      userAgent: req.headers['user-agent'],
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: 'Teacher account registered successfully!',
+      token: result.token,
+      user: result.user,
+    });
+  } catch (error) {
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({
+        success: false,
+        message: error.message,
+      });
+    }
+    return next(error);
+  }
+}
+
 module.exports = {
   login,
+  register,
   getMe,
   getProfile,
   updateProfile,

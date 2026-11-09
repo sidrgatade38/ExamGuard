@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import authService from '../services/authService';
@@ -6,7 +6,6 @@ import questionPaperService from '../services/questionPaperService';
 import answerKeyService from '../services/answerKeyService';
 import blueprintService from '../services/blueprintService';
 import academicService from '../services/academicService';
-import NotificationBell from '../components/NotificationBell';
 import {
   BookOpen,
   Plus,
@@ -54,15 +53,18 @@ export default function TeacherHome() {
   // Creation sub-mode: 'select' | 'upload' | 'generate'
   const [creationMode, setCreationMode] = useState('select');
 
-  // Teacher Profile State (Module 2.1)
+  // Teacher Profile State (Module 2.1 & Sprint Corrections)
   const [profileData, setProfileData] = useState(() => user?.profile || {
     name: user?.name || '',
     email: user?.email || '',
     facultyId: `COMP-FAC-${(user?.id || 'FACULTY').slice(0, 6).toUpperCase()}`,
     department: 'Department of Computer Engineering',
     designation: 'Assistant Professor',
+    qualification: 'M.E. (Computer Engineering)',
     specialization: 'Computer Engineering & System Architecture',
+    experienceYears: 5,
     phone: '',
+    mobileNumber: '',
     isActive: true,
   });
   const [loadingProfile, setLoadingProfile] = useState(false);
@@ -98,8 +100,19 @@ export default function TeacherHome() {
   const [loadingAssignedPapers, setLoadingAssignedPapers] = useState(false);
   const [assignedPapersError, setAssignedPapersError] = useState('');
 
-  // In-app Action Notification Alert (replaces browser alerts)
-  const [actionAlert, setActionAlert] = useState(null);
+  // In-app Action Notification Alert with Auto-Dismiss (3-5s success, 5-7s error)
+  const [actionAlert, setActionAlertState] = useState(null);
+  const actionAlertTimerRef = useRef(null);
+  const setActionAlert = useCallback((alert) => {
+    if (actionAlertTimerRef.current) clearTimeout(actionAlertTimerRef.current);
+    setActionAlertState(alert);
+    if (alert) {
+      const duration = alert.type === 'success' || alert.type === 'info' ? 4000 : 6000;
+      actionAlertTimerRef.current = setTimeout(() => {
+        setActionAlertState(null);
+      }, duration);
+    }
+  }, []);
 
   // Digital Signature Verification state (Module 7)
   const [verifyingId, setVerifyingId] = useState(null);
@@ -331,11 +344,11 @@ export default function TeacherHome() {
     setProfileError('');
     setProfileSuccess('');
 
+    const phoneVal = (profileData?.phone || profileData?.mobileNumber || '').trim();
     // Contact number validation (if provided)
-    if (profileData?.phone && profileData.phone.trim()) {
-      const cleanPhone = profileData.phone.trim();
+    if (phoneVal) {
       const phoneRegex = /^\+?[0-9\s-]{10,15}$/;
-      if (!phoneRegex.test(cleanPhone)) {
+      if (!phoneRegex.test(phoneVal)) {
         setProfileError('Please enter a valid 10-15 digit phone number (e.g. +91 9876543210 or 9876543210).');
         setSavingProfile(false);
         return;
@@ -345,15 +358,24 @@ export default function TeacherHome() {
     try {
       // Keep department strictly locked to Computer Engineering
       const payload = {
-        ...profileData,
+        name: (profileData?.name || '').trim(),
+        designation: profileData?.designation || 'Assistant Professor',
+        phone: phoneVal,
+        mobileNumber: phoneVal,
+        qualification: (profileData?.qualification || '').trim(),
+        specialization: (profileData?.specialization || '').trim(),
+        experienceYears: Number(profileData?.experienceYears || profileData?.experience_years || 0),
         department: 'Department of Computer Engineering',
       };
       const res = await authService.updateProfile(payload);
-      setProfileData(res.data);
+      if (res.data) {
+        setProfileData(res.data);
+      }
       setProfileSuccess('Faculty profile updated successfully!');
       setTimeout(() => setProfileSuccess(''), 4000);
     } catch (err) {
       setProfileError(err.response?.data?.message || err.message || 'Failed to update profile.');
+      setTimeout(() => setProfileError(''), 6000);
     } finally {
       setSavingProfile(false);
     }
@@ -662,7 +684,6 @@ export default function TeacherHome() {
             <Layers size={15} />
             <span>Algorithm Flow</span>
           </button>
-          <NotificationBell onSelectPaper={(p) => setSelectedPaper(p)} />
           <div
             style={{ ...styles.userBadge, cursor: 'pointer' }}
             onClick={() => setActiveTab('profile')}
@@ -682,7 +703,6 @@ export default function TeacherHome() {
 
         {/* Mobile Navigation Controls */}
         <div className="nav-mobile-controls" style={styles.navMobileControls}>
-          <NotificationBell onSelectPaper={(p) => setSelectedPaper(p)} />
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             style={styles.mobileMenuToggle}
@@ -765,16 +785,6 @@ export default function TeacherHome() {
               >
                 <Layers size={18} />
                 <span>My Question Papers ({papers.length})</span>
-              </button>
-              <button
-                onClick={() => {
-                  setActiveTab('assigned');
-                  setMobileMenuOpen(false);
-                }}
-                style={activeTab === 'assigned' ? { ...styles.mobileTabBtn, ...styles.mobileTabBtnActive } : styles.mobileTabBtn}
-              >
-                <FileCheck size={18} />
-                <span>Assigned to Me ({assignedPapers.length})</span>
               </button>
               <button
                 onClick={() => {
@@ -871,15 +881,6 @@ export default function TeacherHome() {
             <Layers size={18} />
             <span>My Papers</span>
             <span style={styles.counterBadge}>{papers.length}</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('assigned')}
-            style={activeTab === 'assigned' ? { ...styles.tab, ...styles.activeTab } : styles.tab}
-          >
-            <FileCheck size={18} />
-            <span>Assigned to Me</span>
-            <span style={styles.counterBadge}>{assignedPapers.length}</span>
           </button>
 
           <button
@@ -1037,26 +1038,6 @@ export default function TeacherHome() {
                   padding: '1.25rem',
                   cursor: 'pointer',
                 }}
-                onClick={() => setActiveTab('assigned')}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text-muted)' }}>Assigned to Me</span>
-                  <FileCheck size={18} color="#8b5cf6" />
-                </div>
-                <div style={{ fontSize: '1.85rem', fontWeight: 800, color: '#8b5cf6', margin: '0.5rem 0 0.2rem 0' }}>
-                  {stats.assignedCount}
-                </div>
-                <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>Colleague papers assigned</span>
-              </div>
-
-              <div
-                style={{
-                  backgroundColor: 'var(--color-surface)',
-                  border: '1px solid var(--color-border)',
-                  borderRadius: 'var(--radius-lg)',
-                  padding: '1.25rem',
-                  cursor: 'pointer',
-                }}
                 onClick={() => setActiveTab('list')}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1167,30 +1148,6 @@ export default function TeacherHome() {
                 <div>
                   <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--color-structure)' }}>View My Papers</div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>{papers.length} authored papers</div>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab('assigned')}
-                style={{
-                  backgroundColor: 'var(--color-surface)',
-                  border: '1px solid var(--color-border)',
-                  borderRadius: 'var(--radius-md)',
-                  padding: '1rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.75rem',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                }}
-              >
-                <div style={{ width: '40px', height: '40px', borderRadius: '8px', backgroundColor: '#faf5ff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <FileCheck size={20} color="#9333ea" />
-                </div>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--color-structure)' }}>Assigned to Me</div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>{assignedPapers.length} assigned papers</div>
                 </div>
               </button>
 
@@ -1397,7 +1354,7 @@ export default function TeacherHome() {
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span style={{ color: 'var(--color-text-muted)' }}>Faculty ID:</span>
                     <strong style={{ fontFamily: 'var(--font-jetbrains)', color: 'var(--color-primary)' }}>
-                      {profileData?.facultyId || 'COMP-FAC-001'}
+                      {profileData?.facultyId || profileData?.faculty_id || 'COMP-FAC-001'}
                     </strong>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -1409,12 +1366,28 @@ export default function TeacherHome() {
                     <span>TEACHER (Computer Engineering)</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: 'var(--color-text-muted)' }}>Contact Phone:</span>
-                    <span>{profileData?.phone || 'Not configured'}</span>
+                    <span style={{ color: 'var(--color-text-muted)' }}>Mobile Number:</span>
+                    <span style={{ fontWeight: 600 }}>{profileData?.phone || profileData?.mobileNumber || profileData?.mobile_number || 'Not configured'}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: 'var(--color-text-muted)' }}>Qualification:</span>
+                    <span>{profileData?.qualification || 'M.E. (Computer Engineering)'}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: 'var(--color-text-muted)' }}>Specialization:</span>
+                    <span>{profileData?.specialization || 'Computer Engineering & System Architecture'}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: 'var(--color-text-muted)' }}>Experience:</span>
+                    <span>{profileData?.experienceYears || profileData?.experience_years ? `${profileData.experienceYears || profileData.experience_years} Years` : '5 Years'}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span style={{ color: 'var(--color-text-muted)' }}>Account Created:</span>
                     <span>{user?.created_at || user?.createdAt ? new Date(user.created_at || user.createdAt).toLocaleDateString() : 'Active Member'}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: 'var(--color-text-muted)' }}>Last Profile Update:</span>
+                    <span>{profileData?.updatedAt || profileData?.updated_at ? new Date(profileData.updatedAt || profileData.updated_at).toLocaleString() : 'Recently'}</span>
                   </div>
                 </div>
               </div>
@@ -1435,6 +1408,29 @@ export default function TeacherHome() {
 
                 <form onSubmit={handleUpdateProfile} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                   <div>
+                    <label style={styles.label}>Full Name <span style={{ color: '#ef4444' }}>*</span></label>
+                    <input
+                      type="text"
+                      style={styles.input}
+                      value={profileData?.name || ''}
+                      onChange={(e) => setProfileData({ ...profileData, name: e.target.value })}
+                      placeholder="e.g. Dr. A. P. Sharma"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label style={styles.label}>Email Address (Institutional)</label>
+                    <input
+                      type="email"
+                      style={{ ...styles.input, backgroundColor: 'var(--color-surface-subtle)', color: 'var(--color-text-muted)', cursor: 'not-allowed' }}
+                      value={profileData?.email || user?.email || ''}
+                      disabled
+                      readOnly
+                    />
+                  </div>
+
+                  <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <label style={styles.label}>Faculty ID (System-Generated)</label>
                       <span style={{ fontSize: '11px', color: '#0369a1', backgroundColor: '#e0f2fe', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>
@@ -1444,7 +1440,7 @@ export default function TeacherHome() {
                     <input
                       type="text"
                       style={{ ...styles.input, backgroundColor: 'var(--color-surface-subtle)', color: 'var(--color-text-muted)', cursor: 'not-allowed', fontFamily: 'var(--font-jetbrains)' }}
-                      value={profileData?.facultyId || `COMP-FAC-${(user?.id || 'FACULTY').slice(0, 6).toUpperCase()}`}
+                      value={profileData?.facultyId || profileData?.faculty_id || `COMP-FAC-${(user?.id || 'FACULTY').slice(0, 6).toUpperCase()}`}
                       readOnly
                       disabled
                       title="Faculty ID is permanent and managed by the institution."
@@ -1480,17 +1476,51 @@ export default function TeacherHome() {
                   </div>
 
                   <div>
-                    <label style={styles.label}>Contact Phone Number (Optional)</label>
+                    <label style={styles.label}>Mobile / Phone Number</label>
                     <input
                       type="tel"
                       style={styles.input}
-                      value={profileData?.phone || ''}
-                      onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
+                      value={profileData?.phone || profileData?.mobileNumber || ''}
+                      onChange={(e) => setProfileData({ ...profileData, phone: e.target.value, mobileNumber: e.target.value })}
                       placeholder="+91 98765 43210"
                     />
                     <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', marginTop: '3px' }}>
-                      Institutional contact phone for urgent Examination Cell notifications.
+                      Institutional contact phone for urgent Examination Cell notifications and Resend SMS/email alerts.
                     </div>
+                  </div>
+
+                  <div>
+                    <label style={styles.label}>Highest Qualification</label>
+                    <input
+                      type="text"
+                      style={styles.input}
+                      value={profileData?.qualification || ''}
+                      onChange={(e) => setProfileData({ ...profileData, qualification: e.target.value })}
+                      placeholder="e.g. Ph.D. (Computer Engg), M.Tech (CSE)"
+                    />
+                  </div>
+
+                  <div>
+                    <label style={styles.label}>Area of Specialization</label>
+                    <input
+                      type="text"
+                      style={styles.input}
+                      value={profileData?.specialization || ''}
+                      onChange={(e) => setProfileData({ ...profileData, specialization: e.target.value })}
+                      placeholder="e.g. Cryptography, Distributed Systems, AI/ML"
+                    />
+                  </div>
+
+                  <div>
+                    <label style={styles.label}>Teaching / Professional Experience (Years)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="60"
+                      style={styles.input}
+                      value={profileData?.experienceYears ?? profileData?.experience_years ?? 5}
+                      onChange={(e) => setProfileData({ ...profileData, experienceYears: parseInt(e.target.value, 10) || 0 })}
+                    />
                   </div>
 
                   <button
@@ -1809,300 +1839,6 @@ export default function TeacherHome() {
                               <span>Delete</span>
                             </button>
                           )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* TAB 2: ASSIGNED QUESTION PAPERS */}
-        {activeTab === 'assigned' && (
-          <div style={styles.tabContent}>
-            {/* Header / Stats Banner */}
-            <div style={styles.statsBanner}>
-              <div>
-                <h2 style={styles.sectionHeading}>Question Papers Assigned to Me</h2>
-                <p style={styles.sectionSubtitle}>
-                  Examination question papers designated to you by colleague faculty members. Next-day delivery gating is strictly enforced.
-                </p>
-              </div>
-
-              <div style={styles.bannerActions}>
-                <button onClick={fetchAssignedPapers} style={styles.refreshBtn} title="Refresh Assigned Papers List">
-                  <RefreshCw size={16} className={loadingAssignedPapers ? 'spin' : ''} />
-                  <span>Refresh</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Search Input */}
-            <div style={styles.searchBarWrapper}>
-              <input
-                type="text"
-                placeholder="Search assigned papers by subject, title, setter faculty, or exam type..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                style={styles.searchInput}
-              />
-            </div>
-
-            {/* Error Alert */}
-            {assignedPapersError && (
-              <div style={styles.alertError}>
-                <AlertCircle size={18} />
-                <span>{assignedPapersError}</span>
-              </div>
-            )}
-
-            {/* Loading State */}
-            {loadingAssignedPapers ? (
-              <div style={styles.loadingContainer}>
-                <Loader2 size={32} color="#3b82f6" style={{ animation: 'spin 1s linear infinite' }} />
-                <span>Loading assigned question papers...</span>
-              </div>
-            ) : filteredAssignedPapers.length === 0 ? (
-              /* Empty State */
-              <div style={styles.emptyState}>
-                <FileCheck size={48} color="#64748b" />
-                <h3 style={styles.emptyTitle}>No Assigned Question Papers Found</h3>
-                <p style={styles.emptySubtitle}>
-                  {searchTerm
-                    ? 'No assigned question papers match your search criteria.'
-                    : 'You have not been assigned any question papers by other faculty members yet.'}
-                </p>
-              </div>
-            ) : (
-              /* Paper Cards Grid */
-              <div style={styles.papersGrid}>
-                {filteredAssignedPapers.map((paper) => {
-                  const isDeliverable = paper.isDeliverable;
-                  const isTampered = verificationResults[paper.id]?.tamperDetected;
-
-                  return (
-                    <div key={paper.id} style={styles.paperCard}>
-                      <div style={styles.cardHeader}>
-                        <div style={styles.subjectPill}>{paper.subject}</div>
-                        <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-                          <span
-                            style={{
-                              fontSize: '0.72rem',
-                              fontWeight: '600',
-                              padding: '0.2rem 0.55rem',
-                              borderRadius: '4px',
-                              backgroundColor: isDeliverable
-                                ? 'rgba(34, 197, 94, 0.15)'
-                                : 'rgba(234, 179, 8, 0.15)',
-                              color: isDeliverable ? '#4ade80' : '#facc15',
-                              border: isDeliverable
-                                ? '1px solid rgba(34, 197, 94, 0.3)'
-                                : '1px solid rgba(234, 179, 8, 0.3)',
-                            }}
-                          >
-                            {isDeliverable ? '✔ Delivered' : '⏳ Delivery Gated'}
-                          </span>
-                          <span style={styles.statusBadge}>{paper.status}</span>
-                        </div>
-                      </div>
-
-                      <h3 style={styles.paperTitle}>{paper.title}</h3>
-
-                      {/* Module 5.3: Authorized Verifier Display & Decision Status */}
-                      <div
-                        style={{
-                          margin: '0.5rem 0',
-                          padding: '0.6rem 0.75rem',
-                          borderRadius: '6px',
-                          border:
-                            paper.review_status === 'RECOMMENDED' || paper.review_status === 'REVIEWED' || paper.admin_approval_status === 'APPROVED'
-                              ? '1px solid #bbf7d0'
-                              : paper.review_status === 'RETURNED' || paper.admin_approval_status === 'RETURNED'
-                              ? '1px solid #fde68a'
-                              : paper.review_status === 'REJECTED' || paper.admin_approval_status === 'REJECTED'
-                              ? '1px solid #fca5a5'
-                              : '1px solid #e2e8f0',
-                          backgroundColor:
-                            paper.review_status === 'RECOMMENDED' || paper.review_status === 'REVIEWED' || paper.admin_approval_status === 'APPROVED'
-                              ? '#f0fdf4'
-                              : paper.review_status === 'RETURNED' || paper.admin_approval_status === 'RETURNED'
-                              ? '#fffbeb'
-                              : paper.review_status === 'REJECTED' || paper.admin_approval_status === 'REJECTED'
-                              ? '#fef2f2'
-                              : '#f8fafc',
-                          fontSize: '0.78rem',
-                        }}
-                      >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span style={{ fontWeight: 700, color: 'var(--color-structure)' }}>
-                            {paper.review_status === 'RECOMMENDED' || paper.review_status === 'REVIEWED' || paper.admin_approval_status === 'APPROVED'
-                              ? '✔ Verified'
-                              : paper.review_status === 'RETURNED' || paper.admin_approval_status === 'RETURNED'
-                              ? '⚠ Returned for Revision'
-                              : paper.review_status === 'REJECTED' || paper.admin_approval_status === 'REJECTED'
-                              ? '✖ Rejected'
-                              : '⏳ Pending Verification'}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => handleOpenVerificationHistory(paper)}
-                            style={{
-                              background: 'none',
-                              border: 'none',
-                              color: 'var(--color-primary)',
-                              fontSize: '0.72rem',
-                              fontWeight: 600,
-                              cursor: 'pointer',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '3px',
-                              padding: 0,
-                            }}
-                          >
-                            <History size={12} />
-                            <span>Audit History</span>
-                          </button>
-                        </div>
-
-                        {paper.reviewer?.name ? (
-                          <div style={{ color: '#334155', marginTop: '3px' }}>
-                            <strong>Verified by:</strong> {paper.reviewer.name}
-                            {paper.reviewed_at && (
-                              <span style={{ color: '#64748b' }}>
-                                {' '}• {new Date(paper.reviewed_at).toLocaleDateString()}
-                              </span>
-                            )}
-                          </div>
-                        ) : paper.review_status && paper.review_status !== 'PENDING_REVIEW' && paper.review_status !== 'PENDING' ? (
-                          <div style={{ color: '#334155', marginTop: '3px' }}>
-                            <strong>Decision:</strong> {paper.review_status}
-                            {paper.reviewed_at && (
-                              <span style={{ color: '#64748b' }}>
-                                {' '}• {new Date(paper.reviewed_at).toLocaleDateString()}
-                              </span>
-                            )}
-                          </div>
-                        ) : (
-                          <div style={{ color: '#64748b', marginTop: '3px' }}>
-                            Awaiting verification by Exam Coordinator.
-                          </div>
-                        )}
-
-                        {(paper.review_comments || paper.admin_comments) && (
-                          <div style={{ color: '#475569', fontStyle: 'italic', marginTop: '3px' }}>
-                            &quot;{paper.review_comments || paper.admin_comments}&quot;
-                          </div>
-                        )}
-                      </div>
-
-                      <div style={styles.metaRows}>
-                        <div style={styles.metaRow}>
-                          <User size={14} color="#94a3b8" />
-                          <span>
-                            <strong>Setter Faculty:</strong>{' '}
-                            {paper.teacher ? `${paper.teacher.name} (${paper.teacher.email})` : 'Faculty Member'}
-                          </span>
-                        </div>
-
-                        <div style={styles.metaRow}>
-                          <Calendar size={14} color="#94a3b8" />
-                          <span>
-                            <strong>Exam Date:</strong> {paper.examDate}
-                          </span>
-                        </div>
-
-                        <div style={styles.deliveryRow}>
-                          <Clock size={14} color={isDeliverable ? '#4ade80' : '#f59e0b'} />
-                          <span>
-                            <strong>Next-Day Delivery:</strong>{' '}
-                            <span style={{ color: isDeliverable ? '#4ade80' : '#facc15', fontWeight: '600' }}>
-                              {paper.scheduledDeliveryDate}
-                            </span>
-                          </span>
-                        </div>
-
-                        <div style={styles.metaRow}>
-                          <span style={{ fontSize: '0.75rem', color: isDeliverable ? '#86efac' : '#fde047' }}>
-                            {isDeliverable
-                              ? 'Access Authorized • Ready for verification and download'
-                              : `Access Restricted • Unlocks on ${paper.scheduledDeliveryDate}`}
-                          </span>
-                        </div>
-                      </div>
-
-                      {verificationResults[paper.id] && (
-                        <div
-                          style={
-                            verificationResults[paper.id].verified
-                              ? styles.verificationSuccessAlert
-                              : styles.verificationFailureAlert
-                          }
-                        >
-                          {verificationResults[paper.id].verified ? (
-                            <span>✔ RSA-PSS Signature Verified Valid</span>
-                          ) : (
-                            <span>✖ Signature/Integrity Check Failed</span>
-                          )}
-                        </div>
-                      )}
-
-                      <div style={styles.cardFooter}>
-                        <span style={styles.fileInfoText}>
-                          PDF • {paper.fileSize ? (paper.fileSize / 1024).toFixed(1) : '—'} KB
-                        </span>
-
-                        <div style={styles.cardBtnGroup}>
-                          <button
-                            onClick={() => handleVerifySignature(paper.id)}
-                            disabled={verifyingId === paper.id}
-                            style={styles.verifyCardBtn}
-                            title="Verify RSA-PSS Signature & Integrity"
-                          >
-                            {verifyingId === paper.id ? (
-                              <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />
-                            ) : (
-                              <ShieldCheck size={13} />
-                            )}
-                            <span>Verify</span>
-                          </button>
-
-                          <button
-                            onClick={() => setSelectedPaper(paper)}
-                            style={styles.viewBtn}
-                            title="View Metadata"
-                          >
-                            <Eye size={15} />
-                            <span>Details</span>
-                          </button>
-
-                          <button
-                            onClick={() => handleDownload(paper.id, paper.fileName)}
-                            disabled={downloadingId === paper.id || isTampered || !isDeliverable}
-                            style={{
-                              ...styles.downloadBtn,
-                              ...(!isDeliverable
-                                ? { backgroundColor: '#334155', opacity: 0.5, cursor: 'not-allowed' }
-                                : isTampered
-                                ? { backgroundColor: '#475569', opacity: 0.5, cursor: 'not-allowed' }
-                                : {}),
-                            }}
-                            title={
-                              !isDeliverable
-                                ? `Access restricted until delivery date (${paper.scheduledDeliveryDate})`
-                                : isTampered
-                                ? 'Integrity check failed: download blocked'
-                                : 'Download Decrypted PDF'
-                            }
-                          >
-                            {downloadingId === paper.id ? (
-                              <Loader2 size={15} style={{ animation: 'spin 1s linear infinite' }} />
-                            ) : (
-                              <Download size={15} />
-                            )}
-                            <span>{!isDeliverable ? 'Delivery Gated' : isTampered ? 'Tamper Blocked' : 'Download'}</span>
-                          </button>
                         </div>
                       </div>
                     </div>

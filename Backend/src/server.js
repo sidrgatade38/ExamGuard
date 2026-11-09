@@ -24,8 +24,14 @@ app.use(
 // CORS configuration (environment-aware allowlist, blocks untrusted browser origins)
 app.use(createCorsMiddleware());
 
-// Body parser middleware
-app.use(express.json());
+// Body parser middleware - capture raw body for cryptographic Resend webhook verification
+app.use(
+  express.json({
+    verify: (req, res, buf) => {
+      req.rawBody = buf;
+    },
+  })
+);
 app.use(express.urlencoded({ extended: true }));
 
 // Root status endpoint (browser friendly status confirmation)

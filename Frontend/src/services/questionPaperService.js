@@ -140,6 +140,24 @@ export const questionPaperService = {
     const response = await api.get(`/question-papers/${id}/verification-history`);
     return response.data?.data || [];
   },
+
+  /**
+   * Draft helpers (Module 23)
+   */
+  async listDrafts() {
+    const res = await api.get('/question-papers/drafts');
+    return res.data?.data || [];
+  },
+
+  async deleteDraft(id) {
+    const res = await api.delete(`/question-papers/drafts/${id}`);
+    return res.data;
+  },
+
+  async saveDraft(payload) {
+    const res = await api.post('/question-papers/drafts', payload);
+    return res.data;
+  },
 };
 
 export default questionPaperService;

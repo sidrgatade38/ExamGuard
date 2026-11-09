@@ -236,6 +236,24 @@ async function reviewPaper(req, res, next) {
   }
 }
 
+async function removePaperAssignment(req, res, next) {
+  try {
+    const coordinatorId = req.user?.userId;
+    const { id } = req.params;
+
+    const result = await examCoordinatorService.archiveCoordinatorAssignment(id, coordinatorId);
+    return res.status(200).json(result);
+  } catch (err) {
+    if (err.statusCode) {
+      return res.status(err.statusCode).json({
+        success: false,
+        message: err.message,
+      });
+    }
+    return next(err);
+  }
+}
+
 module.exports = {
   getAssignedPapers,
   getDashboardStats,
@@ -244,4 +262,5 @@ module.exports = {
   downloadPaper,
   verifyPaperSignature,
   reviewPaper,
+  removePaperAssignment,
 };

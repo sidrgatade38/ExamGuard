@@ -12,6 +12,7 @@ const questionBankRoutes = require('./questionBankRoutes');
 const blueprintRoutes = require('./blueprintRoutes');
 const questionPaperGeneratorRoutes = require('./questionPaperGeneratorRoutes');
 const academicMasterRoutes = require('./academicMasterRoutes');
+const webhookRoutes = require('./webhookRoutes');
 
 const router = express.Router();
 
@@ -29,5 +30,6 @@ router.use('/question-bank', questionBankRoutes);
 router.use('/exam-blueprints', blueprintRoutes);
 router.use('/question-paper-generator', questionPaperGeneratorRoutes);
 router.use('/academic', academicMasterRoutes);
+router.use('/webhooks', webhookRoutes);
 
 module.exports = router;

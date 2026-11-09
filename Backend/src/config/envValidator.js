@@ -133,6 +133,22 @@ function validateEnvironment(cfg) {
     }
   }
 
+  // 6. Resend Email Service Configuration Validation (Module 10 & Production Sprint)
+  const resendApiKey = config.resend?.apiKey || process.env.RESEND_API_KEY;
+  const resendFrom = config.resend?.fromEmail || process.env.RESEND_FROM_EMAIL;
+
+  if (!resendApiKey || resendApiKey.trim().length === 0) {
+    warnings.push('RESEND_API_KEY is not configured: Email notifications will be recorded in database as PENDING. Provision a verified API key to enable live institutional email delivery.');
+  } else if (!resendApiKey.startsWith('re_')) {
+    warnings.push('RESEND_API_KEY does not start with standard prefix "re_". Verify key validity in Resend dashboard.');
+  }
+
+  if (!resendFrom || resendFrom.trim().length === 0) {
+    warnings.push('RESEND_FROM_EMAIL is not set: Using default "ExamGuard <onboarding@resend.dev>". Configure a domain verified in Resend for production delivery.');
+  } else if (resendFrom.includes('onboarding@resend.dev') && isProduction) {
+    warnings.push('RESEND_FROM_EMAIL is using the testing address "onboarding@resend.dev" in production. Note: this address can only deliver to the account owner\'s email address.');
+  }
+
   return {
     valid: errors.length === 0,
     errors,

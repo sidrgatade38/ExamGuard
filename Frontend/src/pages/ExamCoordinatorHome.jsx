@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import examCoordinatorService from '../services/examCoordinatorService';
 import answerKeyService from '../services/answerKeyService';
-import NotificationBell from '../components/NotificationBell';
 import AlgorithmFlowDiagram from '../components/AlgorithmFlowDiagram';
 import {
   ClipboardCheck,
@@ -37,6 +36,7 @@ import {
   Building,
   GraduationCap,
   Sparkles,
+  Trash2,
 } from 'lucide-react';
 
 export default function ExamCoordinatorHome() {
@@ -96,8 +96,19 @@ export default function ExamCoordinatorHome() {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [departmentFilter, setDepartmentFilter] = useState('ALL');
 
-  // Notification / Alert message state
-  const [actionAlert, setActionAlert] = useState(null);
+  // Notification / Alert message state with Auto-Dismissal (3-5s success/warning, 5-7s danger)
+  const [actionAlert, setActionAlertState] = useState(null);
+  const actionTimerRef = useRef(null);
+  const setActionAlert = useCallback((alert) => {
+    if (actionTimerRef.current) clearTimeout(actionTimerRef.current);
+    setActionAlertState(alert);
+    if (alert) {
+      const duration = alert.type === 'danger' ? 6000 : 4000;
+      actionTimerRef.current = setTimeout(() => {
+        setActionAlertState(null);
+      }, duration);
+    }
+  }, []);
 
   // Review & Workflow State (Module 22)
   const [reviewModalPaper, setReviewModalPaper] = useState(null);
@@ -372,6 +383,28 @@ export default function ExamCoordinatorHome() {
     }
   };
 
+  // Remove / Archive assignment from coordinator active queue (Sprint Section 8)
+  const handleRemoveAssignment = async (paper) => {
+    if (!window.confirm(`Are you sure you want to remove assignment for "${paper.title}" from your active coordinator queue? The underlying paper record and author history will remain preserved.`)) {
+      return;
+    }
+    try {
+      await examCoordinatorService.removeAssignedPaper(paper.id);
+      setActionAlert({
+        type: 'success',
+        title: 'Assignment Removed',
+        message: `Paper "${paper.title}" was removed from your active coordinator queue.`,
+      });
+      fetchPapers(pagination.page);
+    } catch (err) {
+      setActionAlert({
+        type: 'danger',
+        title: 'Failed to Remove',
+        message: err.response?.data?.message || err.message || 'Failed to remove assignment.',
+      });
+    }
+  };
+
   // Distinct department list for filtering
   const departments = useMemo(() => {
     const set = new Set();
@@ -529,7 +562,6 @@ export default function ExamCoordinatorHome() {
             <Layers size={15} />
             <span>Algorithm Flow</span>
           </button>
-          <NotificationBell onSelectPaper={(p) => setSelectedPaper(p)} />
           <div style={styles.roleBadge}>
             <Lock size={12} style={{ marginRight: '4px' }} />
             Role: EXAM_COORDINATOR
@@ -546,7 +578,6 @@ export default function ExamCoordinatorHome() {
 
         {/* Mobile Navigation Controls */}
         <div className="nav-mobile-controls" style={styles.navMobileControls}>
-          <NotificationBell onSelectPaper={(p) => setSelectedPaper(p)} />
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             style={styles.mobileMenuToggle}
@@ -1320,7 +1351,7 @@ export default function ExamCoordinatorHome() {
                                     isTampered
                                       ? 'Download blocked: Integrity verification failed'
                                       : !isDeliverable
-                                      ? 'Locked until scheduled examination delivery date'
+                                      ? (paper.formattedReleaseTime ? `Locked: Decrypted paper will be released strictly 1 hour prior to examination (${paper.formattedReleaseTime})` : 'Locked: Access opens strictly 1 hour prior to exam')
                                       : 'Verify-Before-Decrypt and download decrypted PDF'
                                   }
                                 >
@@ -1338,6 +1369,21 @@ export default function ExamCoordinatorHome() {
                                       ? 'Locked'
                                       : 'Download'}
                                   </span>
+                                </button>
+
+                                {/* Remove / Archive assignment from queue */}
+                                <button
+                                  onClick={() => handleRemoveAssignment(paper)}
+                                  style={{
+                                    ...styles.viewBtn,
+                                    backgroundColor: 'transparent',
+                                    border: '1px solid #ef4444',
+                                    color: '#ef4444',
+                                    padding: '0.4rem 0.5rem',
+                                  }}
+                                  title="Remove assignment from active queue"
+                                >
+                                  <Trash2 size={14} />
                                 </button>
                               </div>
                             </td>

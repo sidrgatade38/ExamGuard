@@ -1,5 +1,5 @@
 const express = require('express');
-const { login, getMe, getProfile, updateProfile } = require('../controllers/authController');
+const { login, register, getMe, getProfile, updateProfile } = require('../controllers/authController');
 const { authenticateToken } = require('../middleware/authMiddleware');
 const { defaultLoginLimiter } = require('../middleware/rateLimiter');
 
@@ -7,6 +7,9 @@ const router = express.Router();
 
 // POST /api/auth/login (Rate-limited against brute force abuse)
 router.post('/login', defaultLoginLimiter, login);
+
+// POST /api/auth/register (Teacher self-registration)
+router.post('/register', defaultLoginLimiter, register);
 
 // GET /api/auth/me (Protected by authenticateToken middleware)
 router.get('/me', authenticateToken, getMe);

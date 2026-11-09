@@ -25,6 +25,12 @@ router.get('/users/:id', adminController.getUser);
 // Administrative user creation
 router.post('/users', adminController.postUser);
 
+// Update user details
+router.put('/users/:id', adminController.updateUser);
+
+// Account deletion & safe access revocation
+router.delete('/users/:id', adminController.deleteUser);
+
 // Account activation / deactivation
 router.patch('/users/:id/status', adminController.updateStatus);
 

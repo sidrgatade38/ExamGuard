@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ShieldAlert,
@@ -61,8 +61,31 @@ export default function AdminHome() {
   const [userRoleFilter, setUserRoleFilter] = useState('');
   const [userStatusFilter, setUserStatusFilter] = useState('');
   const [usersLoading, setUsersLoading] = useState(false);
-  const [userActionError, setUserActionError] = useState(null);
-  const [userActionSuccess, setUserActionSuccess] = useState(null);
+  // Alerts with auto-dismissal (3-5s success, 5-7s error)
+  const [userActionError, setUserActionErrorState] = useState(null);
+  const [userActionSuccess, setUserActionSuccessState] = useState(null);
+  const successTimerRef = useRef(null);
+  const errorTimerRef = useRef(null);
+
+  const setUserActionSuccess = useCallback((msg) => {
+    if (successTimerRef.current) clearTimeout(successTimerRef.current);
+    setUserActionSuccessState(msg);
+    if (msg) {
+      successTimerRef.current = setTimeout(() => {
+        setUserActionSuccessState(null);
+      }, 4000);
+    }
+  }, []);
+
+  const setUserActionError = useCallback((msg) => {
+    if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
+    setUserActionErrorState(msg);
+    if (msg) {
+      errorTimerRef.current = setTimeout(() => {
+        setUserActionErrorState(null);
+      }, 6000);
+    }
+  }, []);
 
   // Modals
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -73,6 +96,20 @@ export default function AdminHome() {
     role: 'TEACHER',
   });
   const [createSubmitting, setCreateSubmitting] = useState(false);
+
+  // Edit User State
+  const [userToEdit, setUserToEdit] = useState(null);
+  const [editForm, setEditForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    role: 'TEACHER',
+  });
+  const [editSubmitting, setEditSubmitting] = useState(false);
+
+  // Delete / Safe Archival State
+  const [userToDelete, setUserToDelete] = useState(null);
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
 
   const [selectedUserDetail, setSelectedUserDetail] = useState(null);
 
@@ -269,6 +306,52 @@ export default function AdminHome() {
       );
     } finally {
       setPasswordSubmitting(false);
+    }
+  };
+
+  // Safe User Deletion & Archival Handler (Sprint Section 2)
+  const handleDeleteUser = async () => {
+    if (!userToDelete) return;
+    setDeleteSubmitting(true);
+    setUserActionError(null);
+    setUserActionSuccess(null);
+    try {
+      const res = await adminService.deleteUser(userToDelete.id);
+      setUserActionSuccess(res.message || `User account for "${userToDelete.email}" has been safely archived. Active login access revoked while historical records and question papers remain preserved.`);
+      setUserToDelete(null);
+      fetchUsers(usersPagination.page);
+    } catch (err) {
+      setUserActionError(err.response?.data?.message || err.message || 'Failed to archive user account.');
+    } finally {
+      setDeleteSubmitting(false);
+    }
+  };
+
+  // Edit User Account Information Handler (Sprint Section 2)
+  const handleEditUser = async (e) => {
+    e.preventDefault();
+    if (!userToEdit) return;
+    if (!editForm.name.trim() || !editForm.email.trim()) {
+      setUserActionError('Name and Email are required.');
+      return;
+    }
+    setEditSubmitting(true);
+    setUserActionError(null);
+    setUserActionSuccess(null);
+    try {
+      await adminService.updateUser(userToEdit.id, {
+        name: editForm.name.trim(),
+        email: editForm.email.trim().toLowerCase(),
+        phone: editForm.phone.trim(),
+        role: editForm.role,
+      });
+      setUserActionSuccess(`User account "${editForm.email}" updated successfully.`);
+      setUserToEdit(null);
+      fetchUsers(usersPagination.page);
+    } catch (err) {
+      setUserActionError(err.response?.data?.message || err.message || 'Failed to update user account.');
+    } finally {
+      setEditSubmitting(false);
     }
   };
 
@@ -634,19 +717,7 @@ export default function AdminHome() {
                 <span>Academic &amp; Paper Config</span>
               </button>
 
-              <button
-                onClick={() => {
-                  setActiveTab('audit');
-                  setMobileMenuOpen(false);
-                }}
-                style={{
-                  ...styles.mobileNavBtn,
-                  ...(activeTab === 'audit' ? styles.mobileNavBtnActive : {}),
-                }}
-              >
-                <Activity size={18} />
-                <span>Security Audit Logs</span>
-              </button>
+              {/* Security audit logging operates continuously on backend; UI navigation tab removed per Section 11 */}
             </div>
 
             <div style={styles.mobileLogoutWrapper}>
@@ -681,17 +752,6 @@ export default function AdminHome() {
         >
           <BookOpen size={18} style={{ marginRight: '0.5rem' }} />
           <span>Academic &amp; Paper Config</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('audit')}
-          style={{
-            ...styles.tabBtn,
-            ...(activeTab === 'audit' ? styles.tabBtnActive : {}),
-          }}
-        >
-          <Activity size={18} style={{ marginRight: '0.5rem' }} />
-          <span>Security Audit Logs</span>
         </button>
       </nav>
 
@@ -772,6 +832,7 @@ export default function AdminHome() {
                   <option value="">All Statuses</option>
                   <option value="active">Active Only</option>
                   <option value="inactive">Inactive Only</option>
+                  <option value="archived">Archived / Access Revoked</option>
                 </select>
               </div>
 
@@ -873,7 +934,12 @@ export default function AdminHome() {
                               </span>
                             </td>
                             <td style={styles.td}>
-                              {u.isActive ? (
+                              {u.isDeleted ? (
+                                <span style={{ ...styles.statusInactivePill, backgroundColor: '#fee2e2', color: '#991b1b', border: '1px solid #fecaca' }}>
+                                  <XCircle size={12} style={{ marginRight: '0.25rem' }} />
+                                  Archived
+                                </span>
+                              ) : u.isActive ? (
                                 <span style={styles.statusActivePill}>
                                   <CheckCircle2 size={12} style={{ marginRight: '0.25rem' }} />
                                   Active
@@ -897,6 +963,23 @@ export default function AdminHome() {
                                   title="View User Details"
                                 >
                                   <Eye size={15} />
+                                </button>
+
+                                {/* Edit Account */}
+                                <button
+                                  onClick={() => {
+                                    setUserToEdit(u);
+                                    setEditForm({
+                                      name: u.name || '',
+                                      email: u.email || '',
+                                      phone: u.phone || '',
+                                      role: u.role || 'TEACHER',
+                                    });
+                                  }}
+                                  style={styles.actionIconBtn}
+                                  title="Edit Account Details"
+                                >
+                                  <Edit size={15} color="#3b82f6" />
                                 </button>
 
                                 {/* Change Role */}
@@ -934,6 +1017,20 @@ export default function AdminHome() {
                                   title={u.isActive ? 'Deactivate User' : 'Activate User'}
                                 >
                                   {u.isActive ? <UserX size={15} /> : <UserCheck size={15} />}
+                                </button>
+
+                                {/* Safe Account Deletion & Archival */}
+                                <button
+                                  onClick={() => setUserToDelete(u)}
+                                  disabled={isSelf || u.isDeleted}
+                                  style={{
+                                    ...styles.actionIconBtn,
+                                    color: '#ef4444',
+                                    ...(isSelf || u.isDeleted ? { opacity: 0.35, cursor: 'not-allowed' } : {}),
+                                  }}
+                                  title={isSelf ? 'Cannot delete your own admin account' : u.isDeleted ? 'Account already archived' : 'Delete / Safely Revoke Access'}
+                                >
+                                  <Trash2 size={15} />
                                 </button>
                               </div>
                             </td>
@@ -1996,6 +2093,177 @@ export default function AdminHome() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* MODAL: EDIT USER ACCOUNT INFORMATION (Sprint Section 2)        */}
+      {/* ============================================================== */}
+      {userToEdit && (
+        <div style={styles.modalOverlay}>
+          <div style={styles.modalCard}>
+            <div style={styles.modalHeader}>
+              <h3 style={styles.modalTitle}>Edit User Account Information</h3>
+              <button
+                onClick={() => setUserToEdit(null)}
+                style={styles.modalCloseBtn}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleEditUser}>
+              <div style={styles.modalBody}>
+                <div style={styles.formField}>
+                  <label style={styles.formLabel}>Full Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={editForm.name}
+                    onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                    style={styles.modalInput}
+                  />
+                </div>
+
+                <div style={styles.formField}>
+                  <label style={styles.formLabel}>Institutional Email Address *</label>
+                  <input
+                    type="email"
+                    required
+                    value={editForm.email}
+                    onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                    style={styles.modalInput}
+                  />
+                </div>
+
+                <div style={styles.formField}>
+                  <label style={styles.formLabel}>Mobile / Contact Phone</label>
+                  <input
+                    type="tel"
+                    placeholder="+91 98765 43210"
+                    value={editForm.phone}
+                    onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                    style={styles.modalInput}
+                  />
+                </div>
+
+                <div style={styles.formField}>
+                  <label style={styles.formLabel}>Assigned Role *</label>
+                  <select
+                    value={editForm.role}
+                    onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}
+                    style={styles.modalSelect}
+                  >
+                    <option value="TEACHER">TEACHER (Question Paper Author & Answer Keys)</option>
+                    <option value="EXAM_COORDINATOR">EXAM_COORDINATOR (Distribution & Materials)</option>
+                    <option value="ADMIN">ADMIN (System Administrator)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={styles.modalFooter}>
+                <button
+                  type="button"
+                  onClick={() => setUserToEdit(null)}
+                  style={styles.modalDismissBtn}
+                  disabled={editSubmitting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  style={styles.modalSubmitBtn}
+                  disabled={editSubmitting}
+                >
+                  {editSubmitting ? (
+                    <>
+                      <Loader2 size={16} style={{ animation: 'spin 1s linear infinite', marginRight: '0.4rem' }} />
+                      Saving...
+                    </>
+                  ) : (
+                    'Save Account Details'
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* MODAL: SAFE ACCOUNT DELETION & ARCHIVAL (Sprint Section 2)     */}
+      {/* ============================================================== */}
+      {userToDelete && (
+        <div style={styles.modalOverlay}>
+          <div style={styles.modalCard}>
+            <div style={styles.modalHeader}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Trash2 size={20} color="#ef4444" />
+                <h3 style={{ ...styles.modalTitle, color: '#ef4444' }}>Safe Account Deletion & Archival</h3>
+              </div>
+              <button
+                onClick={() => setUserToDelete(null)}
+                style={styles.modalCloseBtn}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={styles.modalBody}>
+              <div
+                style={{
+                  backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  borderRadius: '8px',
+                  padding: '12px 16px',
+                  marginBottom: '14px',
+                  color: '#f87171',
+                  fontSize: '13px',
+                }}
+              >
+                <strong>Account to be deactivated:</strong> {userToDelete.name} ({userToDelete.email}) • Role: <strong>{userToDelete.role}</strong>
+              </div>
+
+              <h4 style={{ fontSize: '14px', fontWeight: 700, margin: '0 0 8px 0', color: 'var(--color-text-primary)' }}>
+                Consequences of Account Deletion:
+              </h4>
+              <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '13px', color: 'var(--color-text-secondary)', lineHeight: '1.6' }}>
+                <li>All active user sessions and authentication tokens are immediately revoked.</li>
+                <li>The user is permanently blocked from logging in to ExamGuard.</li>
+                <li><strong>Institutional Records Preserved:</strong> All question papers, digital signatures, cryptographic verification logs, and audit entries authored by or assigned to this user will remain safely preserved in the database.</li>
+                <li>Foreign-key constraints and historical academic integrity are fully maintained.</li>
+              </ul>
+            </div>
+
+            <div style={styles.modalFooter}>
+              <button
+                type="button"
+                onClick={() => setUserToDelete(null)}
+                style={styles.modalDismissBtn}
+                disabled={deleteSubmitting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteUser}
+                disabled={deleteSubmitting}
+                style={{
+                  ...styles.modalSubmitBtn,
+                  backgroundColor: '#dc2626',
+                }}
+              >
+                {deleteSubmitting ? (
+                  <>
+                    <Loader2 size={16} style={{ animation: 'spin 1s linear infinite', marginRight: '0.4rem' }} />
+                    Archiving Account...
+                  </>
+                ) : (
+                  'Confirm Account Deletion'
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

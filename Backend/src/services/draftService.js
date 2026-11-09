@@ -11,6 +11,7 @@
 const crypto = require('crypto');
 const { supabase } = require('../config/supabase');
 const auditLogService = require('./auditLogService');
+const notificationService = require('./notificationService');
 
 // In-memory fallback cache for drafts if DB table is initializing
 const memoryDrafts = new Map();
@@ -187,6 +188,12 @@ async function saveDraft(payload) {
     await supabase.from('exam_blueprints').upsert(bpDraft);
   } catch (_) {}
 
+  // Dispatch draft saved notification via Resend
+  notificationService.notifyDraftSaved({
+    draft: record,
+    teacher: { id: teacherId },
+  }).catch(() => {});
+
   return formatDraftRecord(record);
 }
 
@@ -267,13 +274,14 @@ async function getTeacherDrafts(teacherId) {
  */
 async function getDraftById(id, teacherId, role) {
   if (!id) throw new Error('Draft ID is required.');
+  const cleanId = String(id).trim();
 
   let draft = null;
   try {
     const { data, error } = await supabase
       .from('exam_paper_drafts')
       .select('*')
-      .eq('id', id)
+      .eq('id', cleanId)
       .maybeSingle();
 
     if (data && !error) {
@@ -282,7 +290,7 @@ async function getDraftById(id, teacherId, role) {
   } catch (_) {}
 
   if (!draft) {
-    draft = memoryDrafts.get(id);
+    draft = memoryDrafts.get(cleanId);
   }
 
   if (!draft) {
@@ -291,7 +299,7 @@ async function getDraftById(id, teacherId, role) {
       const { data: bp } = await supabase
         .from('exam_blueprints')
         .select('*')
-        .eq('id', id)
+        .eq('id', cleanId)
         .maybeSingle();
 
       if (bp) {
@@ -327,6 +335,42 @@ async function getDraftById(id, teacherId, role) {
     } catch (_) {}
   }
 
+  // Also check question_papers where status is DRAFT
+  if (!draft) {
+    try {
+      const { data: qp } = await supabase
+        .from('question_papers')
+        .select('*')
+        .eq('id', cleanId)
+        .eq('status', 'DRAFT')
+        .maybeSingle();
+
+      if (qp) {
+        draft = {
+          id: qp.id,
+          teacher_id: qp.teacher_id,
+          title: qp.title,
+          subject: qp.subject,
+          course: 'B.E. (Computer Engineering)',
+          department: 'Department of Computer Engineering',
+          class_year: 'TE',
+          academic_pattern: qp.academic_year || '2019',
+          semester: qp.semester || 'Semester 5',
+          duration_hours: 2.5,
+          total_marks: 70,
+          step: 1,
+          blueprint_id: null,
+          form_data: {},
+          sections: [],
+          generated_sets: null,
+          status: 'DRAFT',
+          created_at: qp.created_at,
+          updated_at: qp.updated_at,
+        };
+      }
+    } catch (_) {}
+  }
+
   if (!draft) {
     const err = new Error('Draft not found.');
     err.statusCode = 404;
@@ -334,7 +378,8 @@ async function getDraftById(id, teacherId, role) {
   }
 
   // Enforce teacher data isolation
-  if (role !== 'ADMIN' && draft.teacher_id !== teacherId) {
+  const ownerId = draft.teacher_id || draft.teacherId;
+  if (role !== 'ADMIN' && ownerId && ownerId !== teacherId) {
     const err = new Error('Unauthorized: You can only view and edit your own drafts.');
     err.statusCode = 403;
     throw err;
@@ -348,25 +393,34 @@ async function getDraftById(id, teacherId, role) {
  */
 async function deleteDraft(id, teacherId, role) {
   if (!id) throw new Error('Draft ID is required.');
+  const cleanId = String(id).trim();
 
-  const draft = await getDraftById(id, teacherId, role);
-  if (!draft) {
-    const err = new Error('Draft not found.');
-    err.statusCode = 404;
-    throw err;
+  let draftTitle = 'Draft';
+  try {
+    const draft = await getDraftById(cleanId, teacherId, role);
+    if (draft && draft.title) {
+      draftTitle = draft.title;
+    }
+  } catch (err) {
+    if (err.statusCode === 403) throw err;
+    // If not found in primary store, proceed to clean from all fallback caches
   }
 
-  memoryDrafts.delete(id);
+  memoryDrafts.delete(cleanId);
 
   try {
-    await supabase.from('exam_paper_drafts').delete().eq('id', id);
+    await supabase.from('exam_paper_drafts').delete().eq('id', cleanId);
   } catch (_) {}
 
   try {
-    await supabase.from('exam_blueprints').delete().eq('id', id).eq('status', 'DRAFT');
+    await supabase.from('exam_blueprints').delete().eq('id', cleanId).eq('status', 'DRAFT');
   } catch (_) {}
 
-  return { success: true, message: `Draft "${draft.title}" was deleted.` };
+  try {
+    await supabase.from('question_papers').delete().eq('id', cleanId).eq('status', 'DRAFT');
+  } catch (_) {}
+
+  return { success: true, message: `Draft "${draftTitle}" was deleted successfully.` };
 }
 
 function formatDraftRecord(row) {

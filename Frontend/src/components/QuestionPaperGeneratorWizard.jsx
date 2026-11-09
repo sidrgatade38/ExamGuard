@@ -31,6 +31,12 @@ import {
   Edit3,
   Image as ImageIcon,
   UploadCloud,
+  Trash2,
+  ArrowUp,
+  ArrowDown,
+  Filter,
+  Search,
+  Repeat,
 } from 'lucide-react';
 
 export default function QuestionPaperGeneratorWizard({ initialDraft = null, recipients = [], onSuccess, onCancel }) {
@@ -228,6 +234,265 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
   const [generatedPaperData, setGeneratedPaperData] = useState(() => initialDraft?.generatedPaperData || null);
   const [activeSetIndex, setActiveSetIndex] = useState(0);
 
+  // Step 4 Question Editing & Shared Pool Replacement State (Sprint Section 6 & 7)
+  const [replacingTarget, setReplacingTarget] = useState(null);
+  const [editingTarget, setEditingTarget] = useState(null);
+  const [editingQuestionForm, setEditingQuestionForm] = useState({
+    questionText: '',
+    marks: 8,
+    difficulty: 'MEDIUM',
+    bloomTaxonomy: 'L2 - Understand',
+    subquestions: [],
+  });
+  const [poolFilter, setPoolFilter] = useState({ unit: '', difficulty: '', search: '' });
+
+  // Recalculate numbering and marks for a set
+  const recalculateSetStructure = (setObj) => {
+    let runningNum = 1;
+    let totalMarks = 0;
+    const sections = (setObj.paperStructureSnapshot?.sections || []).map((sec, idx) => {
+      const primaryNum = runningNum++;
+      let altNum = null;
+      let secMarks = 0;
+
+      const pSubs = sec.primaryQuestion?.subquestions || sec.subquestionsConfig || [];
+      let pMarks = 0;
+      if (pSubs.length > 0) {
+        pMarks = pSubs.reduce((acc, sq) => acc + (Number(sq.marks) || 0), 0);
+      } else {
+        pMarks = Number(sec.primaryQuestion?.marks) || Number(sec.targetMarks) || 8;
+      }
+      secMarks = pMarks;
+
+      if (sec.alternativeQuestion) {
+        altNum = runningNum++;
+        const aSubs = sec.alternativeQuestion?.subquestions || sec.subquestionsConfig || [];
+        let aMarks = 0;
+        if (aSubs.length > 0) {
+          aMarks = aSubs.reduce((acc, sq) => acc + (Number(sq.marks) || 0), 0);
+        } else {
+          aMarks = Number(sec.alternativeQuestion?.marks) || Number(sec.targetMarks) || pMarks;
+        }
+        secMarks = Math.max(pMarks, aMarks);
+      }
+
+      totalMarks += secMarks;
+      return {
+        ...sec,
+        groupOrder: idx + 1,
+        primaryQuestionNumber: primaryNum,
+        alternativeQuestionNumber: altNum,
+        targetMarks: secMarks,
+      };
+    });
+
+    return {
+      ...setObj,
+      totalMarks,
+      paperStructureSnapshot: {
+        ...setObj.paperStructureSnapshot,
+        sections,
+      },
+    };
+  };
+
+  const updateActiveSet = (updater) => {
+    setGeneratedPaperData((prev) => {
+      if (!prev || !prev.sets) return prev;
+      const newSets = [...prev.sets];
+      const curSet = newSets[activeSetIndex];
+      if (!curSet) return prev;
+
+      const updatedSet = updater(curSet);
+      newSets[activeSetIndex] = recalculateSetStructure(updatedSet);
+      return {
+        ...prev,
+        sets: newSets,
+      };
+    });
+  };
+
+  const handleSelectReplacement = (repQ) => {
+    if (!replacingTarget) return;
+    const { sectionIndex, questionRole } = replacingTarget;
+    updateActiveSet((curSet) => {
+      const sections = [...(curSet.paperStructureSnapshot?.sections || [])];
+      const sec = { ...sections[sectionIndex] };
+      const newQObj = {
+        id: repQ.id,
+        questionText: repQ.questionText,
+        marks: repQ.marks,
+        difficulty: repQ.difficulty,
+        courseOutcome: repQ.courseOutcome || repQ.course_outcome || 'CO1',
+        programOutcome: repQ.programOutcome || repQ.program_outcome || 'PO1',
+        bloomTaxonomy: repQ.bloomTaxonomy || repQ.bloom_taxonomy || 'L2 - Understand',
+        sourceSet: repQ.source_set || repQ.sourceSet || curSet.setCode,
+        authorName: repQ.author_name || repQ.authorName || 'Computer Engineering Faculty',
+        image: repQ.image || repQ.imageData || repQ.imageUrl,
+        subquestions: repQ.subquestions || [
+          { subPart: 'a', questionText: repQ.questionText, marks: repQ.marks, image: repQ.image }
+        ],
+      };
+      if (questionRole === 'primary') {
+        sec.primaryQuestion = newQObj;
+      } else {
+        sec.alternativeQuestion = newQObj;
+      }
+      sections[sectionIndex] = sec;
+      return {
+        ...curSet,
+        paperStructureSnapshot: {
+          ...curSet.paperStructureSnapshot,
+          sections,
+        },
+      };
+    });
+    setReplacingTarget(null);
+    showNotification('Question successfully replaced from shared question pool. Marks and numbering recalculated.', 'success');
+  };
+
+  const handleOpenEditSetQuestion = (sectionIndex, questionRole, qData) => {
+    const subs = qData.subquestions && qData.subquestions.length > 0
+      ? qData.subquestions
+      : [{ subPart: 'a', questionText: qData.questionText || '', marks: qData.marks || 8 }];
+    setEditingQuestionForm({
+      questionText: qData.questionText || '',
+      marks: qData.marks || 8,
+      difficulty: qData.difficulty || 'MEDIUM',
+      bloomTaxonomy: qData.bloomTaxonomy || 'L2 - Understand',
+      subquestions: subs,
+    });
+    setEditingTarget({ sectionIndex, questionRole, questionData: qData });
+  };
+
+  const handleSaveEditedQuestion = (e) => {
+    e.preventDefault();
+    if (!editingTarget) return;
+    const { sectionIndex, questionRole } = editingTarget;
+    updateActiveSet((curSet) => {
+      const sections = [...(curSet.paperStructureSnapshot?.sections || [])];
+      const sec = { ...sections[sectionIndex] };
+      const totalSubMarks = editingQuestionForm.subquestions.reduce((sum, s) => sum + (Number(s.marks) || 0), 0);
+      const effectiveMarks = totalSubMarks > 0 ? totalSubMarks : Number(editingQuestionForm.marks) || 8;
+      const updatedQ = {
+        questionText: editingQuestionForm.questionText,
+        marks: effectiveMarks,
+        difficulty: editingQuestionForm.difficulty,
+        bloomTaxonomy: editingQuestionForm.bloomTaxonomy,
+        subquestions: editingQuestionForm.subquestions,
+      };
+
+      if (questionRole === 'primary') {
+        sec.primaryQuestion = {
+          ...sec.primaryQuestion,
+          ...updatedQ,
+        };
+      } else {
+        sec.alternativeQuestion = {
+          ...sec.alternativeQuestion,
+          ...updatedQ,
+        };
+      }
+      sections[sectionIndex] = sec;
+      return {
+        ...curSet,
+        paperStructureSnapshot: {
+          ...curSet.paperStructureSnapshot,
+          sections,
+        },
+      };
+    });
+    setEditingTarget(null);
+    showNotification('Question updated successfully. Total marks recalculated.', 'success');
+  };
+
+  const handleRemoveSetQuestion = (sectionIndex, questionRole) => {
+    updateActiveSet((curSet) => {
+      let sections = [...(curSet.paperStructureSnapshot?.sections || [])];
+      if (questionRole === 'alternative') {
+        sections[sectionIndex] = {
+          ...sections[sectionIndex],
+          alternativeQuestion: null,
+          alternativeQuestionNumber: null,
+        };
+      } else {
+        if (sections[sectionIndex].alternativeQuestion) {
+          sections[sectionIndex] = {
+            ...sections[sectionIndex],
+            primaryQuestion: sections[sectionIndex].alternativeQuestion,
+            alternativeQuestion: null,
+            alternativeQuestionNumber: null,
+          };
+        } else {
+          sections.splice(sectionIndex, 1);
+        }
+      }
+      return {
+        ...curSet,
+        paperStructureSnapshot: {
+          ...curSet.paperStructureSnapshot,
+          sections,
+        },
+      };
+    });
+    showNotification('Question removed. Marks and numbering recalculated.', 'success');
+  };
+
+  const handleMoveSection = (sectionIndex, direction) => {
+    updateActiveSet((curSet) => {
+      const sections = [...(curSet.paperStructureSnapshot?.sections || [])];
+      const targetIdx = sectionIndex + direction;
+      if (targetIdx < 0 || targetIdx >= sections.length) return curSet;
+      const temp = sections[sectionIndex];
+      sections[sectionIndex] = sections[targetIdx];
+      sections[targetIdx] = temp;
+      return {
+        ...curSet,
+        paperStructureSnapshot: {
+          ...curSet.paperStructureSnapshot,
+          sections,
+        },
+      };
+    });
+  };
+
+  const handleAddNewSectionToSet = () => {
+    updateActiveSet((curSet) => {
+      const sections = [...(curSet.paperStructureSnapshot?.sections || [])];
+      const newSecIdx = sections.length + 1;
+      const newSec = {
+        groupOrder: newSecIdx,
+        groupLabel: `Unit ${((newSecIdx - 1) % 6) + 1}`,
+        targetUnit: ((newSecIdx - 1) % 6) + 1,
+        targetMarks: 8,
+        primaryQuestionNumber: 0,
+        primaryQuestion: {
+          id: 'manual-' + Date.now(),
+          questionText: `Evaluation Question for ${blueprint.subject}`,
+          marks: 8,
+          difficulty: 'MEDIUM',
+          courseOutcome: 'CO1',
+          programOutcome: 'PO1',
+          bloomTaxonomy: 'L2 - Understand',
+          authorName: teacherProfile?.name || 'Faculty Member',
+          sourceSet: curSet.setCode,
+          subquestions: [
+            { subPart: 'a', questionText: `Evaluation Question for ${blueprint.subject}`, marks: 8 }
+          ],
+        },
+      };
+      sections.push(newSec);
+      return {
+        ...curSet,
+        paperStructureSnapshot: {
+          ...curSet.paperStructureSnapshot,
+          sections,
+        },
+      };
+    });
+    showNotification('New question section added. Marks and numbering recalculated.', 'success');
+  };
+
   // Final Approval & Submission State
   const defaultCoord = recipients.find((r) => r.role === 'EXAM_COORDINATOR') || recipients[0];
   const [submissionForm, setSubmissionForm] = useState({
@@ -291,9 +556,19 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
 
         const deptsList = deptsData.data || [];
         const coursesList = coursesData.data || [];
-        const patternsList = (patternsData.data || []).filter(p => !p.name.includes('2015') && p.code !== 'PAT_2015');
+
+        // Canonical Academic Patterns strictly: 2019, 2024, 2025 (Section 6)
+        const canonicalPatterns = [
+          { id: 'pat_2019', name: '2019' },
+          { id: 'pat_2024', name: '2024' },
+          { id: 'pat_2025', name: '2025' },
+        ];
+        const patternsList = canonicalPatterns;
+
         const semsList = semestersData.data || [];
-        const titlesList = (titlesData.data && titlesData.data.length > 0) ? titlesData.data : [
+
+        // Canonical Paper Titles strictly: Open Book Test, CCE Exam, End Sem Exam (Section 6)
+        const titlesList = [
           { id: 'obt', title: 'Open Book Test' },
           { id: 'cce', title: 'CCE Exam' },
           { id: 'endsem', title: 'End Sem Exam' },
@@ -1273,6 +1548,307 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
             </p>
           </div>
 
+{/* MODAL: REPLACE QUESTION FROM SHARED SUBJECT POOL (Sprint Section 7) */}
+          {replacingTarget && (
+            <div style={styles.modalOverlay}>
+              <div style={{ ...styles.modalCard, maxWidth: '820px', maxHeight: '85vh', overflowY: 'auto' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px', marginBottom: '14px' }}>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 700, color: '#0f172a' }}>
+                      Select Replacement Question from Shared Pool ({blueprint.subject})
+                    </h3>
+                    <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#64748b' }}>
+                      Replacing for {replacingTarget.questionRole === 'primary' ? 'Primary' : 'Alternative'} Question. Choose from department repository.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setReplacingTarget(null)}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+
+                {/* Shared Pool Filters */}
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '14px', flexWrap: 'wrap' }}>
+                  <input
+                    type="text"
+                    placeholder="Search question text or topic..."
+                    value={poolFilter.search}
+                    onChange={(e) => setPoolFilter({ ...poolFilter, search: e.target.value })}
+                    style={{ ...styles.input, flex: 2, height: '36px', fontSize: '12px' }}
+                  />
+                  <select
+                    value={poolFilter.unit}
+                    onChange={(e) => setPoolFilter({ ...poolFilter, unit: e.target.value })}
+                    style={{ ...styles.select, flex: 1, height: '36px', fontSize: '12px' }}
+                  >
+                    <option value="">All Units</option>
+                    {[1, 2, 3, 4, 5, 6].map((u) => (
+                      <option key={u} value={u}>Unit {u}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={poolFilter.difficulty}
+                    onChange={(e) => setPoolFilter({ ...poolFilter, difficulty: e.target.value })}
+                    style={{ ...styles.select, flex: 1, height: '36px', fontSize: '12px' }}
+                  >
+                    <option value="">All Difficulties</option>
+                    <option value="EASY">Easy</option>
+                    <option value="MEDIUM">Medium</option>
+                    <option value="HARD">Hard</option>
+                  </select>
+                </div>
+
+                {/* Replacement Options List */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '420px', overflowY: 'auto' }}>
+                  {questions
+                    .filter((q) => {
+                      if (poolFilter.unit && String(q.unitNumber) !== String(poolFilter.unit)) return false;
+                      if (poolFilter.difficulty && q.difficulty !== poolFilter.difficulty) return false;
+                      if (poolFilter.search) {
+                        const s = poolFilter.search.toLowerCase();
+                        return (q.questionText || '').toLowerCase().includes(s) || (q.topic || '').toLowerCase().includes(s);
+                      }
+                      return true;
+                    })
+                    .map((q) => (
+                      <div
+                        key={q.id}
+                        style={{
+                          border: '1px solid #cbd5e1',
+                          borderRadius: '8px',
+                          padding: '12px',
+                          backgroundColor: '#ffffff',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          gap: '12px',
+                        }}
+                      >
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '4px', flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: '11px', fontWeight: 700, backgroundColor: '#e2e8f0', color: '#334155', padding: '1px 6px', borderRadius: '4px' }}>
+                              Unit {q.unitNumber}
+                            </span>
+                            <span style={{ fontSize: '11px', fontWeight: 700, backgroundColor: '#dbeafe', color: '#1e40af', padding: '1px 6px', borderRadius: '4px' }}>
+                              {q.marks} Marks
+                            </span>
+                            <span style={{ fontSize: '11px', fontWeight: 600, backgroundColor: q.difficulty === 'HARD' ? '#fee2e2' : q.difficulty === 'MEDIUM' ? '#fef3c7' : '#dcfce7', color: q.difficulty === 'HARD' ? '#991b1b' : q.difficulty === 'MEDIUM' ? '#92400e' : '#166534', padding: '1px 6px', borderRadius: '4px' }}>
+                              {q.difficulty}
+                            </span>
+                            {(q.source_set || q.sourceSet) && (
+                              <span style={{ fontSize: '10px', fontWeight: 600, backgroundColor: '#fef3c7', color: '#92400e', padding: '1px 6px', borderRadius: '4px' }}>
+                                Origin: {q.source_set || q.sourceSet}
+                              </span>
+                            )}
+                            {(q.author_name || q.authorName) && (
+                              <span style={{ fontSize: '11px', color: '#64748b' }}>
+                                by {q.author_name || q.authorName}
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: '13px', color: '#1e293b', fontWeight: 500 }}>
+                            {q.questionText}
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleSelectReplacement(q)}
+                          style={{
+                            padding: '6px 14px',
+                            backgroundColor: '#0284c7',
+                            color: '#ffffff',
+                            border: 'none',
+                            borderRadius: '6px',
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          Select Replacement
+                        </button>
+                      </div>
+                    ))}
+                  {questions.length === 0 && (
+                    <div style={{ textAlign: 'center', padding: '20px', color: '#64748b' }}>
+                      No alternative questions found in repository for {blueprint.subject}.
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setReplacingTarget(null)}
+                    style={styles.secondaryButton}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* MODAL: EDIT QUESTION DETAILS & MANUAL MARKS (Sprint Section 6) */}
+          {editingTarget && (
+            <div style={styles.modalOverlay}>
+              <div style={{ ...styles.modalCard, maxWidth: '650px', maxHeight: '85vh', overflowY: 'auto' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px', marginBottom: '14px' }}>
+                  <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 700, color: '#0f172a' }}>
+                    Edit Question Content &amp; Manual Marks Allocation
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setEditingTarget(null)}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+
+                <form onSubmit={handleSaveEditedQuestion}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    <div>
+                      <label style={styles.label}>Question Text *</label>
+                      <textarea
+                        rows={3}
+                        required
+                        value={editingQuestionForm.questionText}
+                        onChange={(e) => setEditingQuestionForm({ ...editingQuestionForm, questionText: e.target.value })}
+                        style={{ ...styles.input, height: 'auto', padding: '8px' }}
+                      />
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                      <div>
+                        <label style={styles.label}>Total Marks Allocation *</label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={50}
+                          required
+                          value={editingQuestionForm.marks}
+                          onChange={(e) => setEditingQuestionForm({ ...editingQuestionForm, marks: Number(e.target.value) || 1 })}
+                          style={styles.input}
+                        />
+                      </div>
+
+                      <div>
+                        <label style={styles.label}>Difficulty Level</label>
+                        <select
+                          value={editingQuestionForm.difficulty}
+                          onChange={(e) => setEditingQuestionForm({ ...editingQuestionForm, difficulty: e.target.value })}
+                          style={styles.select}
+                        >
+                          <option value="EASY">EASY</option>
+                          <option value="MEDIUM">MEDIUM</option>
+                          <option value="HARD">HARD</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                        <label style={styles.label}>Subquestions Breakdown</label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const curSubs = [...editingQuestionForm.subquestions];
+                            const nextPart = String.fromCharCode(97 + curSubs.length);
+                            curSubs.push({ subPart: nextPart, questionText: '', marks: 4 });
+                            setEditingQuestionForm({ ...editingQuestionForm, subquestions: curSubs });
+                          }}
+                          style={{
+                            padding: '3px 8px',
+                            backgroundColor: '#eff6ff',
+                            border: '1px solid #bfdbfe',
+                            borderRadius: '4px',
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            color: '#1d4ed8',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          + Add Subquestion
+                        </button>
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {editingQuestionForm.subquestions.map((sub, sidx) => (
+                          <div key={sidx} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            <span style={{ fontWeight: 700, fontSize: '13px', width: '22px' }}>
+                              ({sub.subPart || String.fromCharCode(97 + sidx)})
+                            </span>
+                            <input
+                              type="text"
+                              placeholder="Subquestion details..."
+                              value={sub.questionText}
+                              onChange={(e) => {
+                                const curSubs = [...editingQuestionForm.subquestions];
+                                curSubs[sidx].questionText = e.target.value;
+                                setEditingQuestionForm({ ...editingQuestionForm, subquestions: curSubs });
+                              }}
+                              style={{ ...styles.input, flex: 3 }}
+                            />
+                            <input
+                              type="number"
+                              min={1}
+                              max={25}
+                              placeholder="M"
+                              value={sub.marks}
+                              onChange={(e) => {
+                                const curSubs = [...editingQuestionForm.subquestions];
+                                curSubs[sidx].marks = Number(e.target.value) || 1;
+                                setEditingQuestionForm({ ...editingQuestionForm, subquestions: curSubs });
+                              }}
+                              style={{ ...styles.input, width: '65px' }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const curSubs = editingQuestionForm.subquestions.filter((_, idx) => idx !== sidx);
+                                setEditingQuestionForm({ ...editingQuestionForm, subquestions: curSubs });
+                              }}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                color: '#ef4444',
+                                cursor: 'pointer',
+                                padding: '4px',
+                              }}
+                            >
+                              <X size={16} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px' }}>
+                      <button
+                        type="button"
+                        onClick={() => setEditingTarget(null)}
+                        style={styles.secondaryButton}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        style={styles.primaryButton}
+                      >
+                        Save Question Changes
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
           <div style={styles.buttonRow}>
             <div style={{ display: 'flex', gap: '8px' }}>
               <button type="button" style={styles.secondaryButton} onClick={onCancel}>
@@ -1498,7 +2074,7 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
               type="button"
               style={styles.primaryButton}
               onClick={handleCheckFeasibility}
-              disabled={questions.length < 8 || checkingFeasibility}
+              disabled={questions.length === 0 || checkingFeasibility}
             >
               {checkingFeasibility ? <Loader2 size={18} className="animate-spin" /> : <Sliders size={18} />}
               <span>Verify Feasibility &amp; Sets</span>
@@ -1819,6 +2395,322 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
                   Under Examination Cell security guidelines, final question selection and arrangements are cryptographically isolated on the server. Teachers can review questions via the Permitted Preview before submission. Once submitted, only the designated Exam Coordinator may decrypt and access the final question paper upon scheduled delivery.
                 </p>
               </div>
+            </div>
+          </div>
+
+          {/* Active Set Question Paper Structure & Interactive Editor (Sprint Section 6 & 7) */}
+          <div style={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px', marginBottom: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+              <div>
+                <h4 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>
+                  {activeSet.setCode} Examination Structure &amp; Question Allocations
+                </h4>
+                <p style={{ margin: '3px 0 0 0', fontSize: '13px', color: '#64748b' }}>
+                  Add, edit, replace, or reorder questions. Marks and numbering auto-recalculate dynamically.
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '13px', fontWeight: 700, backgroundColor: '#e0f2fe', color: '#0369a1', padding: '6px 12px', borderRadius: '8px' }}>
+                  Total: {activeSet.totalMarks} Marks
+                </span>
+                <button
+                  type="button"
+                  onClick={handleAddNewSectionToSet}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    padding: '6px 12px',
+                    backgroundColor: '#10b981',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                  title="Add another question section to this set"
+                >
+                  <Plus size={14} />
+                  <span>Add Question Section</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Sections & Questions List */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {(activeSet.paperStructureSnapshot?.sections || []).map((sec, secIdx) => {
+                return (
+                  <div
+                    key={secIdx}
+                    style={{
+                      border: '1px solid #cbd5e1',
+                      borderRadius: '10px',
+                      padding: '16px',
+                      backgroundColor: '#f8fafc',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontWeight: 700, fontSize: '14px', color: '#1e293b' }}>
+                          Group {sec.groupOrder || secIdx + 1}: {sec.groupLabel || `Unit ${sec.targetUnit || secIdx + 1}`}
+                        </span>
+                        <span style={{ fontSize: '11px', fontWeight: 600, backgroundColor: '#e2e8f0', color: '#475569', padding: '2px 8px', borderRadius: '4px' }}>
+                          {sec.targetMarks} Marks
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '4px' }}>
+                        <button
+                          type="button"
+                          onClick={() => handleMoveSection(secIdx, -1)}
+                          disabled={secIdx === 0}
+                          style={{
+                            padding: '3px 8px',
+                            backgroundColor: '#ffffff',
+                            border: '1px solid #cbd5e1',
+                            borderRadius: '4px',
+                            cursor: secIdx === 0 ? 'not-allowed' : 'pointer',
+                            opacity: secIdx === 0 ? 0.4 : 1,
+                          }}
+                          title="Move Question Section Up"
+                        >
+                          <ArrowUp size={13} color="#475569" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleMoveSection(secIdx, 1)}
+                          disabled={secIdx === (activeSet.paperStructureSnapshot?.sections || []).length - 1}
+                          style={{
+                            padding: '3px 8px',
+                            backgroundColor: '#ffffff',
+                            border: '1px solid #cbd5e1',
+                            borderRadius: '4px',
+                            cursor: secIdx === (activeSet.paperStructureSnapshot?.sections || []).length - 1 ? 'not-allowed' : 'pointer',
+                            opacity: secIdx === (activeSet.paperStructureSnapshot?.sections || []).length - 1 ? 0.4 : 1,
+                          }}
+                          title="Move Question Section Down"
+                        >
+                          <ArrowDown size={13} color="#475569" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Primary Question Box */}
+                    {sec.primaryQuestion && (
+                      <div style={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px 14px', marginBottom: '10px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                          <div>
+                            <span style={{ fontWeight: 800, fontSize: '14px', color: '#0284c7', marginRight: '8px' }}>
+                              Q{sec.primaryQuestionNumber}
+                            </span>
+                            <span style={{ fontSize: '11px', fontWeight: 600, backgroundColor: '#f0fdf4', color: '#166534', padding: '2px 6px', borderRadius: '4px' }}>
+                              Primary Compulsory
+                            </span>
+                            {(sec.primaryQuestion.sourceSet || sec.primaryQuestion.source_set) && (
+                              <span style={{ fontSize: '10px', fontWeight: 600, backgroundColor: '#fef3c7', color: '#92400e', padding: '2px 6px', borderRadius: '4px', marginLeft: '6px' }}>
+                                Origin: {sec.primaryQuestion.sourceSet || sec.primaryQuestion.source_set}
+                              </span>
+                            )}
+                            {(sec.primaryQuestion.authorName || sec.primaryQuestion.author_name) && (
+                              <span style={{ fontSize: '10px', color: '#64748b', marginLeft: '6px' }}>
+                                by {sec.primaryQuestion.authorName || sec.primaryQuestion.author_name}
+                              </span>
+                            )}
+                          </div>
+
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditSetQuestion(secIdx, 'primary', sec.primaryQuestion)}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                padding: '4px 8px',
+                                backgroundColor: '#f1f5f9',
+                                border: '1px solid #cbd5e1',
+                                borderRadius: '4px',
+                                fontSize: '11px',
+                                fontWeight: 600,
+                                color: '#1e293b',
+                                cursor: 'pointer',
+                              }}
+                              title="Edit Question Text & Manual Marks"
+                            >
+                              <Edit3 size={12} color="#2563eb" />
+                              <span>Edit</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => setReplacingTarget({ sectionIndex: secIdx, questionRole: 'primary', currentQuestion: sec.primaryQuestion })}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                padding: '4px 8px',
+                                backgroundColor: '#eff6ff',
+                                border: '1px solid #bfdbfe',
+                                borderRadius: '4px',
+                                fontSize: '11px',
+                                fontWeight: 600,
+                                color: '#1d4ed8',
+                                cursor: 'pointer',
+                              }}
+                              title="Replace Question from Shared Pool"
+                            >
+                              <Repeat size={12} color="#1d4ed8" />
+                              <span>Replace</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveSetQuestion(secIdx, 'primary')}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                padding: '4px 8px',
+                                backgroundColor: '#fef2f2',
+                                border: '1px solid #fecaca',
+                                borderRadius: '4px',
+                                color: '#dc2626',
+                                cursor: 'pointer',
+                              }}
+                              title="Remove Question"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Subquestions & Marks */}
+                        {(sec.primaryQuestion.subquestions || [{ subPart: 'a', questionText: sec.primaryQuestion.questionText, marks: sec.primaryQuestion.marks }]).map((sq, sqi) => (
+                          <div key={sqi} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#334155', marginBottom: '4px' }}>
+                            <span><strong>({sq.subPart || String.fromCharCode(97 + sqi)})</strong> {sq.questionText}</span>
+                            <span style={{ fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap', marginLeft: '12px' }}>[{sq.marks}M]</span>
+                          </div>
+                        ))}
+
+                        {/* Diagram if present */}
+                        {(sec.primaryQuestion.image?.dataUrl || sec.primaryQuestion.image || sec.primaryQuestion.imageData || sec.primaryQuestion.imageUrl) && (
+                          <div style={{ marginTop: '8px' }}>
+                            <img
+                              src={sec.primaryQuestion.image?.dataUrl || sec.primaryQuestion.image || sec.primaryQuestion.imageData || sec.primaryQuestion.imageUrl}
+                              alt="Question Diagram"
+                              style={{ maxWidth: '240px', maxHeight: '120px', objectFit: 'contain', border: '1px solid #cbd5e1', borderRadius: '4px', padding: '2px' }}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Alternative OR Question */}
+                    {sec.alternativeQuestion && (
+                      <>
+                        <div style={{ textAlign: 'center', margin: '4px 0', fontSize: '11px', fontWeight: 800, color: '#64748b' }}>
+                          — OR —
+                        </div>
+
+                        <div style={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px 14px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                            <div>
+                              <span style={{ fontWeight: 800, fontSize: '14px', color: '#7c3aed', marginRight: '8px' }}>
+                                Q{sec.alternativeQuestionNumber}
+                              </span>
+                              <span style={{ fontSize: '11px', fontWeight: 600, backgroundColor: '#f5f3ff', color: '#6d28d9', padding: '2px 6px', borderRadius: '4px' }}>
+                                Alternative Option
+                              </span>
+                              {(sec.alternativeQuestion.sourceSet || sec.alternativeQuestion.source_set) && (
+                                <span style={{ fontSize: '10px', fontWeight: 600, backgroundColor: '#fef3c7', color: '#92400e', padding: '2px 6px', borderRadius: '4px', marginLeft: '6px' }}>
+                                  Origin: {sec.alternativeQuestion.sourceSet || sec.alternativeQuestion.source_set}
+                                </span>
+                              )}
+                              {(sec.alternativeQuestion.authorName || sec.alternativeQuestion.author_name) && (
+                                <span style={{ fontSize: '10px', color: '#64748b', marginLeft: '6px' }}>
+                                  by {sec.alternativeQuestion.authorName || sec.alternativeQuestion.author_name}
+                                </span>
+                              )}
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '6px' }}>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditSetQuestion(secIdx, 'alternative', sec.alternativeQuestion)}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  padding: '4px 8px',
+                                  backgroundColor: '#f1f5f9',
+                                  border: '1px solid #cbd5e1',
+                                  borderRadius: '4px',
+                                  fontSize: '11px',
+                                  fontWeight: 600,
+                                  color: '#1e293b',
+                                  cursor: 'pointer',
+                                }}
+                                title="Edit Question Text & Manual Marks"
+                              >
+                                <Edit3 size={12} color="#2563eb" />
+                                <span>Edit</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => setReplacingTarget({ sectionIndex: secIdx, questionRole: 'alternative', currentQuestion: sec.alternativeQuestion })}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  padding: '4px 8px',
+                                  backgroundColor: '#eff6ff',
+                                  border: '1px solid #bfdbfe',
+                                  borderRadius: '4px',
+                                  fontSize: '11px',
+                                  fontWeight: 600,
+                                  color: '#1d4ed8',
+                                  cursor: 'pointer',
+                                }}
+                                title="Replace Question from Shared Pool"
+                              >
+                                <Repeat size={12} color="#1d4ed8" />
+                                <span>Replace</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveSetQuestion(secIdx, 'alternative')}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  padding: '4px 8px',
+                                  backgroundColor: '#fef2f2',
+                                  border: '1px solid #fecaca',
+                                  borderRadius: '4px',
+                                  color: '#dc2626',
+                                  cursor: 'pointer',
+                                }}
+                                title="Remove Alternative Question"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          </div>
+
+                          {(sec.alternativeQuestion.subquestions || [{ subPart: 'a', questionText: sec.alternativeQuestion.questionText, marks: sec.alternativeQuestion.marks }]).map((sq, sqi) => (
+                            <div key={sqi} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#334155', marginBottom: '4px' }}>
+                              <span><strong>({sq.subPart || String.fromCharCode(97 + sqi)})</strong> {sq.questionText}</span>
+                              <span style={{ fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap', marginLeft: '12px' }}>[{sq.marks}M]</span>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
 

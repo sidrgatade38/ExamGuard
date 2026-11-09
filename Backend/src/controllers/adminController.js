@@ -254,6 +254,48 @@ async function approveQuestionPaper(req, res, next) {
   }
 }
 
+/**
+ * Handles DELETE /api/admin/users/:id - Safe archival & access revocation
+ */
+async function deleteUser(req, res, next) {
+  try {
+    const { id } = req.params;
+    const adminUserId = req.user?.userId;
+    const clientContext = getClientContext(req);
+
+    const result = await adminService.deleteUser(id, adminUserId, clientContext);
+    return res.status(200).json(result);
+  } catch (err) {
+    if (err.statusCode) {
+      return res.status(err.statusCode).json({ success: false, message: err.message });
+    }
+    return next(err);
+  }
+}
+
+/**
+ * Handles PUT /api/admin/users/:id - Update permitted user information
+ */
+async function updateUser(req, res, next) {
+  try {
+    const { id } = req.params;
+    const adminUserId = req.user?.userId;
+    const clientContext = getClientContext(req);
+
+    const updated = await adminService.updateUser(id, req.body, adminUserId, clientContext);
+    return res.status(200).json({
+      success: true,
+      message: 'User account details updated successfully',
+      user: updated,
+    });
+  } catch (err) {
+    if (err.statusCode) {
+      return res.status(err.statusCode).json({ success: false, message: err.message });
+    }
+    return next(err);
+  }
+}
+
 module.exports = {
   getUsers,
   getUser,
@@ -261,6 +303,8 @@ module.exports = {
   updateStatus,
   updateRole,
   resetPassword,
+  deleteUser,
+  updateUser,
   getRoles,
   getQuestionPapers,
   approveQuestionPaper,

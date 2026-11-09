@@ -13,6 +13,16 @@ export const authService = {
   },
 
   /**
+   * Registers a new teacher account via POST /api/auth/register
+   * @param {Object} registerData
+   * @returns {Promise<{ success: boolean, token: string, user: Object }>}
+   */
+  async register(registerData) {
+    const response = await api.post('/auth/register', registerData);
+    return response.data;
+  },
+
+  /**
    * Fetches the currently authenticated user identity from GET /api/auth/me
    * @returns {Promise<{ success: boolean, user: Object }>}
    */

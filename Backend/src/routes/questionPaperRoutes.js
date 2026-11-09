@@ -20,6 +20,12 @@ const {
   downloadTeacherAnswerKey,
   verifyTeacherAnswerKeySignature,
 } = require('../controllers/answerKeyController');
+const {
+  listDrafts,
+  saveDraft,
+  getDraft,
+  deleteDraft,
+} = require('../controllers/blueprintController');
 
 const router = express.Router();
 
@@ -63,6 +69,35 @@ router.get(
   authenticateToken,
   authorizeRoles('TEACHER'),
   getRecipients
+);
+
+// Draft endpoints alias (Module 23 & Lifecycle - mounts before /:id to prevent routing collisions)
+router.get(
+  '/drafts',
+  authenticateToken,
+  authorizeRoles('TEACHER', 'ADMIN'),
+  listDrafts
+);
+
+router.post(
+  '/drafts',
+  authenticateToken,
+  authorizeRoles('TEACHER', 'ADMIN'),
+  saveDraft
+);
+
+router.get(
+  '/drafts/:id',
+  authenticateToken,
+  authorizeRoles('TEACHER', 'ADMIN'),
+  getDraft
+);
+
+router.delete(
+  '/drafts/:id',
+  authenticateToken,
+  authorizeRoles('TEACHER', 'ADMIN'),
+  deleteDraft
 );
 
 // GET /api/question-papers/:id - View question paper metadata (Ownership verified in service)
