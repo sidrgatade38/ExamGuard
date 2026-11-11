@@ -5,6 +5,7 @@ const encryptionService = require('./encryptionService');
 const signatureService = require('./signatureService');
 const verificationService = require('./verificationService');
 const auditLogService = require('./auditLogService');
+const notificationService = require('./notificationService');
 
 /**
  * Exam Coordinator Service (Module 9)
@@ -602,6 +603,13 @@ async function downloadAndDecryptQuestionPaper(paperId, coordinatorId) {
         metadata: { paperId, examDateTime: examDateTime.toISOString(), releaseDateTime: releaseDateTime.toISOString() },
       });
 
+      notificationService.notifySecurityAlert({
+        user: { id: coordinatorId },
+        action: 'EARLY_DECRYPTION_ATTEMPT_BLOCKED',
+        ipAddress: '127.0.0.1',
+        userAgent: 'ExamGuard Secure Client',
+      }).catch(() => {});
+
       const earlyErr = new Error(
         `Access forbidden: Question paper plaintext is locked until 1 hour prior to the scheduled examination (${examDateTime.toLocaleString()}). Content release opens at ${releaseDateTime.toLocaleString()}. Safe metadata, signatures, and review status remain accessible.`
       );
@@ -687,6 +695,15 @@ async function downloadAndDecryptQuestionPaper(paperId, coordinatorId) {
       summary: `Exam coordinator successfully decrypted and downloaded question paper ${paperId}`,
       metadata: { paperId, fileName: paper.file_name },
     });
+
+    try {
+      await notificationService.notifySecurePaperReleased({
+        paper: { id: paperId, title: paper.title, subject: paper.subject },
+        coordinator: { id: coordinatorId },
+        examDate: rawExamDate,
+        examTime: paper.exam_time || '10:00 AM',
+      });
+    } catch (_) {}
 
     return {
       decryptedBuffer,

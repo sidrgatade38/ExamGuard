@@ -50,8 +50,6 @@ export default function TeacherHome() {
 
   // Navigation tab: 'dashboard' | 'list' | 'assigned' | 'drafts' | 'create' | 'profile'
   const [activeTab, setActiveTab] = useState('dashboard');
-  // Creation sub-mode: 'select' | 'upload' | 'generate'
-  const [creationMode, setCreationMode] = useState('select');
 
   // Teacher Profile State (Module 2.1 & Sprint Corrections)
   const [profileData, setProfileData] = useState(() => user?.profile || {
@@ -399,7 +397,6 @@ export default function TeacherHome() {
   const handleResumeDraft = (draft) => {
     setActiveDraft(draft);
     setActiveTab('create');
-    setCreationMode('generate');
   };
 
   // Delete Draft Handler with inline confirmation modal
@@ -1786,7 +1783,6 @@ export default function TeacherHome() {
                   onClick={() => {
                     setActiveDraft(null);
                     setActiveTab('create');
-                    setCreationMode('generate');
                   }}
                   style={styles.createPaperBtn}
                 >
@@ -1819,7 +1815,6 @@ export default function TeacherHome() {
                   onClick={() => {
                     setActiveDraft(null);
                     setActiveTab('create');
-                    setCreationMode('generate');
                   }}
                   style={{ ...styles.submitBtn, width: 'auto', marginTop: '1rem', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
                 >
@@ -1907,438 +1902,27 @@ export default function TeacherHome() {
           </div>
         )}
 
-        {/* TAB 3: CREATE QUESTION PAPER HUB (MODULE 18: TWO OPTIONS) */}
+        {/* TAB 3: CREATE QUESTION PAPER (EXACTLY ONE WORKFLOW: 5-STEP WIZARD) */}
         {activeTab === 'create' && (
-          <div>
-            {/* OPTION SELECTION VIEW */}
-            {creationMode === 'select' && (
-              <div style={styles.formContainer}>
-                <div style={styles.formHeader}>
-                  <h2 style={styles.sectionHeading}>Create Question Paper</h2>
-                  <p style={styles.sectionSubtitle}>
-                    Choose how you would like to prepare and submit this examination question paper.
-                  </p>
-                </div>
-
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))',
-                    gap: '1.5rem',
-                    marginTop: '1.25rem',
-                  }}
-                >
-                  {/* OPTION A: UPLOAD EXISTING PDF */}
-                  <div
-                    style={{
-                      border: '1px solid var(--color-border)',
-                      borderRadius: 'var(--radius-lg)',
-                      padding: '1.75rem',
-                      backgroundColor: 'var(--color-surface)',
-                      boxShadow: 'var(--shadow-sm)',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      justifyContent: 'space-between',
-                      transition: 'border-color var(--transition-fast)',
-                    }}
-                  >
-                    <div>
-                      <div
-                        style={{
-                          width: '48px',
-                          height: '48px',
-                          borderRadius: 'var(--radius-md)',
-                          backgroundColor: 'var(--color-primary-subtle)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          marginBottom: '1rem',
-                        }}
-                      >
-                        <Upload size={24} color="var(--color-primary)" />
-                      </div>
-                      <h3 style={{ fontSize: '1.15rem', fontWeight: '700', color: 'var(--color-structure)', margin: '0 0 0.5rem 0' }}>
-                        Option A: Upload Existing PDF
-                      </h3>
-                      <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', lineHeight: '1.5', margin: 0 }}>
-                        Upload an official examination paper PDF file prepared offline, specify subject metadata, and designate the faculty recipient. Uses the classic ExamGuard upload pipeline.
-                      </p>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => setCreationMode('upload')}
-                      style={{
-                        ...styles.submitBtn,
-                        marginTop: '1.5rem',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '0.5rem',
-                      }}
-                    >
-                      <Upload size={16} />
-                      <span>Upload Existing PDF</span>
-                    </button>
-                  </div>
-
-                  {/* OPTION B: CREATE QUESTION PAPER (GENERATOR) */}
-                  <div
-                    style={{
-                      border: '2px solid var(--color-accent-border)',
-                      borderRadius: 'var(--radius-lg)',
-                      padding: '1.75rem',
-                      backgroundColor: 'var(--color-surface-alt)',
-                      boxShadow: 'var(--shadow-md)',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      justifyContent: 'space-between',
-                      position: 'relative',
-                    }}
-                  >
-                    <div
-                      style={{
-                        position: 'absolute',
-                        top: '14px',
-                        right: '16px',
-                        backgroundColor: 'var(--color-accent)',
-                        color: '#ffffff',
-                        fontSize: '0.65rem',
-                        fontWeight: '700',
-                        padding: '0.2rem 0.5rem',
-                        borderRadius: 'var(--radius-full)',
-                        fontFamily: 'var(--font-jetbrains)',
-                      }}
-                    >
-                      MODULE 18
-                    </div>
-
-                    <div>
-                      <div
-                        style={{
-                          width: '48px',
-                          height: '48px',
-                          borderRadius: 'var(--radius-md)',
-                          backgroundColor: 'var(--color-accent-subtle)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          marginBottom: '1rem',
-                        }}
-                      >
-                        <Sparkles size={24} color="var(--color-accent-hover)" />
-                      </div>
-                      <h3 style={{ fontSize: '1.15rem', fontWeight: '700', color: 'var(--color-structure)', margin: '0 0 0.5rem 0' }}>
-                        Option B: Create Question Paper
-                      </h3>
-                      <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', lineHeight: '1.5', margin: 0 }}>
-                        Build from question bank with university blueprints, alternative OR-pairs (Q1 OR Q2), automated multi-set generation, authentic exam layout preview, and instant secure submission.
-                      </p>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => setCreationMode('generate')}
-                      style={{
-                        ...styles.submitBtn,
-                        backgroundColor: 'var(--color-primary)',
-                        marginTop: '1.5rem',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '0.5rem',
-                      }}
-                    >
-                      <Sparkles size={16} />
-                      <span>Launch Paper Generator</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* OPTION B WIZARD VIEW */}
-            {creationMode === 'generate' && (
-              <div>
-                <div style={{ marginBottom: '16px' }}>
-                  <button
-                    type="button"
-                    onClick={() => setCreationMode('select')}
-                    style={styles.cancelBtn}
-                  >
-                    &larr; Switch Creation Option
-                  </button>
-                </div>
-                <QuestionPaperGeneratorWizard
-                  initialDraft={activeDraft}
-                  recipients={recipients}
-                  onSuccess={(msg) => {
-                    setActionAlert({ type: 'success', message: msg });
-                    fetchPapers();
-                    fetchDrafts();
-                    setActiveDraft(null);
-                    setActiveTab('list');
-                    setCreationMode('select');
-                  }}
-                  onCancel={() => {
-                    setActiveDraft(null);
-                    setCreationMode('select');
-                  }}
-                />
-              </div>
-            )}
-
-            {/* OPTION A: UPLOAD FORM VIEW (EXISTING WORKFLOW UNCHANGED) */}
-            {creationMode === 'upload' && (
-              <div>
-                <div style={{ marginBottom: '16px' }}>
-                  <button
-                    type="button"
-                    onClick={() => setCreationMode('select')}
-                    style={styles.cancelBtn}
-                  >
-                    &larr; Switch Creation Option
-                  </button>
-                </div>
-                <div style={styles.formContainer}>
-                  <div style={styles.formHeader}>
-                    <h2 style={styles.sectionHeading}>Option A: Upload Existing PDF</h2>
-                    <p style={styles.sectionSubtitle}>
-                      Upload an official examination paper PDF, specify subject metadata, and designate the faculty recipient.
-                    </p>
-                  </div>
-
-            {/* Error and Success Alerts */}
-            {formError && (
-              <div style={styles.alertError}>
-                <AlertCircle size={18} />
-                <span>{formError}</span>
-              </div>
-            )}
-
-            {formSuccess && (
-              <div style={styles.alertSuccess}>
-                <CheckCircle2 size={18} />
-                <span>{formSuccess}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleSubmit} style={styles.form}>
-              <div style={styles.formGrid}>
-                {/* Title */}
-                <div style={styles.formGroupSpan2}>
-                  <label style={styles.label} htmlFor="title">
-                    Question Paper Title <span style={styles.required}>*</span>
-                  </label>
-                  <input
-                    id="title"
-                    name="title"
-                    type="text"
-                    placeholder="e.g. End Semester Examination - Nov 2026"
-                    value={formData.title}
-                    onChange={handleInputChange}
-                    required
-                    disabled={submitting}
-                    style={styles.input}
-                  />
-                </div>
-
-                {/* Subject */}
-                <div style={styles.formGroup}>
-                  <label style={styles.label} htmlFor="subject">
-                    Subject Name <span style={styles.required}>*</span>
-                  </label>
-                  <input
-                    id="subject"
-                    name="subject"
-                    type="text"
-                    placeholder="e.g. Database Management Systems"
-                    value={formData.subject}
-                    onChange={handleInputChange}
-                    required
-                    disabled={submitting}
-                    style={styles.input}
-                  />
-                </div>
-
-                {/* Exam Date */}
-                <div style={styles.formGroup}>
-                  <label style={styles.label} htmlFor="examDate">
-                    Examination Date <span style={styles.required}>*</span>
-                  </label>
-                  <input
-                    id="examDate"
-                    name="examDate"
-                    type="date"
-                    value={formData.examDate}
-                    onChange={handleInputChange}
-                    required
-                    disabled={submitting}
-                    style={styles.input}
-                  />
-                </div>
-
-                {/* Semester */}
-                <div style={styles.formGroup}>
-                  <label style={styles.label} htmlFor="semester">
-                    Semester <span style={styles.required}>*</span>
-                  </label>
-                  <select
-                    id="semester"
-                    name="semester"
-                    value={formData.semester}
-                    onChange={handleInputChange}
-                    disabled={submitting}
-                    style={styles.select}
-                  >
-                    <option value="Semester 1">Semester 1</option>
-                    <option value="Semester 2">Semester 2</option>
-                    <option value="Semester 3">Semester 3</option>
-                    <option value="Semester 4">Semester 4</option>
-                    <option value="Semester 5">Semester 5</option>
-                    <option value="Semester 6">Semester 6</option>
-                    <option value="Semester 7">Semester 7</option>
-                    <option value="Semester 8">Semester 8</option>
-                  </select>
-                </div>
-
-                {/* Academic Year */}
-                <div style={styles.formGroup}>
-                  <label style={styles.label} htmlFor="academicYear">
-                    Academic Year <span style={styles.required}>*</span>
-                  </label>
-                  <input
-                    id="academicYear"
-                    name="academicYear"
-                    type="text"
-                    placeholder="e.g. 2026-2027"
-                    value={formData.academicYear}
-                    onChange={handleInputChange}
-                    required
-                    disabled={submitting}
-                    style={styles.input}
-                  />
-                </div>
-
-                {/* Exam Type */}
-                <div style={styles.formGroup}>
-                  <label style={styles.label} htmlFor="examType">
-                    Examination Type <span style={styles.required}>*</span>
-                  </label>
-                  <select
-                    id="examType"
-                    name="examType"
-                    value={formData.examType}
-                    onChange={handleInputChange}
-                    disabled={submitting}
-                    style={styles.select}
-                  >
-                    <option value="End Semester Examination">End Semester Examination</option>
-                    <option value="Mid Term Examination">Mid Term Examination</option>
-                    <option value="Supplementary Examination">Supplementary Examination</option>
-                    <option value="Class Assessment">Class Assessment</option>
-                  </select>
-                </div>
-
-                {/* Assigned Recipient Faculty */}
-                <div style={styles.formGroup}>
-                  <label style={styles.label} htmlFor="assignedToUserId">
-                    Assigned Recipient Faculty <span style={styles.required}>*</span>
-                  </label>
-                  <select
-                    id="assignedToUserId"
-                    name="assignedToUserId"
-                    value={formData.assignedToUserId}
-                    onChange={handleInputChange}
-                    required
-                    disabled={submitting || loadingRecipients}
-                    style={styles.select}
-                  >
-                    {recipients.length === 0 ? (
-                      <option value="">No other faculty members found</option>
-                    ) : (
-                      recipients.map((r) => (
-                        <option key={r.id} value={r.id}>
-                          {r.name} {r.role === 'EXAM_COORDINATOR' ? '★ [Exam Coordinator]' : '[Faculty]'} ({r.email})
-                        </option>
-                      ))
-                    )}
-                  </select>
-                </div>
-              </div>
-
-              {/* PDF File Upload Zone */}
-              <div style={styles.fileUploadSection}>
-                <label style={styles.label}>
-                  Question Paper Document (PDF Only, Max 10 MB) <span style={styles.required}>*</span>
-                </label>
-                <div style={styles.fileDropZone}>
-                  <Upload size={32} color="#3b82f6" />
-                  <div style={styles.dropZoneText}>
-                    {selectedFile ? (
-                      <div>
-                        <span style={styles.selectedFileName}>{selectedFile.name}</span>
-                        <span style={styles.selectedFileSize}>
-                          ({(selectedFile.size / 1024).toFixed(1)} KB)
-                        </span>
-                      </div>
-                    ) : (
-                      <>
-                        <span style={styles.dropPrompt}>Click to browse or drag PDF here</span>
-                        <span style={styles.dropSubPrompt}>Only valid .pdf files with valid PDF headers</span>
-                      </>
-                    )}
-                  </div>
-                  <input
-                    type="file"
-                    accept=".pdf,application/pdf"
-                    onChange={handleFileChange}
-                    disabled={submitting}
-                    style={styles.fileInputHidden}
-                  />
-                </div>
-              </div>
-
-              {/* System Calculation Info Callout */}
-              <div style={styles.infoCallout}>
-                <Clock size={18} color="#38bdf8" />
-                <div style={styles.calloutText}>
-                  <strong>Automated Scheduling:</strong> Upon submission, the server will timestamp this paper and automatically calculate the <strong>Next-Day Delivery Date</strong> (Submission Date + 1 Day). The file is stored in a private Supabase Storage bucket.
-                </div>
-              </div>
-
-              {/* Submit Buttons */}
-              <div style={styles.formActions}>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('list')}
-                  disabled={submitting}
-                  style={styles.cancelBtn}
-                >
-                  Cancel
-                </button>
-
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  style={submitting ? { ...styles.submitBtn, opacity: 0.7 } : styles.submitBtn}
-                >
-                  {submitting ? (
-                    <span style={styles.btnLoadingContent}>
-                      <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
-                      Uploading &amp; Submitting...
-                    </span>
-                  ) : (
-                    'Submit Question Paper'
-                  )}
-                </button>
-              </div>
-            </form>
+          <div style={{ maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
+            <QuestionPaperGeneratorWizard
+              initialDraft={activeDraft}
+              recipients={recipients}
+              onSuccess={(msg) => {
+                setActionAlert({ type: 'success', message: msg });
+                fetchPapers();
+                fetchDrafts();
+                setActiveDraft(null);
+                setActiveTab('list');
+              }}
+              onCancel={() => {
+                setActiveDraft(null);
+                setActiveTab('dashboard');
+              }}
+            />
           </div>
-        </div>
-      )}
-    </div>
-  )}
+        )}
+
 </main>
 
       {/* CONFIRM DRAFT DELETION MODAL */}

@@ -209,10 +209,41 @@ async function notifyAccountReactivated({ user, adminName }) {
  */
 async function notifyAccountStatusChanged({ user, isActive, reason, adminName }) {
   if (isActive) {
+    if (reason === 'reactivated' || reason === 'unblocked') {
+      return notifyAccountReactivated({ user, adminName });
+    }
     return notifyAccountActivated({ user, adminName });
   } else {
+    if (reason === 'blocked' || reason === 'security') {
+      return notifyAccountBlocked({ user, adminName, reason });
+    }
     return notifyAccountDeactivated({ user, adminName, reason });
   }
+}
+
+/**
+ * User Institutional Role Changed
+ */
+async function notifyUserRoleChanged({ user, oldRole, newRole, adminName }) {
+  const target = await ensureContact(user);
+  if (!target || !target.email) return;
+
+  await sendExamGuardEmail({
+    to: target.email,
+    recipientName: target.name,
+    userId: target.id,
+    eventType: 'USER_ROLE_CHANGED',
+    subject: `ExamGuard: Institutional Role Updated to ${newRole}`,
+    title: 'Institutional Role Updated',
+    message: `Your institutional role in ExamGuard has been updated by administrator ${adminName || 'Admin'}. Your access permissions have been updated accordingly. Please sign in again for updated permissions to take effect.`,
+    details: [
+      { label: 'Account Name', value: target.name },
+      { label: 'Previous Role', value: oldRole || 'N/A' },
+      { label: 'New Assigned Role', value: newRole },
+      { label: 'Updated By', value: adminName || 'System Administrator' },
+      { label: 'Department', value: 'Department of Computer Engineering' },
+    ],
+  });
 }
 
 /**
@@ -942,6 +973,7 @@ module.exports = {
   notifyAccountBlocked,
   notifyAccountReactivated,
   notifyAccountStatusChanged,
+  notifyUserRoleChanged,
   notifyAccountDeleted,
   notifyPasswordReset,
   notifySecurityAlert,

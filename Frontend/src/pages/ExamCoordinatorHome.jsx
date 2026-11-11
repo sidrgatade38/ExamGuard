@@ -540,16 +540,6 @@ export default function ExamCoordinatorHome() {
               </span>
             )}
           </button>
-          <button
-            onClick={() => setActiveTab('activity')}
-            style={{
-              ...styles.navTabBtn,
-              ...(activeTab === 'activity' ? styles.navTabBtnActive : {}),
-            }}
-          >
-            <ShieldCheck size={15} />
-            <span>Audit Trail</span>
-          </button>
         </nav>
 
         {/* Desktop Profile Section */}
@@ -670,19 +660,6 @@ export default function ExamCoordinatorHome() {
               >
                 <Clock size={18} />
                 <span>Upcoming Deliveries ({upcomingDeliveries.length})</span>
-              </button>
-              <button
-                onClick={() => {
-                  setActiveTab('activity');
-                  setMobileMenuOpen(false);
-                }}
-                style={{
-                  ...styles.mobileNavTabBtn,
-                  ...(activeTab === 'activity' ? styles.mobileNavTabBtnActive : {}),
-                }}
-              >
-                <ShieldCheck size={18} />
-                <span>Recent Activity & Audit Trail</span>
               </button>
             </div>
 
@@ -1483,113 +1460,6 @@ export default function ExamCoordinatorHome() {
           </section>
         )}
 
-        {/* AUDIT TRAIL & RECENT ACTIVITY SECTION */}
-        {(activeTab === 'overview' || activeTab === 'activity') && (
-          <section style={styles.sectionCard}>
-            <div style={styles.sectionHeader}>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <Activity size={20} color="#38bdf8" />
-                  <h3 style={styles.sectionTitle}>Examination Cell Audit Trail & Recent Activity</h3>
-                </div>
-                <p style={styles.sectionSubtitle}>
-                  Cryptographic verification logs, access events, and paper transmission history.
-                </p>
-              </div>
-              <button
-                onClick={fetchRecentActivity}
-                disabled={loadingActivity}
-                style={styles.iconRefreshBtn}
-                title="Refresh audit activity"
-              >
-                <RefreshCw
-                  size={14}
-                  style={loadingActivity ? { animation: 'spin 1s linear infinite' } : {}}
-                />
-              </button>
-            </div>
-
-            {loadingActivity ? (
-              <div style={{ padding: '2rem', textAlign: 'center', color: '#94a3b8' }}>
-                <Loader2 size={24} style={{ animation: 'spin 1s linear infinite', margin: '0 auto 0.5rem' }} />
-                <p style={{ fontSize: '0.85rem' }}>Loading recent activity logs...</p>
-              </div>
-            ) : recentActivity.length === 0 ? (
-              <div style={styles.inlineEmptyBox}>
-                <ShieldCheck size={28} color="#64748b" />
-                <p style={{ margin: '0.5rem 0 0', color: '#94a3b8', fontSize: '0.875rem' }}>
-                  No recent coordinator events recorded in the audit trail yet. Events will record as papers are verified, decrypted, or inspected.
-                </p>
-              </div>
-            ) : (
-              <div style={styles.activityList}>
-                {recentActivity.map((act) => {
-                  const isSuccess =
-                    act.action.includes('SUCCESS') ||
-                    act.action.includes('VERIFIED') ||
-                    act.action.includes('DOWNLOADED');
-                  const isFailure =
-                    act.action.includes('FAIL') ||
-                    act.action.includes('TAMPER') ||
-                    act.action.includes('DENIED');
-
-                  return (
-                    <div key={act.id || act.timestamp} style={styles.activityItem}>
-                      <div
-                        style={{
-                          ...styles.activityIconBox,
-                          backgroundColor: isFailure
-                            ? 'rgba(239, 68, 68, 0.15)'
-                            : isSuccess
-                            ? 'rgba(34, 197, 94, 0.15)'
-                            : 'rgba(56, 189, 248, 0.15)',
-                          color: isFailure ? '#ef4444' : isSuccess ? '#22c55e' : '#38bdf8',
-                        }}
-                      >
-                        {isFailure ? (
-                          <ShieldAlert size={16} />
-                        ) : isSuccess ? (
-                          <ShieldCheck size={16} />
-                        ) : (
-                          <Activity size={16} />
-                        )}
-                      </div>
-
-                      <div style={{ flex: 1 }}>
-                        <div style={styles.activityTitleRow}>
-                          <span style={styles.activityActionText}>{act.action}</span>
-                          <span style={styles.activityTime}>
-                            {act.created_at ? new Date(act.created_at).toLocaleString() : 'Recent'}
-                          </span>
-                        </div>
-                        <div style={styles.activityDetails}>
-                          {act.details?.title && (
-                            <span style={{ fontWeight: '600', color: '#f8fafc', marginRight: '6px' }}>
-                              [{act.details.title}]
-                            </span>
-                          )}
-                          {act.details?.subject && (
-                            <span style={{ color: '#cbd5e1', marginRight: '6px' }}>
-                              ({act.details.subject})
-                            </span>
-                          )}
-                          {act.details?.algorithm && (
-                            <span style={styles.inlineMonoBadge}>{act.details.algorithm}</span>
-                          )}
-                          {act.users?.name && (
-                            <span style={{ color: '#94a3b8', fontSize: '0.75rem', marginLeft: '6px' }}>
-                              • by {act.users.name}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </section>
-        )}
       </main>
 
       {/* QUESTION PAPER METADATA MODAL */}

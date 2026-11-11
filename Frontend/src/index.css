@@ -361,6 +361,144 @@ button, input, select, textarea {
 }
 
 /* --------------------------------------------------------------------------
+   Standardized Application Navigation System (Requirement 3)
+   -------------------------------------------------------------------------- */
+.app-header {
+  background-color: var(--color-structure);
+  color: var(--color-structure-text);
+  padding: 0.85rem clamp(1rem, 3vw, 2rem);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--color-structure-border);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: var(--shadow-sm);
+  width: 100%;
+}
+
+.app-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.app-brand-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-md);
+  background-color: var(--color-primary-subtle);
+  border: 1px solid var(--color-primary-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.app-brand-title {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: var(--color-structure-text);
+  margin: 0;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.app-brand-subtitle {
+  font-size: 0.7rem;
+  color: var(--color-structure-muted);
+  margin: 0;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.app-tab-bar {
+  background-color: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  padding: 0 clamp(1rem, 3vw, 2rem);
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  position: sticky;
+  top: 61px;
+  z-index: 90;
+  scrollbar-width: none; /* Firefox */
+}
+
+.app-tab-bar::-webkit-scrollbar {
+  display: none; /* Chrome/Safari */
+}
+
+.app-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.85rem 1rem;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--transition-fast);
+  text-decoration: none;
+}
+
+.app-tab-btn:hover {
+  color: var(--color-text-primary);
+  background-color: var(--color-surface-hover);
+}
+
+.app-tab-btn.active {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+  background-color: transparent;
+}
+
+.app-tab-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--radius-full);
+  background-color: var(--color-primary-subtle);
+  color: var(--color-primary);
+  font-family: var(--font-ibm-plex);
+}
+
+/* Algorithm Flow Responsive Arrows */
+.flow-arrow-desktop {
+  display: block;
+}
+.flow-arrow-mobile {
+  display: none;
+}
+@media (max-width: 768px) {
+  .flow-arrow-desktop {
+    display: none !important;
+  }
+  .flow-arrow-mobile {
+    display: block !important;
+  }
+}
+
+/* Global Responsive Form & Grid Helpers */
+@media (max-width: 640px) {
+  .responsive-p-mobile {
+    padding: 1rem !important;
+  }
+  .responsive-stack-mobile {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+}
+
+/* --------------------------------------------------------------------------
    Animations & Keyframes
    -------------------------------------------------------------------------- */
 @keyframes spin {

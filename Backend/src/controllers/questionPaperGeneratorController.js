@@ -3,6 +3,7 @@
  */
 
 const generatorService = require('../services/questionPaperGeneratorService');
+const notificationService = require('../services/notificationService');
 
 async function generateSets(req, res, next) {
   try {
@@ -39,6 +40,14 @@ async function generateSets(req, res, next) {
       data: safeData,
     });
   } catch (err) {
+    try {
+      await notificationService.notifyPaperGenerationFailed({
+        subject: req.body?.subject || 'Curriculum Subject',
+        reason: err.message,
+        requestedBy: { id: req.user?.userId || req.user?.id },
+      });
+    } catch (_) {}
+
     if (err.statusCode) {
       return res.status(err.statusCode).json({
         success: false,

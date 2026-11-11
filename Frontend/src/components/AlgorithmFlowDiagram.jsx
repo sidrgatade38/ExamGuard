@@ -98,8 +98,8 @@ export default function AlgorithmFlowDiagram({ isOpen, onClose }) {
                   </div>
 
                   <div style={styles.arrowWrap}>
-                    <ArrowRight size={20} style={styles.desktopArrow} />
-                    <ArrowDown size={20} style={styles.mobileArrow} />
+                    <ArrowRight size={20} className="flow-arrow-desktop" />
+                    <ArrowDown size={20} className="flow-arrow-mobile" />
                   </div>
 
                   {/* Step 2 */}
@@ -115,8 +115,8 @@ export default function AlgorithmFlowDiagram({ isOpen, onClose }) {
                   </div>
 
                   <div style={styles.arrowWrap}>
-                    <ArrowRight size={20} style={styles.desktopArrow} />
-                    <ArrowDown size={20} style={styles.mobileArrow} />
+                    <ArrowRight size={20} className="flow-arrow-desktop" />
+                    <ArrowDown size={20} className="flow-arrow-mobile" />
                   </div>
 
                   {/* Step 3 */}
@@ -132,8 +132,8 @@ export default function AlgorithmFlowDiagram({ isOpen, onClose }) {
                   </div>
 
                   <div style={styles.arrowWrap}>
-                    <ArrowRight size={20} style={styles.desktopArrow} />
-                    <ArrowDown size={20} style={styles.mobileArrow} />
+                    <ArrowRight size={20} className="flow-arrow-desktop" />
+                    <ArrowDown size={20} className="flow-arrow-mobile" />
                   </div>
 
                   {/* Step 4 */}
@@ -149,8 +149,8 @@ export default function AlgorithmFlowDiagram({ isOpen, onClose }) {
                   </div>
 
                   <div style={styles.arrowWrap}>
-                    <ArrowRight size={20} style={styles.desktopArrow} />
-                    <ArrowDown size={20} style={styles.mobileArrow} />
+                    <ArrowRight size={20} className="flow-arrow-desktop" />
+                    <ArrowDown size={20} className="flow-arrow-mobile" />
                   </div>
 
                   {/* Step 5 */}
@@ -166,8 +166,8 @@ export default function AlgorithmFlowDiagram({ isOpen, onClose }) {
                   </div>
 
                   <div style={styles.arrowWrap}>
-                    <ArrowRight size={20} style={styles.desktopArrow} />
-                    <ArrowDown size={20} style={styles.mobileArrow} />
+                    <ArrowRight size={20} className="flow-arrow-desktop" />
+                    <ArrowDown size={20} className="flow-arrow-mobile" />
                   </div>
 
                   {/* Step 6 */}
@@ -214,8 +214,8 @@ export default function AlgorithmFlowDiagram({ isOpen, onClose }) {
                   </div>
 
                   <div style={styles.arrowWrap}>
-                    <ArrowRight size={20} style={styles.desktopArrow} />
-                    <ArrowDown size={20} style={styles.mobileArrow} />
+                    <ArrowRight size={20} className="flow-arrow-desktop" />
+                    <ArrowDown size={20} className="flow-arrow-mobile" />
                   </div>
 
                   {/* Step 8 */}
@@ -231,8 +231,8 @@ export default function AlgorithmFlowDiagram({ isOpen, onClose }) {
                   </div>
 
                   <div style={styles.arrowWrap}>
-                    <ArrowRight size={20} style={styles.desktopArrow} />
-                    <ArrowDown size={20} style={styles.mobileArrow} />
+                    <ArrowRight size={20} className="flow-arrow-desktop" />
+                    <ArrowDown size={20} className="flow-arrow-mobile" />
                   </div>
 
                   {/* Step 9 */}
@@ -248,8 +248,8 @@ export default function AlgorithmFlowDiagram({ isOpen, onClose }) {
                   </div>
 
                   <div style={styles.arrowWrap}>
-                    <ArrowRight size={20} style={styles.desktopArrow} />
-                    <ArrowDown size={20} style={styles.mobileArrow} />
+                    <ArrowRight size={20} className="flow-arrow-desktop" />
+                    <ArrowDown size={20} className="flow-arrow-mobile" />
                   </div>
 
                   {/* Step 10 */}
@@ -265,8 +265,8 @@ export default function AlgorithmFlowDiagram({ isOpen, onClose }) {
                   </div>
 
                   <div style={styles.arrowWrap}>
-                    <ArrowRight size={20} style={styles.desktopArrow} />
-                    <ArrowDown size={20} style={styles.mobileArrow} />
+                    <ArrowRight size={20} className="flow-arrow-desktop" />
+                    <ArrowDown size={20} className="flow-arrow-mobile" />
                   </div>
 
                   {/* Step 11 */}
@@ -306,8 +306,8 @@ export default function AlgorithmFlowDiagram({ isOpen, onClose }) {
                 </div>
 
                 <div style={styles.decArrowWrap}>
-                  <ArrowRight size={22} style={styles.desktopArrow} color="#8b5cf6" />
-                  <ArrowDown size={22} style={styles.mobileArrow} color="#8b5cf6" />
+                  <ArrowRight size={22} className="flow-arrow-desktop" color="#8b5cf6" />
+                  <ArrowDown size={22} className="flow-arrow-mobile" color="#8b5cf6" />
                 </div>
 
                 <div style={styles.decryptionStep}>
@@ -321,8 +321,8 @@ export default function AlgorithmFlowDiagram({ isOpen, onClose }) {
                 </div>
 
                 <div style={styles.decArrowWrap}>
-                  <ArrowRight size={22} style={styles.desktopArrow} color="#8b5cf6" />
-                  <ArrowDown size={22} style={styles.mobileArrow} color="#8b5cf6" />
+                  <ArrowRight size={22} className="flow-arrow-desktop" color="#8b5cf6" />
+                  <ArrowDown size={22} className="flow-arrow-mobile" color="#8b5cf6" />
                 </div>
 
                 <div style={styles.decryptionStep}>
@@ -336,8 +336,8 @@ export default function AlgorithmFlowDiagram({ isOpen, onClose }) {
                 </div>
 
                 <div style={styles.decArrowWrap}>
-                  <ArrowRight size={22} style={styles.desktopArrow} color="#8b5cf6" />
-                  <ArrowDown size={22} style={styles.mobileArrow} color="#8b5cf6" />
+                  <ArrowRight size={22} className="flow-arrow-desktop" color="#8b5cf6" />
+                  <ArrowDown size={22} className="flow-arrow-mobile" color="#8b5cf6" />
                 </div>
 
                 <div style={styles.decryptionStep}>
@@ -351,8 +351,8 @@ export default function AlgorithmFlowDiagram({ isOpen, onClose }) {
                 </div>
 
                 <div style={styles.decArrowWrap}>
-                  <ArrowRight size={22} style={styles.desktopArrow} color="#8b5cf6" />
-                  <ArrowDown size={22} style={styles.mobileArrow} color="#8b5cf6" />
+                  <ArrowRight size={22} className="flow-arrow-desktop" color="#8b5cf6" />
+                  <ArrowDown size={22} className="flow-arrow-mobile" color="#8b5cf6" />
                 </div>
 
                 <div style={styles.decryptionStepHighlight}>
@@ -450,7 +450,7 @@ const styles = {
     backgroundColor: '#0f172a',
     borderRadius: '16px',
     border: '1px solid #1e293b',
-    width: '100%',
+    width: 'min(96vw, 1100px)',
     maxWidth: '1100px',
     maxHeight: '90vh',
     display: 'flex',

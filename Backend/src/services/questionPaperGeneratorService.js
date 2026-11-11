@@ -341,6 +341,22 @@ async function generateExamSets({ blueprintId, teacherId, role = 'TEACHER' }) {
     teacher: { id: teacherId },
   }).catch(() => {});
 
+  // Notify each set generated
+  generatedSets.forEach((s) => {
+    notificationService.notifySetFinalized({
+      setCode: s.setCode,
+      subject: blueprint.subject,
+      teacher: { id: teacherId },
+      questionCount: s.questionIds?.length || 0,
+    }).catch(() => {});
+  });
+
+  notificationService.notifySetsReadyForPool({
+    subject: blueprint.subject,
+    coordinator: null,
+    authorCount: 1,
+  }).catch(() => {});
+
   return {
     paperId,
     blueprintId: blueprint.id,

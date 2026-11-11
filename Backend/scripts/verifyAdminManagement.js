@@ -239,6 +239,10 @@ supabaseClient.from = function (tableName) {
             rows = rows.filter((r) => r[col] === val);
             return builder;
           },
+          neq(col, val) {
+            rows = rows.filter((r) => r[col] !== val);
+            return builder;
+          },
           or(clause) {
             // e.g. name.ilike.%search%,email.ilike.%search%
             const parts = clause.split(',');

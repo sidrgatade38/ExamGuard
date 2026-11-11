@@ -485,7 +485,7 @@ function createTestPaperRecord({ paperId, teacherId, assignedToCoordId, status =
     semester: 'Semester 6',
     academic_year: '2026-2027',
     exam_type: 'End Semester Examination',
-    exam_date: '2026-11-20',
+    exam_date: '2026-11-01',
     teacher_id: teacherId,
     file_name: 'computer_networks_final.pdf',
     storage_path: storagePath,
@@ -493,7 +493,7 @@ function createTestPaperRecord({ paperId, teacherId, assignedToCoordId, status =
     mime_type: 'application/pdf',
     status,
     submitted_at: new Date().toISOString(),
-    scheduled_delivery_date: '2026-11-19',
+    scheduled_delivery_date: '2026-11-01',
     created_at: new Date().toISOString(),
   };
   inMemoryPapers.set(paperId, paperRecord);
@@ -527,7 +527,7 @@ function createTestPaperRecord({ paperId, teacherId, assignedToCoordId, status =
     assigned_to_user_id: assignedToCoordId,
     assigned_by_user_id: teacherId,
     assigned_at: new Date().toISOString(),
-    scheduled_delivery_date: '2026-11-19',
+    scheduled_delivery_date: '2026-11-01',
     delivered_at: null,
     delivery_status: 'PENDING',
   };

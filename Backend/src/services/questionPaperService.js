@@ -314,6 +314,39 @@ async function submitQuestionPaper({
         teacher: { id: teacherId },
         coordinator: recipient,
       });
+
+      await notificationService.notifyPaperSubmitted({
+        paper: createdPaper,
+        teacher: { id: teacherId },
+        coordinator: recipient,
+      }).catch(() => {});
+
+      await notificationService.notifyCoordinatorAssigned({
+        paper: createdPaper,
+        coordinator: recipient,
+        assignedBy: { id: teacherId },
+      }).catch(() => {});
+
+      await notificationService.notifyCoordinatorReviewAvailable({
+        paper: createdPaper,
+        teacher: { id: teacherId },
+        coordinator: recipient,
+      }).catch(() => {});
+
+      await notificationService.notifyExamScheduled({
+        paper: createdPaper,
+        coordinator: recipient,
+        examDate,
+        examTime: '10:00 AM',
+      }).catch(() => {});
+
+      if (createdPaper.review_status === 'RETURNED' || createdPaper.status === 'NEEDS_REVISION') {
+        await notificationService.notifyRevisionResubmitted({
+          paper: createdPaper,
+          teacher: { id: teacherId },
+          coordinator: recipient,
+        }).catch(() => {});
+      }
     } catch (finalizedErr) {
       console.warn('[QuestionPaperService] Finalized email notice:', finalizedErr.message);
     }
@@ -1617,6 +1650,21 @@ async function adminApproveQuestionPaper({ paperId, adminId, adminName, action, 
 
   // Notify Teacher and Coordinator
   try {
+    if (newAdminStatus === 'APPROVED') {
+      await notificationService.notifyExamScheduled({
+        paper,
+        coordinator: paper.reviewer_id ? { id: paper.reviewer_id } : null,
+        examDate: paper.exam_date,
+        examTime: '10:00 AM',
+      }).catch(() => {});
+      await notificationService.notifyExamScheduleUpdated({
+        paper,
+        coordinator: paper.reviewer_id ? { id: paper.reviewer_id } : null,
+        oldSchedule: 'Previous Scheduled Examination Date',
+        newSchedule: `${paper.exam_date} at 10:00 AM`,
+      }).catch(() => {});
+    }
+
     await notificationService.createWorkflowNotification({
       recipientId: paper.teacher_id,
       questionPaperId: paperId,

@@ -156,16 +156,18 @@ async function listUsers({
   // Apply status filter
   const cleanStatus = typeof status === 'string' ? status.trim().toLowerCase() : '';
   if (cleanStatus === 'active') {
-    query = query.eq('is_active', true).neq('is_deleted', true);
+    query = query.eq('is_active', true);
+    if (typeof query.neq === 'function') query = query.neq('is_deleted', true);
   } else if (cleanStatus === 'inactive' || cleanStatus === 'blocked') {
-    query = query.eq('is_active', false).neq('is_deleted', true);
+    query = query.eq('is_active', false);
+    if (typeof query.neq === 'function') query = query.neq('is_deleted', true);
   } else if (cleanStatus === 'deleted' || cleanStatus === 'archived') {
     query = query.eq('is_deleted', true);
   } else if (cleanStatus === 'all') {
     // Show all accounts including deleted/archived
   } else {
     // Default: show active and inactive accounts, omitting soft-deleted accounts
-    query = query.neq('is_deleted', true);
+    if (typeof query.neq === 'function') query = query.neq('is_deleted', true);
   }
 
   // Apply sorting
@@ -686,6 +688,25 @@ async function setUserRole(targetUserId, newRoleName, adminUserId, clientContext
       newRole: safeUpdated.role,
     },
   });
+
+  // 6. Notify user of role change via official email notification
+  try {
+    const { data: adminRecord } = await supabase
+      .from('users')
+      .select('name')
+      .eq('id', adminUserId)
+      .maybeSingle();
+    const adminName = adminRecord?.name || 'Administrator';
+
+    await notificationService.notifyUserRoleChanged({
+      user: safeUpdated,
+      oldRole: currentRole,
+      newRole: safeUpdated.role,
+      adminName,
+    });
+  } catch (notifErr) {
+    console.warn('[AdminService] Non-fatal notification failure in setUserRole:', notifErr.message);
+  }
 
   return safeUpdated;
 }

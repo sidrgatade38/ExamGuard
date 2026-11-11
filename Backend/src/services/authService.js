@@ -532,6 +532,14 @@ async function updateTeacherProfile(userId, profileData, requesterRole) {
         updatedFields: ['mobile_number', 'designation', 'qualification', 'specialization'],
       });
 
+      if (existing.mobileNumber && cleanPhone && existing.mobileNumber !== cleanPhone) {
+        await notificationService.notifyMobileNumberChanged({
+          user: { id: userId, name: userObj?.name || existing.name, email: userObj?.email || existing.email },
+          oldMobile: existing.mobileNumber,
+          newMobile: cleanPhone,
+        }).catch(() => {});
+      }
+
       return getOrCreateTeacherProfile(userId);
     }
   } catch (err) {

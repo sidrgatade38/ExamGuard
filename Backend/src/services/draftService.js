@@ -194,6 +194,13 @@ async function saveDraft(payload) {
     teacher: { id: teacherId },
   }).catch(() => {});
 
+  if (!draftData?.id) {
+    notificationService.notifyPaperCreated({
+      paper: { title: record.title, subject: record.subject, id: record.id },
+      teacher: { id: teacherId },
+    }).catch(() => {});
+  }
+
   return formatDraftRecord(record);
 }
 
