@@ -3081,9 +3081,35 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
 
           {/* Permitted Preview Modal */}
           {previewModalOpen && (
-            <div style={styles.modalOverlay}>
-              <div style={{ ...styles.modalCard, maxWidth: '850px', maxHeight: '90vh', overflowY: 'auto' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px', marginBottom: '16px' }}>
+            <div
+              style={styles.modalOverlay}
+              onClick={(e) => {
+                if (e.target === e.currentTarget) setPreviewModalOpen(false);
+              }}
+            >
+              <div
+                style={{
+                  ...styles.modalCard,
+                  maxWidth: '850px',
+                  maxHeight: 'min(92vh, 850px)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  overflow: 'hidden',
+                  padding: 0,
+                }}
+              >
+                {/* Fixed Header */}
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'flex-start',
+                    padding: '16px 20px',
+                    borderBottom: '1px solid #e2e8f0',
+                    backgroundColor: '#ffffff',
+                    flexShrink: 0,
+                  }}
+                >
                   <div>
                     <span style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.05em', color: '#0284c7', textTransform: 'uppercase' }}>
                       Official University Examination Preview • {activeSet.setCode}
@@ -3099,17 +3125,28 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
                     type="button"
                     onClick={() => setPreviewModalOpen(false)}
                     style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: '4px' }}
+                    title="Close"
+                    aria-label="Close"
                   >
                     <X size={20} />
                   </button>
                 </div>
 
-                <div style={{ backgroundColor: '#f8fafc', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '18px', display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#334155', flexWrap: 'wrap', gap: '8px' }}>
-                  <div><strong>Subject Code:</strong> {blueprint.subjectCode}</div>
-                  <div><strong>Duration:</strong> {blueprint.durationHours} Hours</div>
-                  <div><strong>Total Marks:</strong> {blueprint.totalMarks} Marks</div>
-                  <div><strong>Active Set:</strong> {activeSet.setCode}</div>
-                </div>
+                {/* Scrollable Preview Body */}
+                <div
+                  style={{
+                    padding: '18px 20px',
+                    overflowY: 'auto',
+                    flex: '1 1 auto',
+                    WebkitOverflowScrolling: 'touch',
+                  }}
+                >
+                  <div style={{ backgroundColor: '#f8fafc', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '18px', display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#334155', flexWrap: 'wrap', gap: '8px' }}>
+                    <div><strong>Subject Code:</strong> {blueprint.subjectCode}</div>
+                    <div><strong>Duration:</strong> {blueprint.durationHours} Hours</div>
+                    <div><strong>Total Marks:</strong> {blueprint.totalMarks} Marks</div>
+                    <div><strong>Active Set:</strong> {activeSet.setCode}</div>
+                  </div>
 
                 <div style={{ marginBottom: '18px', fontSize: '12px', color: '#475569' }}>
                   <strong>Instructions to Candidates:</strong>
@@ -3192,9 +3229,20 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
                       </div>
                     </div>
                   ))}
+                  </div>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
+                {/* Fixed Footer */}
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'flex-end',
+                    padding: '12px 20px',
+                    borderTop: '1px solid #e2e8f0',
+                    backgroundColor: '#f8fafc',
+                    flexShrink: 0,
+                  }}
+                >
                   <button
                     type="button"
                     style={styles.secondaryButton}
@@ -3381,299 +3429,386 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
       {/* MODAL: ADD / EDIT QUESTION                                            */}
       {/* --------------------------------------------------------------------- */}
       {newQuestionModalOpen && (
-        <div style={styles.modalOverlay}>
-          <div style={styles.modalCard}>
-            <h3 style={styles.modalTitle}>
-              {editingQuestionId ? 'Edit / Replace Question' : 'Add Question'} for {blueprint.subject}
-            </h3>
-            <form onSubmit={handleSaveQuestion}>
-              <div style={styles.grid2}>
-                <div>
-                  <label style={styles.label}>Unit Selector <span style={{ color: '#ef4444' }}>*</span></label>
-                  <select
-                    style={styles.select}
-                    value={newQuestionForm.unitNumber}
-                    required
-                    onChange={(e) => {
-                      const uNum = e.target.value ? parseInt(e.target.value, 10) : '';
-                      setNewQuestionForm({
-                        ...newQuestionForm,
-                        unitNumber: uNum,
-                        unitTitle: uNum ? `Unit ${uNum}` : '',
-                      });
-                    }}
-                  >
-                    <option value="">-- Select Unit --</option>
-                    <option value={1}>Unit 1</option>
-                    <option value={2}>Unit 2</option>
-                    <option value={3}>Unit 3</option>
-                    <option value={4}>Unit 4</option>
-                    <option value={5}>Unit 5</option>
-                    <option value={6}>Unit 6</option>
-                  </select>
-                </div>
-                <div>
-                  <label style={styles.label}>Marks <span style={{ color: '#ef4444' }}>*</span></label>
-                  <select
-                    style={styles.select}
-                    value={newQuestionForm.marks}
-                    required
-                    onChange={(e) =>
-                      setNewQuestionForm({ ...newQuestionForm, marks: e.target.value ? parseInt(e.target.value, 10) : '' })
-                    }
-                  >
-                    <option value="">-- Select Question Marks --</option>
-                    <option value={2}>2 Marks</option>
-                    <option value={3}>3 Marks</option>
-                    <option value={4}>4 Marks</option>
-                    <option value={5}>5 Marks</option>
-                    <option value={6}>6 Marks</option>
-                    <option value={7}>7 Marks</option>
-                    <option value={8}>8 Marks</option>
-                    <option value={9}>9 Marks</option>
-                    <option value={10}>10 Marks</option>
-                    <option value={14}>14 Marks</option>
-                    <option value={15}>15 Marks</option>
-                    <option value={17}>17 Marks</option>
-                    <option value={18}>18 Marks</option>
-                  </select>
-                </div>
-                <div>
-                  <label style={styles.label}>Difficulty <span style={{ color: '#ef4444' }}>*</span></label>
-                  <select
-                    style={styles.select}
-                    value={newQuestionForm.difficulty}
-                    required
-                    onChange={(e) =>
-                      setNewQuestionForm({ ...newQuestionForm, difficulty: e.target.value })
-                    }
-                  >
-                    <option value="">-- Select Difficulty --</option>
-                    <option value="EASY">EASY</option>
-                    <option value="MEDIUM">MEDIUM</option>
-                    <option value="HARD">HARD</option>
-                  </select>
-                </div>
-                <div>
-                  <label style={styles.label}>Question Type</label>
-                  <select
-                    style={styles.select}
-                    value={newQuestionForm.questionType}
-                    onChange={(e) =>
-                      setNewQuestionForm({ ...newQuestionForm, questionType: e.target.value })
-                    }
-                  >
-                    <option value="">-- Select Question Type --</option>
-                    <option value="DESCRIPTIVE">DESCRIPTIVE</option>
-                    <option value="NUMERICAL">NUMERICAL</option>
-                    <option value="ANALYTICAL">ANALYTICAL</option>
-                  </select>
-                </div>
+        <div
+          style={styles.modalOverlay}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setNewQuestionModalOpen(false);
+          }}
+        >
+          <div
+            style={{
+              ...styles.modalCard,
+              maxWidth: '680px',
+              maxHeight: 'min(92vh, 820px)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              padding: 0,
+            }}
+          >
+            {/* Modal Header: Fixed at Top */}
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '16px 20px',
+                borderBottom: '1px solid #e2e8f0',
+                backgroundColor: '#ffffff',
+                flexShrink: 0,
+              }}
+            >
+              <div>
+                <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 700, color: '#0f172a' }}>
+                  {editingQuestionId ? 'Edit / Replace Question' : 'Add Question'} for {blueprint.subject}
+                </h3>
+                <p style={{ margin: '3px 0 0 0', fontSize: '12px', color: '#64748b' }}>
+                  Enter question details, outcomes, Bloom&apos;s level, text, and optional diagram.
+                </p>
               </div>
+              <button
+                type="button"
+                onClick={() => setNewQuestionModalOpen(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: '#64748b',
+                  padding: '4px',
+                  borderRadius: '6px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                title="Close"
+                aria-label="Close"
+              >
+                <X size={20} />
+              </button>
+            </div>
 
-              {/* CO / PO / Bloom's Taxonomy Dropdowns (OBE Compliance with Prompt Placeholders) */}
-              <div style={{ ...styles.grid2, marginTop: '12px' }}>
-                <div>
-                  <label style={styles.label}>Course Outcome (CO)</label>
-                  <select
-                    style={styles.select}
-                    value={newQuestionForm.courseOutcome}
-                    onChange={(e) =>
-                      setNewQuestionForm({ ...newQuestionForm, courseOutcome: e.target.value })
-                    }
-                  >
-                    <option value="">-- Select Course Outcome (CO) --</option>
-                    {(outcomes.courseOutcomes || []).map((co) => (
-                      <option key={co.code} value={co.code}>
-                        {co.code}: {co.title}
-                      </option>
-                    ))}
-                    {(!outcomes.courseOutcomes || outcomes.courseOutcomes.length === 0) && (
-                      <>
-                        <option value="CO1">CO1: Fundamentals and Analysis</option>
-                        <option value="CO2">CO2: Algorithm Design Paradigms</option>
-                        <option value="CO3">CO3: Dynamic Programming</option>
-                        <option value="CO4">CO4: Backtracking and Branch-and-Bound</option>
-                        <option value="CO5">CO5: Complexity Classes</option>
-                        <option value="CO6">CO6: Advanced Algorithms</option>
-                      </>
-                    )}
-                  </select>
-                </div>
-
-                <div>
-                  <label style={styles.label}>Program Outcome (PO / PSO)</label>
-                  <select
-                    style={styles.select}
-                    value={newQuestionForm.programOutcome}
-                    onChange={(e) =>
-                      setNewQuestionForm({ ...newQuestionForm, programOutcome: e.target.value })
-                    }
-                  >
-                    <option value="">-- Select Program Outcome (PO) --</option>
-                    {(outcomes.programOutcomes || []).map((po) => (
-                      <option key={po.code} value={po.code}>
-                        {po.code}: {po.title}
-                      </option>
-                    ))}
-                    {(!outcomes.programOutcomes || outcomes.programOutcomes.length === 0) && (
-                      <>
-                        <option value="PO1">PO1: Engineering Knowledge</option>
-                        <option value="PO2">PO2: Problem Analysis</option>
-                        <option value="PO3">PO3: Design/Development of Solutions</option>
-                        <option value="PO4">PO4: Investigations</option>
-                        <option value="PSO1">PSO1: Professional Skills</option>
-                      </>
-                    )}
-                  </select>
-                </div>
-
-                <div style={{ gridColumn: 'span 2' }}>
-                  <label style={styles.label}>Bloom&apos;s Taxonomy Level (BT)</label>
-                  <select
-                    style={styles.select}
-                    value={newQuestionForm.bloomTaxonomy}
-                    onChange={(e) =>
-                      setNewQuestionForm({ ...newQuestionForm, bloomTaxonomy: e.target.value })
-                    }
-                  >
-                    <option value="">-- Select Bloom's Taxonomy Level --</option>
-                    {(outcomes.bloomTaxonomyLevels || []).map((bt) => (
-                      <option key={bt.code} value={`${bt.code} - ${bt.title}`}>
-                        {bt.code} - {bt.title}
-                      </option>
-                    ))}
-                    {(!outcomes.bloomTaxonomyLevels || outcomes.bloomTaxonomyLevels.length === 0) && (
-                      <>
-                        <option value="L1 - Remember">L1 - Remember (Recall facts and basic concepts)</option>
-                        <option value="L2 - Understand">L2 - Understand (Explain ideas or concepts)</option>
-                        <option value="L3 - Apply">L3 - Apply (Use information in new situations)</option>
-                        <option value="L4 - Analyze">L4 - Analyze (Draw connections among ideas)</option>
-                        <option value="L5 - Evaluate">L5 - Evaluate (Justify a stand or decision)</option>
-                        <option value="L6 - Create">L6 - Create (Produce new or original work)</option>
-                      </>
-                    )}
-                  </select>
-                </div>
-              </div>
-
-              <div style={{ marginTop: '12px' }}>
-                <label style={styles.label}>Topic / Concept</label>
-                <input
-                  type="text"
-                  style={styles.input}
-                  placeholder="e.g. Relational Normalization, Direct Linking Loader"
-                  value={newQuestionForm.topic}
-                  onChange={(e) =>
-                    setNewQuestionForm({ ...newQuestionForm, topic: e.target.value })
-                  }
-                />
-              </div>
-
-              <div style={{ marginTop: '12px' }}>
-                <label style={styles.label}>Question Text</label>
-                <textarea
-                  style={{ ...styles.input, height: '80px' }}
-                  value={newQuestionForm.questionText}
-                  onChange={(e) =>
-                    setNewQuestionForm({ ...newQuestionForm, questionText: e.target.value })
-                  }
-                  required
-                />
-              </div>
-
-              {/* Module 4.3: Insert Image Option */}
-              <div style={{ marginTop: '14px', padding: '12px', border: '1px dashed var(--color-border)', borderRadius: '8px', backgroundColor: 'var(--color-surface-subtle)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                  <label style={{ ...styles.label, margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <ImageIcon size={16} color="var(--color-primary)" />
-                    <span>Attach Diagram / Figure (PNG, JPEG - Max 5MB)</span>
-                  </label>
-                  {!newQuestionForm.image && (
-                    <label style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      padding: '6px 12px',
-                      borderRadius: '6px',
-                      backgroundColor: 'var(--color-primary)',
-                      color: '#ffffff',
-                      fontSize: '12px',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                    }}>
-                      <UploadCloud size={14} />
-                      <span>Insert Image</span>
-                      <input
-                        type="file"
-                        accept="image/png,image/jpeg,image/webp"
-                        style={{ display: 'none' }}
-                        onChange={handleImageUpload}
-                        disabled={uploadingImage}
-                      />
-                    </label>
-                  )}
-                </div>
-
-                {imageError && (
-                  <div style={{ color: '#ef4444', fontSize: '12px', marginBottom: '8px' }}>
-                    {imageError}
+            {/* Modal Form: Flex column layout with scrollable body and pinned footer */}
+            <form
+              onSubmit={handleSaveQuestion}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                flex: 1,
+                minHeight: 0,
+                overflow: 'hidden',
+                margin: 0,
+              }}
+            >
+              {/* Scrollable Form Body */}
+              <div
+                style={{
+                  padding: '18px 20px',
+                  overflowY: 'auto',
+                  flex: '1 1 auto',
+                  WebkitOverflowScrolling: 'touch',
+                }}
+              >
+                <div style={styles.grid2}>
+                  <div>
+                    <label style={styles.label}>Unit Selector <span style={{ color: '#ef4444' }}>*</span></label>
+                    <select
+                      style={styles.select}
+                      value={newQuestionForm.unitNumber}
+                      required
+                      onChange={(e) => {
+                        const uNum = e.target.value ? parseInt(e.target.value, 10) : '';
+                        setNewQuestionForm({
+                          ...newQuestionForm,
+                          unitNumber: uNum,
+                          unitTitle: uNum ? `Unit ${uNum}` : '',
+                        });
+                      }}
+                    >
+                      <option value="">-- Select Unit --</option>
+                      <option value={1}>Unit 1</option>
+                      <option value={2}>Unit 2</option>
+                      <option value={3}>Unit 3</option>
+                      <option value={4}>Unit 4</option>
+                      <option value={5}>Unit 5</option>
+                      <option value={6}>Unit 6</option>
+                    </select>
                   </div>
-                )}
+                  <div>
+                    <label style={styles.label}>Marks <span style={{ color: '#ef4444' }}>*</span></label>
+                    <select
+                      style={styles.select}
+                      value={newQuestionForm.marks}
+                      required
+                      onChange={(e) =>
+                        setNewQuestionForm({ ...newQuestionForm, marks: e.target.value ? parseInt(e.target.value, 10) : '' })
+                      }
+                    >
+                      <option value="">-- Select Question Marks --</option>
+                      <option value={2}>2 Marks</option>
+                      <option value={3}>3 Marks</option>
+                      <option value={4}>4 Marks</option>
+                      <option value={5}>5 Marks</option>
+                      <option value={6}>6 Marks</option>
+                      <option value={7}>7 Marks</option>
+                      <option value={8}>8 Marks</option>
+                      <option value={9}>9 Marks</option>
+                      <option value={10}>10 Marks</option>
+                      <option value={14}>14 Marks</option>
+                      <option value={15}>15 Marks</option>
+                      <option value={17}>17 Marks</option>
+                      <option value={18}>18 Marks</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={styles.label}>Difficulty <span style={{ color: '#ef4444' }}>*</span></label>
+                    <select
+                      style={styles.select}
+                      value={newQuestionForm.difficulty}
+                      required
+                      onChange={(e) =>
+                        setNewQuestionForm({ ...newQuestionForm, difficulty: e.target.value })
+                      }
+                    >
+                      <option value="">-- Select Difficulty --</option>
+                      <option value="EASY">EASY</option>
+                      <option value="MEDIUM">MEDIUM</option>
+                      <option value="HARD">HARD</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={styles.label}>Question Type</label>
+                    <select
+                      style={styles.select}
+                      value={newQuestionForm.questionType}
+                      onChange={(e) =>
+                        setNewQuestionForm({ ...newQuestionForm, questionType: e.target.value })
+                      }
+                    >
+                      <option value="">-- Select Question Type --</option>
+                      <option value="DESCRIPTIVE">DESCRIPTIVE</option>
+                      <option value="NUMERICAL">NUMERICAL</option>
+                      <option value="ANALYTICAL">ANALYTICAL</option>
+                    </select>
+                  </div>
+                </div>
 
-                {newQuestionForm.image && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', backgroundColor: 'var(--color-surface)', padding: '10px', borderRadius: '6px', border: '1px solid var(--color-border)' }}>
-                    <img
-                      src={newQuestionForm.image.dataUrl}
-                      alt="Question diagram preview"
-                      style={{ maxWidth: '120px', maxHeight: '70px', objectFit: 'contain', borderRadius: '4px', border: '1px solid #cbd5e1' }}
-                    />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-structure)' }}>
-                        {newQuestionForm.image.name}
-                      </div>
-                      <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
-                        {(newQuestionForm.image.size / 1024).toFixed(1)} KB • Ready for examination embedding
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', gap: '6px' }}>
+                {/* CO / PO / Bloom's Taxonomy Dropdowns (OBE Compliance with Prompt Placeholders) */}
+                <div style={{ ...styles.grid2, marginTop: '14px' }}>
+                  <div>
+                    <label style={styles.label}>Course Outcome (CO)</label>
+                    <select
+                      style={styles.select}
+                      value={newQuestionForm.courseOutcome}
+                      onChange={(e) =>
+                        setNewQuestionForm({ ...newQuestionForm, courseOutcome: e.target.value })
+                      }
+                    >
+                      <option value="">-- Select Course Outcome (CO) --</option>
+                      {(outcomes.courseOutcomes || []).map((co) => (
+                        <option key={co.code} value={co.code}>
+                          {co.code}: {co.title}
+                        </option>
+                      ))}
+                      {(!outcomes.courseOutcomes || outcomes.courseOutcomes.length === 0) && (
+                        <>
+                          <option value="CO1">CO1: Fundamentals and Analysis</option>
+                          <option value="CO2">CO2: Algorithm Design Paradigms</option>
+                          <option value="CO3">CO3: Dynamic Programming</option>
+                          <option value="CO4">CO4: Backtracking and Branch-and-Bound</option>
+                          <option value="CO5">CO5: Complexity Classes</option>
+                          <option value="CO6">CO6: Advanced Algorithms</option>
+                        </>
+                      )}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={styles.label}>Program Outcome (PO / PSO)</label>
+                    <select
+                      style={styles.select}
+                      value={newQuestionForm.programOutcome}
+                      onChange={(e) =>
+                        setNewQuestionForm({ ...newQuestionForm, programOutcome: e.target.value })
+                      }
+                    >
+                      <option value="">-- Select Program Outcome (PO) --</option>
+                      {(outcomes.programOutcomes || []).map((po) => (
+                        <option key={po.code} value={po.code}>
+                          {po.code}: {po.title}
+                        </option>
+                      ))}
+                      {(!outcomes.programOutcomes || outcomes.programOutcomes.length === 0) && (
+                        <>
+                          <option value="PO1">PO1: Engineering Knowledge</option>
+                          <option value="PO2">PO2: Problem Analysis</option>
+                          <option value="PO3">PO3: Design/Development of Solutions</option>
+                          <option value="PO4">PO4: Investigations</option>
+                          <option value="PSO1">PSO1: Professional Skills</option>
+                        </>
+                      )}
+                    </select>
+                  </div>
+
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <label style={styles.label}>Bloom&apos;s Taxonomy Level (BT)</label>
+                    <select
+                      style={styles.select}
+                      value={newQuestionForm.bloomTaxonomy}
+                      onChange={(e) =>
+                        setNewQuestionForm({ ...newQuestionForm, bloomTaxonomy: e.target.value })
+                      }
+                    >
+                      <option value="">-- Select Bloom's Taxonomy Level --</option>
+                      {(outcomes.bloomTaxonomyLevels || []).map((bt) => (
+                        <option key={bt.code} value={`${bt.code} - ${bt.title}`}>
+                          {bt.code} - {bt.title}
+                        </option>
+                      ))}
+                      {(!outcomes.bloomTaxonomyLevels || outcomes.bloomTaxonomyLevels.length === 0) && (
+                        <>
+                          <option value="L1 - Remember">L1 - Remember (Recall facts and basic concepts)</option>
+                          <option value="L2 - Understand">L2 - Understand (Explain ideas or concepts)</option>
+                          <option value="L3 - Apply">L3 - Apply (Use information in new situations)</option>
+                          <option value="L4 - Analyze">L4 - Analyze (Draw connections among ideas)</option>
+                          <option value="L5 - Evaluate">L5 - Evaluate (Justify a stand or decision)</option>
+                          <option value="L6 - Create">L6 - Create (Produce new or original work)</option>
+                        </>
+                      )}
+                    </select>
+                  </div>
+                </div>
+
+                <div style={{ marginTop: '14px' }}>
+                  <label style={styles.label}>Topic / Concept</label>
+                  <input
+                    type="text"
+                    style={styles.input}
+                    placeholder="e.g. Relational Normalization, Direct Linking Loader"
+                    value={newQuestionForm.topic}
+                    onChange={(e) =>
+                      setNewQuestionForm({ ...newQuestionForm, topic: e.target.value })
+                    }
+                  />
+                </div>
+
+                <div style={{ marginTop: '14px' }}>
+                  <label style={styles.label}>Question Text <span style={{ color: '#ef4444' }}>*</span></label>
+                  <textarea
+                    style={{ ...styles.input, height: '90px', resize: 'vertical' }}
+                    placeholder="Enter complete examination question text..."
+                    value={newQuestionForm.questionText}
+                    onChange={(e) =>
+                      setNewQuestionForm({ ...newQuestionForm, questionText: e.target.value })
+                    }
+                    required
+                  />
+                </div>
+
+                {/* Module 4.3: Insert Image Option */}
+                <div style={{ marginTop: '14px', padding: '12px', border: '1px dashed var(--color-border)', borderRadius: '8px', backgroundColor: 'var(--color-surface-subtle)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
+                    <label style={{ ...styles.label, margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <ImageIcon size={16} color="var(--color-primary)" />
+                      <span>Attach Diagram / Figure (PNG, JPEG - Max 5MB)</span>
+                    </label>
+                    {!newQuestionForm.image && (
                       <label style={{
-                        padding: '4px 8px',
-                        fontSize: '11px',
-                        borderRadius: '4px',
-                        border: '1px solid var(--color-border)',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '6px 12px',
+                        borderRadius: '6px',
+                        backgroundColor: 'var(--color-primary)',
+                        color: '#ffffff',
+                        fontSize: '12px',
+                        fontWeight: 600,
                         cursor: 'pointer',
-                        color: 'var(--color-text)',
                       }}>
-                        Replace
+                        <UploadCloud size={14} />
+                        <span>Insert Image</span>
                         <input
                           type="file"
                           accept="image/png,image/jpeg,image/webp"
                           style={{ display: 'none' }}
                           onChange={handleImageUpload}
+                          disabled={uploadingImage}
                         />
                       </label>
-                      <button
-                        type="button"
-                        onClick={handleRemoveImage}
-                        style={{
+                    )}
+                  </div>
+
+                  {imageError && (
+                    <div style={{ color: '#ef4444', fontSize: '12px', marginBottom: '8px' }}>
+                      {imageError}
+                    </div>
+                  )}
+
+                  {newQuestionForm.image && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', backgroundColor: 'var(--color-surface)', padding: '10px', borderRadius: '6px', border: '1px solid var(--color-border)', flexWrap: 'wrap' }}>
+                      <img
+                        src={newQuestionForm.image.dataUrl}
+                        alt="Question diagram preview"
+                        style={{ maxWidth: '120px', maxHeight: '70px', objectFit: 'contain', borderRadius: '4px', border: '1px solid #cbd5e1' }}
+                      />
+                      <div style={{ flex: 1, minWidth: '160px' }}>
+                        <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-structure)' }}>
+                          {newQuestionForm.image.name}
+                        </div>
+                        <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
+                          {(newQuestionForm.image.size / 1024).toFixed(1)} KB • Ready for examination embedding
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <label style={{
                           padding: '4px 8px',
                           fontSize: '11px',
                           borderRadius: '4px',
-                          border: '1px solid #fca5a5',
-                          backgroundColor: '#fee2e2',
-                          color: '#dc2626',
+                          border: '1px solid var(--color-border)',
                           cursor: 'pointer',
-                        }}
-                      >
-                        Remove
-                      </button>
+                          color: 'var(--color-text)',
+                        }}>
+                          Replace
+                          <input
+                            type="file"
+                            accept="image/png,image/jpeg,image/webp"
+                            style={{ display: 'none' }}
+                            onChange={handleImageUpload}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          onClick={handleRemoveImage}
+                          style={{
+                            padding: '4px 8px',
+                            fontSize: '11px',
+                            borderRadius: '4px',
+                            border: '1px solid #fca5a5',
+                            backgroundColor: '#fee2e2',
+                            color: '#dc2626',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          Remove
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '16px' }}>
+              {/* Fixed Modal Footer: Always Visible and Never Clipped */}
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                  alignItems: 'center',
+                  gap: '10px',
+                  padding: '14px 20px',
+                  borderTop: '1px solid #e2e8f0',
+                  backgroundColor: '#f8fafc',
+                  flexShrink: 0,
+                }}
+              >
                 <button
                   type="button"
                   style={styles.secondaryButton}
@@ -3681,8 +3816,17 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
                 >
                   Cancel
                 </button>
-                <button type="submit" style={styles.primaryButton}>
-                  Save Question
+                <button
+                  type="submit"
+                  style={{
+                    ...styles.primaryButton,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                  }}
+                >
+                  <Check size={16} />
+                  <span>{editingQuestionId ? 'Save Question Changes' : 'Save Question'}</span>
                 </button>
               </div>
             </form>
@@ -3694,29 +3838,66 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
       {/* MODAL: CUSTOMIZE MARKS STRUCTURE & QUESTION LAYOUT (Requirement 1)     */}
       {/* --------------------------------------------------------------------- */}
       {customStructureModalOpen && (
-        <div style={styles.modalOverlay}>
-          <div style={{ ...styles.modalCard, maxWidth: '850px', maxHeight: '90vh', overflowY: 'auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px', marginBottom: '16px' }}>
+        <div
+          style={styles.modalOverlay}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setCustomStructureModalOpen(false);
+          }}
+        >
+          <div
+            style={{
+              ...styles.modalCard,
+              maxWidth: '860px',
+              maxHeight: 'min(92vh, 850px)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              padding: 0,
+            }}
+          >
+            {/* Modal Header */}
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '16px 20px',
+                borderBottom: '1px solid #e2e8f0',
+                backgroundColor: '#ffffff',
+                flexShrink: 0,
+              }}
+            >
               <div>
-                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <Settings size={20} color="var(--color-primary)" />
                   <span>Customize Examination Marks Structure &amp; Question Layout</span>
                 </h3>
-                <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#64748b' }}>
+                <p style={{ margin: '3px 0 0 0', fontSize: '12px', color: '#64748b' }}>
                   Configure question pairs, syllabus units, sub-question marks, and OR alternatives for this examination blueprint.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setCustomStructureModalOpen(false)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: '4px' }}
+                title="Close"
+                aria-label="Close"
               >
                 <X size={20} />
               </button>
             </div>
 
-            {/* List of Question Pairs */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* Scrollable Modal Body */}
+            <div
+              style={{
+                padding: '18px 20px',
+                overflowY: 'auto',
+                flex: '1 1 auto',
+                WebkitOverflowScrolling: 'touch',
+              }}
+            >
+              {/* List of Question Pairs */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               {customSectionsDraft.map((sec, secIdx) => {
                 const subquestions = sec.subquestionsConfig || [];
                 const primaryMarks = subquestions.reduce((sum, sq) => sum + (Number(sq.marks) || 0), 0);
@@ -3991,30 +4172,31 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
                 <span>+ Add Question Pair / Group</span>
               </button>
             </div>
+          </div>
 
-            {/* Summary Footer */}
-            <div
+          {/* Fixed Modal Footer */}
+          <div
               style={{
-                marginTop: '20px',
-                padding: '14px',
-                backgroundColor: '#f1f5f9',
-                borderRadius: '8px',
+                padding: '14px 20px',
+                borderTop: '1px solid #e2e8f0',
+                backgroundColor: '#f8fafc',
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
                 flexWrap: 'wrap',
                 gap: '12px',
+                flexShrink: 0,
               }}
             >
               <div>
-                <div style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>
                   Total Structure Answered Marks:{' '}
-                  <span style={{ color: 'var(--color-primary)', fontSize: '16px' }}>
+                  <span style={{ color: 'var(--color-primary)', fontSize: '15px' }}>
                     {customSectionsDraft.reduce((acc, sec) => acc + (Number(sec.targetMarks) || 0), 0)} Marks
                   </span>
                 </div>
-                <div style={{ fontSize: '12px', color: '#64748b' }}>
-                  Total Pairs: {customSectionsDraft.length} | Total Questions Configured:{' '}
+                <div style={{ fontSize: '11px', color: '#64748b' }}>
+                  Total Pairs: {customSectionsDraft.length} | Questions Configured:{' '}
                   {customSectionsDraft.length * 2} (compulsory + OR alternatives)
                 </div>
               </div>
@@ -4056,24 +4238,73 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
       {/* MODAL: ADD NEW SUBJECT TO SYSTEM (Requirement 3)                       */}
       {/* --------------------------------------------------------------------- */}
       {addSubjectModalOpen && (
-        <div style={styles.modalOverlay}>
-          <div style={{ ...styles.modalCard, maxWidth: '580px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px', marginBottom: '16px' }}>
-              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div
+          style={styles.modalOverlay}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setAddSubjectModalOpen(false);
+          }}
+        >
+          <div
+            style={{
+              ...styles.modalCard,
+              maxWidth: '580px',
+              maxHeight: 'min(92vh, 760px)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              padding: 0,
+            }}
+          >
+            {/* Modal Header */}
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '16px 20px',
+                borderBottom: '1px solid #e2e8f0',
+                backgroundColor: '#ffffff',
+                flexShrink: 0,
+              }}
+            >
+              <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <BookOpen size={20} color="var(--color-primary)" />
                 <span>Add New Subject to Computer Engineering</span>
               </h3>
               <button
                 type="button"
                 onClick={() => setAddSubjectModalOpen(false)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: '4px' }}
+                title="Close"
+                aria-label="Close"
               >
                 <X size={20} />
               </button>
             </div>
 
-            <form onSubmit={handleCreateSubjectSubmit}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <form
+              onSubmit={handleCreateSubjectSubmit}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                flex: 1,
+                minHeight: 0,
+                overflow: 'hidden',
+                margin: 0,
+              }}
+            >
+              {/* Scrollable Body */}
+              <div
+                style={{
+                  padding: '18px 20px',
+                  overflowY: 'auto',
+                  flex: '1 1 auto',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '14px',
+                  WebkitOverflowScrolling: 'touch',
+                }}
+              >
                 <div>
                   <label style={styles.label}>Subject Full Title <span style={{ color: '#ef4444' }}>*</span></label>
                   <input
@@ -4086,7 +4317,7 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
                   />
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
                   <div>
                     <label style={styles.label}>Subject Code <span style={{ color: '#ef4444' }}>*</span></label>
                     <input
@@ -4110,7 +4341,7 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
                   <div>
                     <label style={styles.label}>Class / Year <span style={{ color: '#ef4444' }}>*</span></label>
                     <select
@@ -4138,7 +4369,7 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
                   <div>
                     <label style={styles.label}>Academic Pattern</label>
                     <select
@@ -4165,24 +4396,36 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
                     </select>
                   </div>
                 </div>
+              </div>
 
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px' }}>
-                  <button
-                    type="button"
-                    onClick={() => setAddSubjectModalOpen(false)}
-                    style={styles.secondaryButton}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={savingSubject}
-                    style={styles.primaryButton}
-                  >
-                    {savingSubject ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
-                    <span>Save &amp; Select Subject</span>
-                  </button>
-                </div>
+              {/* Fixed Footer */}
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                  alignItems: 'center',
+                  gap: '10px',
+                  padding: '14px 20px',
+                  borderTop: '1px solid #e2e8f0',
+                  backgroundColor: '#f8fafc',
+                  flexShrink: 0,
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setAddSubjectModalOpen(false)}
+                  style={styles.secondaryButton}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingSubject}
+                  style={styles.primaryButton}
+                >
+                  {savingSubject ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+                  <span>Save &amp; Select Subject</span>
+                </button>
               </div>
             </form>
           </div>
@@ -4289,7 +4532,7 @@ const styles = {
   },
   grid2: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(min(240px, 100%), 1fr))',
     gap: '16px',
   },
   label: {
@@ -4605,20 +4848,27 @@ const styles = {
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    backdropFilter: 'blur(3px)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 1000,
-    padding: '16px',
+    zIndex: 1050,
+    padding: '12px',
+    overflowY: 'auto',
   },
   modalCard: {
     backgroundColor: '#ffffff',
     borderRadius: '12px',
-    maxWidth: '560px',
+    maxWidth: '680px',
     width: '100%',
-    padding: '24px',
-    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
+    maxHeight: 'min(92vh, 850px)',
+    display: 'flex',
+    flexDirection: 'column',
+    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+    border: '1px solid #e2e8f0',
+    overflow: 'hidden',
+    margin: 'auto',
   },
   modalTitle: {
     fontSize: '16px',
