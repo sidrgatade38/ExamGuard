@@ -465,6 +465,7 @@ async function getMyQuestionPapers(teacherId) {
       exam_date,
       teacher_id,
       file_name,
+      storage_path,
       file_size,
       mime_type,
       status,
@@ -550,6 +551,7 @@ async function getQuestionPaperById(paperId, requesterId, requesterRole) {
       exam_date,
       teacher_id,
       file_name,
+      storage_path,
       file_size,
       mime_type,
       status,
@@ -1011,6 +1013,7 @@ async function getAssignedQuestionPapers(facultyId) {
       exam_date,
       teacher_id,
       file_name,
+      storage_path,
       file_size,
       mime_type,
       status,
@@ -1458,45 +1461,70 @@ async function reviewQuestionPaper({ paperId, coordinatorId, coordinatorName, ac
 
   const now = new Date().toISOString();
   let newReviewStatus = 'APPROVED';
-  let newPaperStatus = 'APPROVED';
   let adminStatus = 'APPROVED';
+  // Maintain valid lifecycle status according to chk_question_papers_status constraint:
+  // ('DRAFT', 'SUBMITTED', 'ENCRYPTED', 'SIGNED', 'SCHEDULED', 'DELIVERED', 'ARCHIVED', 'DELETED')
+  let newPaperStatus = paper.status || 'SUBMITTED';
 
   if (normalizedAction === 'RETURN' || normalizedAction === 'REVISION') {
     newReviewStatus = 'RETURNED';
-    newPaperStatus = 'NEEDS_REVISION';
     adminStatus = 'RETURNED';
+    newPaperStatus = paper.status === 'DRAFT' ? 'DRAFT' : 'SUBMITTED';
   } else if (normalizedAction === 'REJECT') {
     newReviewStatus = 'REJECTED';
-    newPaperStatus = 'REJECTED';
     adminStatus = 'REJECTED';
+    newPaperStatus = paper.status || 'SUBMITTED';
   } else {
     // APPROVE / RECOMMEND -> Exam Coordinator verified and approved
     newReviewStatus = 'APPROVED';
-    newPaperStatus = 'APPROVED';
     adminStatus = 'APPROVED';
+    newPaperStatus = paper.scheduled_delivery_date ? 'SCHEDULED' : (paper.status || 'SUBMITTED');
   }
 
-  // Persist review transition
-  const { data: updatedPaper, error: updateErr } = await supabase
+  // Persist review transition with resilient fallback
+  const updatePayload = {
+    review_status: newReviewStatus,
+    status: newPaperStatus,
+    admin_approval_status: adminStatus,
+    reviewer_id: coordinatorId,
+    reviewed_at: now,
+    review_comments: comments ? comments.trim() : null,
+    updated_at: now,
+  };
+
+  let { data: updatedPaper, error: updateErr } = await supabase
     .from('question_papers')
-    .update({
+    .update(updatePayload)
+    .eq('id', paperId)
+    .select('*')
+    .maybeSingle();
+
+  // If primary update fails (e.g. check constraint or column mismatch), retry with core review fields
+  if (updateErr) {
+    console.warn('[QuestionPaperService] Primary review update failed, retrying with core review fields:', updateErr.message);
+    const fallbackPayload = {
       review_status: newReviewStatus,
-      status: newPaperStatus,
-      admin_approval_status: adminStatus,
       reviewer_id: coordinatorId,
       reviewed_at: now,
       review_comments: comments ? comments.trim() : null,
       updated_at: now,
-    })
-    .eq('id', paperId)
-    .select('*')
-    .single();
+    };
+    const retry = await supabase
+      .from('question_papers')
+      .update(fallbackPayload)
+      .eq('id', paperId)
+      .select('*')
+      .maybeSingle();
 
-  if (updateErr) {
-    console.error('[QuestionPaperService] Error updating paper review status:', updateErr.message);
-    const dbErr = new Error('Failed to record review decision in database.');
-    dbErr.statusCode = 500;
-    throw dbErr;
+    if (!retry.error && retry.data) {
+      updatedPaper = retry.data;
+      updateErr = null;
+    } else {
+      console.error('[QuestionPaperService] Error updating paper review status:', retry?.error?.message || updateErr.message);
+      const dbErr = new Error(`Failed to record review decision in database: ${retry?.error?.message || updateErr.message}`);
+      dbErr.statusCode = 500;
+      throw dbErr;
+    }
   }
 
   // Record traceable verification history (Module 5)
@@ -1725,6 +1753,7 @@ async function getAdminQuestionPapers({ status, reviewStatus, adminStatus, searc
       exam_date,
       teacher_id,
       file_name,
+      storage_path,
       file_size,
       mime_type,
       status,

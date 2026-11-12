@@ -89,10 +89,15 @@ async function getMyPapers(req, res, next) {
     }
 
     const papers = await questionPaperService.getMyQuestionPapers(teacherId);
+    const safePapers = (papers || []).map((p) => {
+      const copy = { ...p };
+      delete copy.storage_path;
+      return copy;
+    });
 
     return res.status(200).json({
       success: true,
-      data: papers,
+      data: safePapers,
     });
   } catch (err) {
     if (err.statusCode) {
