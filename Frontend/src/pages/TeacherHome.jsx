@@ -40,6 +40,7 @@ import {
 import QuestionPaperGeneratorWizard from '../components/QuestionPaperGeneratorWizard';
 import DeletePaperModal from '../components/DeletePaperModal';
 import AlgorithmFlowDiagram from '../components/AlgorithmFlowDiagram';
+import AppHeader from '../components/AppHeader';
 
 export default function TeacherHome() {
   const { user, logout } = useAuth();
@@ -657,174 +658,32 @@ export default function TeacherHome() {
     };
   }, [papers, assignedPapers, drafts]);
 
+  const teacherNavTabs = useMemo(() => [
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'profile', label: 'My Profile', icon: UserCheck },
+    { id: 'list', label: 'My Papers', icon: Layers, badge: papers.length },
+    { id: 'drafts', label: 'Drafts', icon: Sparkles, badge: drafts.length },
+    { id: 'create', label: '+ Create Paper', icon: Plus, isPrimary: true },
+  ], [papers.length, drafts.length]);
+
   return (
     <div style={styles.container}>
-      {/* Top Navbar */}
-      <header style={styles.navbar}>
-        <div style={styles.navBrand}>
-          <div style={styles.brandIcon}>
-            <BookOpen size={24} color="#3b82f6" />
-          </div>
-          <div>
-            <h1 style={styles.brandTitle}>ExamGuard</h1>
-            <span style={styles.brandTagline}>Department of Computer Engineering • Faculty Workspace</span>
-          </div>
-        </div>
-
-        {/* Desktop Navigation Section */}
-        <div className="nav-desktop" style={styles.navUserSection}>
-          <button
-            onClick={() => setShowAlgorithmModal(true)}
-            style={styles.algorithmFlowBtn}
-            title="View Cryptographic Algorithm Flow"
-          >
-            <Layers size={15} />
-            <span>Algorithm Flow</span>
-          </button>
-          <div
-            style={{ ...styles.userBadge, cursor: 'pointer' }}
-            onClick={() => setActiveTab('profile')}
-            title="View and Edit Profile"
-          >
-            <User size={16} color="var(--color-accent)" />
-            <div>
-              <div style={styles.userName}>{user?.name || 'Faculty Member'}</div>
-              <div style={styles.userRole}>COMP. ENGG • {profileData?.designation || 'FACULTY'}</div>
-            </div>
-          </div>
-          <button onClick={handleLogout} style={styles.logoutBtn} title="Sign Out">
-            <LogOut size={16} />
-            <span>Sign Out</span>
-          </button>
-        </div>
-
-        {/* Mobile Navigation Controls */}
-        <div className="nav-mobile-controls" style={styles.navMobileControls}>
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            style={styles.mobileMenuToggle}
-            aria-label="Toggle navigation menu"
-            aria-expanded={mobileMenuOpen}
-          >
-            {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
-          </button>
-        </div>
-      </header>
-
-      {/* Mobile Drawer */}
-      {mobileMenuOpen && (
-        <div className="mobile-nav-backdrop" onClick={() => setMobileMenuOpen(false)}>
-          <div className="mobile-nav-drawer open" onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <BookOpen size={20} color="var(--color-primary)" />
-                <span style={{ fontWeight: '700', color: 'var(--color-structure-text)', fontSize: '1rem' }}>
-                  ExamGuard
-                </span>
-              </div>
-              <button
-                onClick={() => setMobileMenuOpen(false)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--color-structure-muted)',
-                  cursor: 'pointer',
-                  padding: '0.25rem',
-                }}
-                aria-label="Close menu"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <div style={styles.mobileUserBox}>
-              <User size={22} color="var(--color-accent)" />
-              <div>
-                <div style={{ fontSize: '0.9rem', fontWeight: '600', color: 'var(--color-structure-text)' }}>
-                  {user?.name || 'Faculty Member'}
-                </div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--color-accent)', fontFamily: 'var(--font-jetbrains)' }}>
-                  {user?.email}
-                </div>
-                <div style={{ fontSize: '0.7rem', color: 'var(--color-structure-muted)', marginTop: '2px' }}>
-                  ROLE: {user?.role || 'TEACHER'}
-                </div>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '1rem' }}>
-              <button
-                onClick={() => {
-                  setActiveTab('dashboard');
-                  setMobileMenuOpen(false);
-                }}
-                style={activeTab === 'dashboard' ? { ...styles.mobileTabBtn, ...styles.mobileTabBtnActive } : styles.mobileTabBtn}
-              >
-                <LayoutDashboard size={18} />
-                <span>Personalized Dashboard</span>
-              </button>
-              <button
-                onClick={() => {
-                  setActiveTab('profile');
-                  setMobileMenuOpen(false);
-                }}
-                style={activeTab === 'profile' ? { ...styles.mobileTabBtn, ...styles.mobileTabBtnActive } : styles.mobileTabBtn}
-              >
-                <UserCheck size={18} />
-                <span>My Faculty Profile</span>
-              </button>
-              <button
-                onClick={() => {
-                  setActiveTab('list');
-                  setMobileMenuOpen(false);
-                }}
-                style={activeTab === 'list' ? { ...styles.mobileTabBtn, ...styles.mobileTabBtnActive } : styles.mobileTabBtn}
-              >
-                <Layers size={18} />
-                <span>My Question Papers ({papers.length})</span>
-              </button>
-              <button
-                onClick={() => {
-                  setActiveTab('drafts');
-                  setMobileMenuOpen(false);
-                }}
-                style={activeTab === 'drafts' ? { ...styles.mobileTabBtn, ...styles.mobileTabBtnActive } : styles.mobileTabBtn}
-              >
-                <Sparkles size={18} />
-                <span>Drafts ({drafts.length})</span>
-              </button>
-              <button
-                onClick={() => {
-                  setActiveDraft(null);
-                  setActiveTab('create');
-                  setMobileMenuOpen(false);
-                }}
-                style={activeTab === 'create' ? { ...styles.mobileTabBtn, ...styles.mobileTabBtnActive } : styles.mobileTabBtn}
-              >
-                <Plus size={18} />
-                <span>Create Question Paper</span>
-              </button>
-              <button
-                onClick={() => {
-                  setShowAlgorithmModal(true);
-                  setMobileMenuOpen(false);
-                }}
-                style={styles.mobileTabBtn}
-              >
-                <Layers size={18} />
-                <span>Algorithm Flow Diagram</span>
-              </button>
-            </div>
-
-            <div style={{ marginTop: 'auto', paddingTop: '1rem', borderTop: '1px solid var(--color-structure-border)' }}>
-              <button onClick={handleLogout} style={styles.mobileLogoutBtn}>
-                <LogOut size={18} />
-                <span>Sign Out</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Unified Modern Academic Navigation Header */}
+      <AppHeader
+        user={user}
+        role="TEACHER"
+        activeTab={activeTab}
+        onTabChange={(tabId) => {
+          if (tabId === 'create') {
+            setActiveDraft(null);
+          }
+          setActiveTab(tabId);
+        }}
+        tabs={teacherNavTabs}
+        onOpenAlgorithmFlow={() => setShowAlgorithmModal(true)}
+        onLogout={handleLogout}
+        profileData={profileData}
+      />
 
       {/* Main Content Container */}
       <main style={styles.main}>
@@ -853,53 +712,7 @@ export default function TeacherHome() {
           </div>
         )}
 
-        {/* Workspace Tab Bar */}
-        <div style={styles.tabBar}>
-          <button
-            onClick={() => setActiveTab('dashboard')}
-            style={activeTab === 'dashboard' ? { ...styles.tab, ...styles.activeTab } : styles.tab}
-          >
-            <LayoutDashboard size={18} />
-            <span>Dashboard</span>
-          </button>
 
-          <button
-            onClick={() => setActiveTab('profile')}
-            style={activeTab === 'profile' ? { ...styles.tab, ...styles.activeTab } : styles.tab}
-          >
-            <UserCheck size={18} />
-            <span>My Profile</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('list')}
-            style={activeTab === 'list' ? { ...styles.tab, ...styles.activeTab } : styles.tab}
-          >
-            <Layers size={18} />
-            <span>My Papers</span>
-            <span style={styles.counterBadge}>{papers.length}</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('drafts')}
-            style={activeTab === 'drafts' ? { ...styles.tab, ...styles.activeTab } : styles.tab}
-          >
-            <Sparkles size={18} />
-            <span>Drafts</span>
-            <span style={styles.counterBadge}>{drafts.length}</span>
-          </button>
-
-          <button
-            onClick={() => {
-              setActiveDraft(null);
-              setActiveTab('create');
-            }}
-            style={activeTab === 'create' ? { ...styles.tab, ...styles.activeTab } : styles.tab}
-          >
-            <Plus size={18} />
-            <span>Create Paper</span>
-          </button>
-        </div>
 
         {/* TAB 0: PERSONALIZED DASHBOARD (MODULE 2.2) */}
         {activeTab === 'dashboard' && (

@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Shield,
   ShieldCheck,
+  ShieldAlert,
   Lock,
+  Unlock,
   Key,
   FileText,
   Upload,
@@ -15,30 +17,246 @@ import {
   AlertTriangle,
   X,
   FileCheck,
+  Database,
+  Clock,
+  Send,
+  Award,
+  Hash,
+  RefreshCw,
+  Cpu,
 } from 'lucide-react';
 
+/**
+ * ExamGuard Cryptographic Algorithm Flow Diagram
+ * Complete visual security architecture redesign.
+ * 
+ * Accurately visualizes:
+ * - Phase 1: Ingestion & Symmetric AES-256-GCM Encryption
+ * - Phase 2: RSA-OAEP 2048-bit Key Wrapping (DEK Envelope)
+ * - Phase 3: SHA-256 Digest & RSA-PSS Digital Signatures (Non-repudiation)
+ * - Phase 4: Zero-Knowledge Private Storage (.enc Isolation)
+ * - Phase 5: RBAC Role Verification & Time-Lock Scheduled Gating
+ * - Phase 6: Verify-Before-Decrypt Invariant & Plaintext Stream Release
+ */
 export default function AlgorithmFlowDiagram({ isOpen, onClose }) {
-  const [activeTab, setActiveTab] = useState('complete');
+  const [activeTab, setActiveTab] = useState('architecture'); // 'architecture' | 'sequence' | 'invariants'
+  const [selectedStage, setSelectedStage] = useState(null);
+
+  // Close on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    if (isOpen) {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
+  // Prevent background scroll when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
+  const stages = [
+    {
+      id: 1,
+      phase: 'Teacher Side: Ingestion',
+      phaseColor: '#2563eb',
+      phaseBg: '#eff6ff',
+      phaseBorder: '#bfdbfe',
+      title: 'Question Paper Preparation',
+      shortTitle: '1. Ingestion',
+      icon: FileText,
+      tech: 'In-Memory PDF Buffer',
+      cipherTerm: 'Plaintext Buffer (%PDF-1.x)',
+      summary: 'Curriculum blueprint generation or multipart PDF upload validated in RAM with magic bytes. No plaintext touches server disk.',
+      detail: 'The authoring faculty finalizes the question paper in the 5-step generator. The Node.js runtime creates an in-memory stream buffer. Content is strictly kept in volatile process memory.',
+    },
+    {
+      id: 2,
+      phase: 'Teacher Side: Key Generation',
+      phaseColor: '#2563eb',
+      phaseBg: '#eff6ff',
+      phaseBorder: '#bfdbfe',
+      title: 'Per-Paper DEK Generation',
+      shortTitle: '2. DEK Gen',
+      icon: Key,
+      tech: 'CSPRNG (Crypto API)',
+      cipherTerm: '256-bit Symmetric DEK + 96-bit IV',
+      summary: 'Generates a unique, cryptographically random 256-bit Data Encryption Key (DEK) and 96-bit initialization vector.',
+      detail: 'Every single question paper receives its own unique 256-bit key. Keys are never reused across sets or subjects.',
+    },
+    {
+      id: 3,
+      phase: 'Teacher Side: Symmetric Encryption',
+      phaseColor: '#2563eb',
+      phaseBg: '#eff6ff',
+      phaseBorder: '#bfdbfe',
+      title: 'AES-256-GCM Encryption',
+      shortTitle: '3. AES-GCM',
+      icon: Lock,
+      tech: 'Authenticated AES-256-GCM',
+      cipherTerm: 'Ciphertext + 128-bit GCM Auth Tag',
+      summary: 'Encrypts the plaintext PDF using AES-256 in Galois/Counter Mode, outputting authenticated ciphertext and a 16-byte authentication tag.',
+      detail: 'AES-GCM provides both confidentiality and built-in authenticity. Any tampering with a single bit of the ciphertext will cause the GCM tag verification to fail closed.',
+    },
+    {
+      id: 4,
+      phase: 'Teacher Side: Envelope Encryption',
+      phaseColor: '#0284c7',
+      phaseBg: '#f0f9ff',
+      phaseBorder: '#bae6fd',
+      title: 'RSA-OAEP Key Wrapping',
+      shortTitle: '4. Key Wrap',
+      icon: ShieldCheck,
+      tech: '2048-bit RSA-OAEP (SHA-256)',
+      cipherTerm: 'Wrapped AES Key (Envelope Scheme)',
+      summary: 'Wraps the symmetric DEK using the Examination Cell 2048-bit RSA public key. The plaintext DEK is immediately zeroized from memory.',
+      detail: 'Envelope encryption isolates key management from data storage. Only the entity possessing the private RSA master key can unwrap the symmetric key.',
+    },
+    {
+      id: 5,
+      phase: 'Teacher Side: Integrity Digest',
+      phaseColor: '#0891b2',
+      phaseBg: '#ecfeff',
+      phaseBorder: '#a5f3fc',
+      title: 'SHA-256 Integrity Digest',
+      shortTitle: '5. SHA-256',
+      icon: Hash,
+      tech: 'Cryptographic Hash Function',
+      cipherTerm: 'Deterministic SHA-256 Digest',
+      summary: 'Computes a deterministic SHA-256 hash across the encrypted ciphertext buffer prior to persistence.',
+      detail: 'This hash serves as the invariant anchor for digital signing and the Verify-Before-Decrypt pipeline.',
+    },
+    {
+      id: 6,
+      phase: 'Teacher Side: Digital Signature',
+      phaseColor: '#0891b2',
+      phaseBg: '#ecfeff',
+      phaseBorder: '#a5f3fc',
+      title: 'RSA-PSS Digital Signature',
+      shortTitle: '6. RSA-PSS',
+      icon: Award,
+      tech: 'RSA-PSS Signature Scheme',
+      cipherTerm: 'Salted RSA Signature (32-byte salt)',
+      summary: 'Signs the SHA-256 ciphertext digest using the faculty author private key to guarantee document origin and non-repudiation.',
+      detail: 'RSA-PSS (Probabilistic Signature Scheme) is mathematically immune to classic RSA signature forging attacks.',
+    },
+    {
+      id: 7,
+      phase: 'Storage Architecture: Zero Knowledge',
+      phaseColor: '#475569',
+      phaseBg: '#f8fafc',
+      phaseBorder: '#cbd5e1',
+      title: 'Secure Private Storage Isolation',
+      shortTitle: '7. Storage',
+      icon: Database,
+      tech: 'Supabase Storage (.enc) & PostgreSQL',
+      cipherTerm: 'Ciphertext Object (.enc) + Paper Keys',
+      summary: 'Encrypted ciphertext is stored with a .enc extension in a private storage bucket. Cryptographic metadata resides in relational database tables.',
+      detail: 'Zero plaintext stored on disk. Ciphertext storage is isolated by teacher ID and paper ID paths with directory traversal defenses.',
+    },
+    {
+      id: 8,
+      phase: 'Coordinator Side: Access Control',
+      phaseColor: '#059669',
+      phaseBg: '#ecfdf5',
+      phaseBorder: '#a7f3d0',
+      title: 'RBAC & Scheduled Delivery Gating',
+      shortTitle: '8. Access Gate',
+      icon: UserCheck,
+      tech: 'Role Authorization & Time-Lock Gate',
+      cipherTerm: 'EXAM_COORDINATOR Claim + Exam Window',
+      summary: 'Validates active JWT coordinator claims, assignment mapping, and server-enforced examination time window (1 hour prior to exam).',
+      detail: 'Strict role-based access control. Early decryption requests before the authorized examination window are rejected with a 403 Forbidden time-lock barrier.',
+    },
+    {
+      id: 9,
+      phase: 'Coordinator Side: Verify-Before-Decrypt',
+      phaseColor: '#059669',
+      phaseBg: '#ecfdf5',
+      phaseBorder: '#a7f3d0',
+      title: 'Verify-Before-Decrypt Invariant',
+      shortTitle: '9. Verify',
+      icon: ShieldAlert,
+      tech: 'Public Key Verification (RSA-PSS)',
+      cipherTerm: 'Ciphertext SHA-256 Match Verification',
+      summary: 'Downloads ciphertext and validates the author RSA-PSS signature against the live hash BEFORE touching any decryption keys.',
+      detail: 'Core security invariant: If signature verification or digest comparison fails, key unwrapping is completely aborted and decryption fails closed.',
+    },
+    {
+      id: 10,
+      phase: 'Coordinator Side: Plaintext Recovery',
+      phaseColor: '#7c3aed',
+      phaseBg: '#f5f3ff',
+      phaseBorder: '#ddd6fe',
+      title: 'DEK Recovery & AES Decryption',
+      shortTitle: '10. Decrypt',
+      icon: Unlock,
+      tech: 'RSA-OAEP Unwrap + AES-256-GCM',
+      cipherTerm: 'Plaintext Buffer + Key Zeroization',
+      summary: 'Unwraps the DEK using the private RSA key, checks the 16-byte GCM tag, and decrypts ciphertext into an in-memory stream.',
+      detail: 'Symmetric DEK is wiped from RAM immediately upon stream completion, preventing memory inspection leaks.',
+    },
+    {
+      id: 11,
+      phase: 'Coordinator Side: Secure Delivery',
+      phaseColor: '#7c3aed',
+      phaseBg: '#f5f3ff',
+      phaseBorder: '#ddd6fe',
+      title: 'Secure Document Delivery & Audit',
+      shortTitle: '11. Delivery',
+      icon: Send,
+      tech: 'Direct Browser Stream & Audit Log',
+      cipherTerm: 'Authenticated PDF Delivery Record',
+      summary: 'Streams the decrypted PDF directly to the coordinator verified browser session and logs an immutable audit event.',
+      detail: 'Paper delivery is logged with coordinator ID, timestamp, and client IP. Download is recorded as DELIVERED.',
+    },
+  ];
+
   return (
     <div style={styles.overlay} onClick={onClose}>
-      <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
-        {/* Header */}
-        <div style={styles.header}>
-          <div style={styles.headerTitleWrap}>
-            <div style={styles.iconBadge}>
-              <Layers size={22} color="#3b82f6" />
+      <div
+        style={styles.dialog}
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-labelledby="flow-dialog-title"
+      >
+        {/* Modal Header */}
+        <div style={styles.dialogHeader}>
+          <div style={styles.headerLeft}>
+            <div style={styles.headerIconBadge}>
+              <Layers size={22} color="#2563eb" strokeWidth={2.2} />
             </div>
             <div>
-              <h2 style={styles.title}>ExamGuard Cryptographic Algorithm Flow</h2>
-              <p style={styles.subtitle}>
-                Authoritative alignment with university security architecture &amp; handwritten design specifications
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <h2 id="flow-dialog-title" style={styles.dialogTitle}>
+                  ExamGuard Cryptographic Architecture Flow
+                </h2>
+                <span style={styles.securityBadge}>AES-256-GCM + RSA-PSS</span>
+              </div>
+              <p style={styles.dialogSubtitle}>
+                Formal cryptographic execution pipeline: Ingestion &rarr; Envelope Encryption &rarr; Digital Signing &rarr; Verify-Before-Decrypt &rarr; Plaintext Delivery
               </p>
             </div>
           </div>
-          <button onClick={onClose} style={styles.closeBtn} title="Close Modal">
+          <button
+            type="button"
+            onClick={onClose}
+            style={styles.closeBtn}
+            title="Close Diagram (Esc)"
+            aria-label="Close"
+          >
             <X size={20} />
           </button>
         </div>
@@ -46,384 +264,316 @@ export default function AlgorithmFlowDiagram({ isOpen, onClose }) {
         {/* View Switcher Tabs */}
         <div style={styles.tabBar}>
           <button
-            onClick={() => setActiveTab('complete')}
-            style={activeTab === 'complete' ? { ...styles.tabBtn, ...styles.activeTabBtn } : styles.tabBtn}
+            type="button"
+            onClick={() => setActiveTab('architecture')}
+            style={{
+              ...styles.tabBtn,
+              ...(activeTab === 'architecture' ? styles.tabBtnActive : {}),
+            }}
           >
-            Complete Algorithm Flow (11 Steps)
+            <Layers size={15} />
+            <span>Security Architecture Pipeline (Grouped by Phase)</span>
           </button>
           <button
-            onClick={() => setActiveTab('decryption')}
-            style={activeTab === 'decryption' ? { ...styles.tabBtn, ...styles.activeTabBtn } : styles.tabBtn}
+            type="button"
+            onClick={() => setActiveTab('sequence')}
+            style={{
+              ...styles.tabBtn,
+              ...(activeTab === 'sequence' ? styles.tabBtnActive : {}),
+            }}
           >
-            Decryption Breakdown Sequence
+            <ShieldCheck size={15} />
+            <span>11-Stage End-to-End Execution Sequence</span>
           </button>
           <button
-            onClick={() => setActiveTab('guarantees')}
-            style={activeTab === 'guarantees' ? { ...styles.tabBtn, ...styles.activeTabBtn } : styles.tabBtn}
+            type="button"
+            onClick={() => setActiveTab('invariants')}
+            style={{
+              ...styles.tabBtn,
+              ...(activeTab === 'invariants' ? styles.tabBtnActive : {}),
+            }}
           >
-            Cryptographic Guarantees
+            <Lock size={15} />
+            <span>Formal Security Guarantees &amp; Invariants</span>
           </button>
         </div>
 
-        {/* Modal Body */}
-        <div style={styles.body}>
-          {activeTab === 'complete' && (
-            <div>
-              <div style={styles.infoBox}>
-                <ShieldCheck size={18} color="#2563eb" style={{ flexShrink: 0, marginTop: '2px' }} />
-                <span style={styles.infoText}>
-                  <strong>Handwritten Algorithm Specification:</strong> Sequence strictly follows the two-sided
-                  institutional model: Teacher Side (Upload &amp; Encryption) &rarr; Exam Cell / Coordinator Side (RBAC Authorization &amp; Decryption).
-                </span>
-              </div>
-
-              {/* SECTION A: TEACHER SIDE */}
-              <div style={styles.flowSection}>
-                <div style={styles.sectionHeader}>
-                  <div style={styles.teacherBadge}>Teacher Side</div>
-                  <span style={styles.sectionTitle}>Document Ingestion, Envelope Encryption &amp; Digital Signing</span>
-                </div>
-
-                <div style={styles.stepGrid}>
-                  {/* Step 1 */}
-                  <div style={styles.stepCard}>
-                    <div style={styles.stepNumberBadge}>1</div>
-                    <div style={styles.stepIconWrapTeacher}>
-                      <UserCheck size={20} color="#2563eb" />
-                    </div>
-                    <div style={styles.stepTitle}>Teacher Login</div>
-                    <div style={styles.stepDesc}>
-                      Authorizes faculty account status and issues signed JWT bearer token with TEACHER claim.
-                    </div>
+        {/* Modal Body (Scrollable) */}
+        <div style={styles.dialogBody}>
+          {/* TAB 1: ARCHITECTURE PIPELINE */}
+          {activeTab === 'architecture' && (
+            <div style={styles.tabContent}>
+              {/* Architecture Legend Banner */}
+              <div style={styles.legendBanner}>
+                <div style={styles.legendTitle}>TWO-SIDED INSTITUTIONAL SECURITY MODEL</div>
+                <div style={styles.legendRow}>
+                  <div style={styles.legendItem}>
+                    <span style={{ ...styles.legendDot, backgroundColor: '#2563eb' }}></span>
+                    <strong>Teacher Workspace</strong>: Ingestion, AES-256-GCM Encryption, RSA-OAEP Key Wrap &amp; RSA-PSS Signing
                   </div>
-
-                  <div style={styles.arrowWrap}>
-                    <ArrowRight size={20} className="flow-arrow-desktop" />
-                    <ArrowDown size={20} className="flow-arrow-mobile" />
+                  <div style={styles.legendDivider}>&rarr;</div>
+                  <div style={styles.legendItem}>
+                    <span style={{ ...styles.legendDot, backgroundColor: '#475569' }}></span>
+                    <strong>Storage Layer</strong>: Isolated Ciphertext (.enc) &amp; Relational Key Isolation
                   </div>
-
-                  {/* Step 2 */}
-                  <div style={styles.stepCard}>
-                    <div style={styles.stepNumberBadge}>2</div>
-                    <div style={styles.stepIconWrapTeacher}>
-                      <Upload size={20} color="#2563eb" />
-                    </div>
-                    <div style={styles.stepTitle}>Create / Upload Question Paper</div>
-                    <div style={styles.stepDesc}>
-                      Multipart PDF upload or curriculum blueprint generation; validated in memory with magic bytes.
-                    </div>
-                  </div>
-
-                  <div style={styles.arrowWrap}>
-                    <ArrowRight size={20} className="flow-arrow-desktop" />
-                    <ArrowDown size={20} className="flow-arrow-mobile" />
-                  </div>
-
-                  {/* Step 3 */}
-                  <div style={styles.stepCard}>
-                    <div style={styles.stepNumberBadge}>3</div>
-                    <div style={styles.stepIconWrapTeacher}>
-                      <Key size={20} color="#2563eb" />
-                    </div>
-                    <div style={styles.stepTitle}>Generate AES Key</div>
-                    <div style={styles.stepDesc}>
-                      CSPRNG generates unique 256-bit AES data-encryption key (DEK) and 96-bit initialization vector.
-                    </div>
-                  </div>
-
-                  <div style={styles.arrowWrap}>
-                    <ArrowRight size={20} className="flow-arrow-desktop" />
-                    <ArrowDown size={20} className="flow-arrow-mobile" />
-                  </div>
-
-                  {/* Step 4 */}
-                  <div style={styles.stepCard}>
-                    <div style={styles.stepNumberBadge}>4</div>
-                    <div style={styles.stepIconWrapTeacher}>
-                      <Lock size={20} color="#2563eb" />
-                    </div>
-                    <div style={styles.stepTitle}>AES Encryption</div>
-                    <div style={styles.stepDesc}>
-                      Encrypts PDF with AES-256-GCM producing ciphertext + 16-byte auth tag; wraps DEK with RSA-OAEP.
-                    </div>
-                  </div>
-
-                  <div style={styles.arrowWrap}>
-                    <ArrowRight size={20} className="flow-arrow-desktop" />
-                    <ArrowDown size={20} className="flow-arrow-mobile" />
-                  </div>
-
-                  {/* Step 5 */}
-                  <div style={styles.stepCard}>
-                    <div style={styles.stepNumberBadge}>5</div>
-                    <div style={styles.stepIconWrapTeacher}>
-                      <FileCheck size={20} color="#2563eb" />
-                    </div>
-                    <div style={styles.stepTitle}>Generate Digital Signature</div>
-                    <div style={styles.stepDesc}>
-                      Computes SHA-256 digest over ciphertext and signs with RSA-PSS private key for non-repudiation.
-                    </div>
-                  </div>
-
-                  <div style={styles.arrowWrap}>
-                    <ArrowRight size={20} className="flow-arrow-desktop" />
-                    <ArrowDown size={20} className="flow-arrow-mobile" />
-                  </div>
-
-                  {/* Step 6 */}
-                  <div style={styles.stepCard}>
-                    <div style={styles.stepNumberBadge}>6</div>
-                    <div style={styles.stepIconWrapTeacher}>
-                      <Shield size={20} color="#2563eb" />
-                    </div>
-                    <div style={styles.stepTitle}>Store Encrypted Paper + Signature</div>
-                    <div style={styles.stepDesc}>
-                      Stores ciphertext in private Supabase Storage (.enc) and cryptographic records in PostgreSQL.
-                    </div>
+                  <div style={styles.legendDivider}>&rarr;</div>
+                  <div style={styles.legendItem}>
+                    <span style={{ ...styles.legendDot, backgroundColor: '#059669' }}></span>
+                    <strong>Exam Cell Workspace</strong>: RBAC Time-Lock Gate &amp; Verify-Before-Decrypt Pipeline
                   </div>
                 </div>
               </div>
 
-              {/* CONNECTOR BRIDGE */}
-              <div style={styles.bridgeWrap}>
+              {/* SECTION A: ENCRYPTION & SIGNING PIPELINE (Teacher Side) */}
+              <div style={styles.phaseContainer}>
+                <div style={styles.phaseHeader}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ ...styles.phaseBadge, backgroundColor: '#dbeafe', color: '#1d4ed8', borderColor: '#bfdbfe' }}>
+                      PATH A: INGESTION, ENCRYPTION &amp; DIGITAL SIGNING
+                    </span>
+                    <span style={styles.phaseSubtext}>Faculty Workspace • In-Memory Execution</span>
+                  </div>
+                </div>
+
+                <div style={styles.cardsGrid}>
+                  {stages.slice(0, 6).map((stg) => {
+                    const Icon = stg.icon;
+                    return (
+                      <div
+                        key={stg.id}
+                        style={{
+                          ...styles.stageCard,
+                          borderColor: stg.phaseBorder,
+                          backgroundColor: '#ffffff',
+                        }}
+                      >
+                        <div style={styles.cardTopRow}>
+                          <span style={{ ...styles.stageNumberBadge, backgroundColor: stg.phaseBg, color: stg.phaseColor, borderColor: stg.phaseBorder }}>
+                            STAGE {stg.id}
+                          </span>
+                          <div style={{ ...styles.stageIconSquircle, backgroundColor: stg.phaseBg }}>
+                            <Icon size={16} color={stg.phaseColor} />
+                          </div>
+                        </div>
+
+                        <h4 style={styles.stageTitle}>{stg.title}</h4>
+                        <div style={styles.cipherTermPill}>{stg.cipherTerm}</div>
+                        <p style={styles.stageSummary}>{stg.summary}</p>
+
+                        <div style={styles.stageFooter}>
+                          <span style={styles.techTag}>{stg.tech}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* CONNECTOR BRIDGE: STORAGE TRANSITION */}
+              <div style={styles.bridgeContainer}>
                 <div style={styles.bridgeLine}></div>
                 <div style={styles.bridgeBadge}>
-                  <span>Secure Storage &amp; Scheduled Delivery Transition</span>
+                  <Database size={15} color="#475569" />
+                  <span>STAGE 7: ZERO-KNOWLEDGE CIPHERTEXT STORAGE ISOLATION (.enc)</span>
                 </div>
                 <div style={styles.bridgeLine}></div>
               </div>
 
-              {/* SECTION B: EXAM CELL SIDE */}
-              <div style={styles.flowSectionCoordinator}>
-                <div style={styles.sectionHeader}>
-                  <div style={styles.coordBadge}>Exam Cell / Exam Coordinator Side</div>
-                  <span style={styles.sectionTitle}>Authorized Retrieval, Verification &amp; Plaintext Delivery</span>
+              {/* SECTION B: VERIFY-BEFORE-DECRYPT PIPELINE (Exam Coordinator Side) */}
+              <div style={styles.phaseContainer}>
+                <div style={styles.phaseHeader}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ ...styles.phaseBadge, backgroundColor: '#d1fae5', color: '#047857', borderColor: '#a7f3d0' }}>
+                      PATH B: VERIFY-BEFORE-DECRYPT &amp; PLAINTEXT RELEASE
+                    </span>
+                    <span style={styles.phaseSubtext}>Exam Cell Workspace • Strict Integrity Barrier</span>
+                  </div>
                 </div>
 
-                <div style={styles.stepGrid}>
-                  {/* Step 7 */}
-                  <div style={styles.stepCardCoord}>
-                    <div style={styles.stepNumberBadgeCoord}>7</div>
-                    <div style={styles.stepIconWrapCoord}>
-                      <UserCheck size={20} color="#10b981" />
-                    </div>
-                    <div style={styles.stepTitle}>Exam Cell Login</div>
-                    <div style={styles.stepDesc}>
-                      Coordinator authenticates with credentials; server issues JWT with EXAM_COORDINATOR role.
-                    </div>
-                  </div>
+                <div style={styles.cardsGrid}>
+                  {stages.slice(7, 11).map((stg) => {
+                    const Icon = stg.icon;
+                    return (
+                      <div
+                        key={stg.id}
+                        style={{
+                          ...styles.stageCard,
+                          borderColor: stg.phaseBorder,
+                          backgroundColor: '#ffffff',
+                        }}
+                      >
+                        <div style={styles.cardTopRow}>
+                          <span style={{ ...styles.stageNumberBadge, backgroundColor: stg.phaseBg, color: stg.phaseColor, borderColor: stg.phaseBorder }}>
+                            STAGE {stg.id}
+                          </span>
+                          <div style={{ ...styles.stageIconSquircle, backgroundColor: stg.phaseBg }}>
+                            <Icon size={16} color={stg.phaseColor} />
+                          </div>
+                        </div>
 
-                  <div style={styles.arrowWrap}>
-                    <ArrowRight size={20} className="flow-arrow-desktop" />
-                    <ArrowDown size={20} className="flow-arrow-mobile" />
-                  </div>
+                        <h4 style={styles.stageTitle}>{stg.title}</h4>
+                        <div style={styles.cipherTermPill}>{stg.cipherTerm}</div>
+                        <p style={styles.stageSummary}>{stg.summary}</p>
 
-                  {/* Step 8 */}
-                  <div style={styles.stepCardCoord}>
-                    <div style={styles.stepNumberBadgeCoord}>8</div>
-                    <div style={styles.stepIconWrapCoord}>
-                      <ShieldCheck size={20} color="#10b981" />
-                    </div>
-                    <div style={styles.stepTitle}>RBAC Authorization</div>
-                    <div style={styles.stepDesc}>
-                      Validates active role, assignment record, and server-side scheduled delivery date gating.
-                    </div>
-                  </div>
-
-                  <div style={styles.arrowWrap}>
-                    <ArrowRight size={20} className="flow-arrow-desktop" />
-                    <ArrowDown size={20} className="flow-arrow-mobile" />
-                  </div>
-
-                  {/* Step 9 */}
-                  <div style={styles.stepCardCoord}>
-                    <div style={styles.stepNumberBadgeCoord}>9</div>
-                    <div style={styles.stepIconWrapCoord}>
-                      <FileCheck size={20} color="#10b981" />
-                    </div>
-                    <div style={styles.stepTitle}>Verify Digital Signature</div>
-                    <div style={styles.stepDesc}>
-                      Downloads ciphertext; recalculates SHA-256 hash and validates RSA-PSS signature BEFORE decryption.
-                    </div>
-                  </div>
-
-                  <div style={styles.arrowWrap}>
-                    <ArrowRight size={20} className="flow-arrow-desktop" />
-                    <ArrowDown size={20} className="flow-arrow-mobile" />
-                  </div>
-
-                  {/* Step 10 */}
-                  <div style={styles.stepCardCoord}>
-                    <div style={styles.stepNumberBadgeCoord}>10</div>
-                    <div style={styles.stepIconWrapCoord}>
-                      <Key size={20} color="#10b981" />
-                    </div>
-                    <div style={styles.stepTitle}>AES Decryption</div>
-                    <div style={styles.stepDesc}>
-                      Unwraps DEK via RSA-OAEP private key; decrypts AES-256-GCM &amp; authenticates GCM tag; wipes key memory.
-                    </div>
-                  </div>
-
-                  <div style={styles.arrowWrap}>
-                    <ArrowRight size={20} className="flow-arrow-desktop" />
-                    <ArrowDown size={20} className="flow-arrow-mobile" />
-                  </div>
-
-                  {/* Step 11 */}
-                  <div style={styles.stepCardCoord}>
-                    <div style={styles.stepNumberBadgeCoord}>11</div>
-                    <div style={styles.stepIconWrapCoord}>
-                      <Eye size={20} color="#10b981" />
-                    </div>
-                    <div style={styles.stepTitle}>View / Download Paper</div>
-                    <div style={styles.stepDesc}>
-                      Streams authenticated plaintext PDF buffer directly to authorized browser with audit log record.
-                    </div>
-                  </div>
+                        <div style={styles.stageFooter}>
+                          <span style={styles.techTag}>{stg.tech}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
           )}
 
-          {activeTab === 'decryption' && (
-            <div>
-              <div style={styles.infoBox}>
-                <Lock size={18} color="#8b5cf6" style={{ flexShrink: 0, marginTop: '2px' }} />
-                <span style={styles.infoText}>
-                  <strong>Handwritten Decryption Sequence:</strong> Encrypted Paper &rarr; Signature Verification &rarr; RBAC Authorization &rarr; AES Decryption &rarr; Original Question Paper.
-                </span>
-              </div>
+          {/* TAB 2: 11-STAGE SEQUENTIAL FLOW */}
+          {activeTab === 'sequence' && (
+            <div style={styles.tabContent}>
+              <div style={styles.sequenceContainer}>
+                {stages.map((stg, index) => {
+                  const Icon = stg.icon;
+                  const isLast = index === stages.length - 1;
 
-              <div style={styles.decryptionFlowWrap}>
-                <div style={styles.decryptionStep}>
-                  <div style={styles.decryptionStepHeader}>
-                    <span style={styles.decStepNum}>A</span>
-                    <span style={styles.decStepName}>Encrypted Paper</span>
-                  </div>
-                  <p style={styles.decStepDesc}>
-                    Stored ciphertext (.enc) retrieved from private Supabase Storage. Plaintext never resides on storage disk.
-                  </p>
-                </div>
+                  return (
+                    <React.Fragment key={stg.id}>
+                      <div style={styles.sequenceItem}>
+                        <div style={styles.sequenceLeft}>
+                          <div
+                            style={{
+                              ...styles.seqNumberCircle,
+                              backgroundColor: stg.phaseBg,
+                              color: stg.phaseColor,
+                              borderColor: stg.phaseBorder,
+                            }}
+                          >
+                            {stg.id}
+                          </div>
+                          {!isLast && <div style={styles.seqConnectingLine}></div>}
+                        </div>
 
-                <div style={styles.decArrowWrap}>
-                  <ArrowRight size={22} className="flow-arrow-desktop" color="#8b5cf6" />
-                  <ArrowDown size={22} className="flow-arrow-mobile" color="#8b5cf6" />
-                </div>
+                        <div style={styles.sequenceCard}>
+                          <div style={styles.seqCardHeader}>
+                            <div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ ...styles.phaseBadgeSmall, color: stg.phaseColor, backgroundColor: stg.phaseBg }}>
+                                  {stg.phase}
+                                </span>
+                                <span style={styles.cipherTermPillSmall}>{stg.cipherTerm}</span>
+                              </div>
+                              <h4 style={styles.seqCardTitle}>{stg.title}</h4>
+                            </div>
+                            <div style={{ ...styles.stageIconSquircle, backgroundColor: stg.phaseBg }}>
+                              <Icon size={18} color={stg.phaseColor} />
+                            </div>
+                          </div>
 
-                <div style={styles.decryptionStep}>
-                  <div style={styles.decryptionStepHeader}>
-                    <span style={styles.decStepNum}>B</span>
-                    <span style={styles.decStepName}>Signature Verification</span>
-                  </div>
-                  <p style={styles.decStepDesc}>
-                    Verify-Before-Decrypt: Evaluates SHA-256 digest &amp; RSA-PSS signature. Tampered ciphertext immediately aborts.
-                  </p>
-                </div>
+                          <p style={styles.seqCardDesc}>{stg.detail}</p>
 
-                <div style={styles.decArrowWrap}>
-                  <ArrowRight size={22} className="flow-arrow-desktop" color="#8b5cf6" />
-                  <ArrowDown size={22} className="flow-arrow-mobile" color="#8b5cf6" />
-                </div>
-
-                <div style={styles.decryptionStep}>
-                  <div style={styles.decryptionStepHeader}>
-                    <span style={styles.decStepNum}>C</span>
-                    <span style={styles.decStepName}>RBAC Authorization</span>
-                  </div>
-                  <p style={styles.decStepDesc}>
-                    Evaluates user role, active status, specific paper assignment, and calendar delivery date gating.
-                  </p>
-                </div>
-
-                <div style={styles.decArrowWrap}>
-                  <ArrowRight size={22} className="flow-arrow-desktop" color="#8b5cf6" />
-                  <ArrowDown size={22} className="flow-arrow-mobile" color="#8b5cf6" />
-                </div>
-
-                <div style={styles.decryptionStep}>
-                  <div style={styles.decryptionStepHeader}>
-                    <span style={styles.decStepNum}>D</span>
-                    <span style={styles.decStepName}>AES Decryption</span>
-                  </div>
-                  <p style={styles.decStepDesc}>
-                    RSA-OAEP unwraps DEK; AES-256-GCM decrypts document; verifies 16-byte authentication tag; wipes key buffer.
-                  </p>
-                </div>
-
-                <div style={styles.decArrowWrap}>
-                  <ArrowRight size={22} className="flow-arrow-desktop" color="#8b5cf6" />
-                  <ArrowDown size={22} className="flow-arrow-mobile" color="#8b5cf6" />
-                </div>
-
-                <div style={styles.decryptionStepHighlight}>
-                  <div style={styles.decryptionStepHeader}>
-                    <span style={styles.decStepNumHighlight}>E</span>
-                    <span style={styles.decStepNameHighlight}>Original Question Paper</span>
-                  </div>
-                  <p style={styles.decStepDesc}>
-                    Authentic, validated PDF streamed directly in memory to authorized faculty/coordinator session.
-                  </p>
-                </div>
+                          <div style={styles.seqCardMeta}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <Cpu size={13} color="#64748b" />
+                              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#475569' }}>
+                                Standard: {stg.tech}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </React.Fragment>
+                  );
+                })}
               </div>
             </div>
           )}
 
-          {activeTab === 'guarantees' && (
-            <div style={styles.guaranteeGrid}>
-              <div style={styles.guaranteeCard}>
-                <div style={styles.guaranteeHeader}>
-                  <Lock size={20} color="#2563eb" />
-                  <h4 style={styles.guaranteeTitle}>Confidentiality (AES-256-GCM)</h4>
+          {/* TAB 3: FORMAL INVARIANTS & GUARANTEES */}
+          {activeTab === 'invariants' && (
+            <div style={styles.tabContent}>
+              <div style={styles.invariantsGrid}>
+                {/* Invariant 1 */}
+                <div style={styles.invariantCard}>
+                  <div style={styles.invIconWrapBlue}>
+                    <ShieldAlert size={24} color="#2563eb" />
+                  </div>
+                  <h3 style={styles.invTitle}>Verify-Before-Decrypt Invariant</h3>
+                  <div style={styles.invRule}>
+                    RULE: Decryption key is never unwrapped unless SHA-256 digest matches author RSA-PSS signature.
+                  </div>
+                  <p style={styles.invDesc}>
+                    The ExamGuard server strictly calculates the SHA-256 hash of the retrieved ciphertext buffer and verifies the teacher&apos;s digital signature against the public key certificate. If a single bit has been altered in transit or storage, decryption aborts immediately without attempting key recovery.
+                  </p>
+                  <div style={styles.invProof}>
+                    &bull; Mathematical guarantee: RSA-PSS non-repudiation protects against tampering and insider manipulation.
+                  </div>
                 </div>
-                <p style={styles.guaranteeDesc}>
-                  Every uploaded examination document is encrypted with a unique 256-bit symmetric key. Plaintext files
-                  are never persisted to disk or cloud storage. AES data keys are wrapped with RSA-OAEP (2048-bit).
-                </p>
-              </div>
 
-              <div style={styles.guaranteeCard}>
-                <div style={styles.guaranteeHeader}>
-                  <FileCheck size={20} color="#10b981" />
-                  <h4 style={styles.guaranteeTitle}>Integrity &amp; Authenticity (RSA-PSS)</h4>
+                {/* Invariant 2 */}
+                <div style={styles.invariantCard}>
+                  <div style={styles.invIconWrapGreen}>
+                    <Key size={24} color="#059669" />
+                  </div>
+                  <h3 style={styles.invTitle}>Envelope Encryption Scheme</h3>
+                  <div style={styles.invRule}>
+                    RULE: 256-bit symmetric DEK is wrapped using 2048-bit RSA-OAEP public key.
+                  </div>
+                  <p style={styles.invDesc}>
+                    Direct storage of symmetric keys is forbidden. Each question paper is encrypted with a unique single-use AES key. The symmetric key is encrypted using the Examination Cell&apos;s asymmetric public key and stored separately from the encrypted ciphertext.
+                  </p>
+                  <div style={styles.invProof}>
+                    &bull; Mathematical guarantee: Hybrid cryptography combines AES speed with RSA public-key distribution security.
+                  </div>
                 </div>
-                <p style={styles.guaranteeDesc}>
-                  The exact ciphertext buffer is hashed with SHA-256 and digitally signed with RSA-PSS using a dedicated
-                  private signing key. Non-repudiation is strictly guaranteed across institutional governance.
-                </p>
-              </div>
 
-              <div style={styles.guaranteeCard}>
-                <div style={styles.guaranteeHeader}>
-                  <UserCheck size={20} color="#8b5cf6" />
-                  <h4 style={styles.guaranteeTitle}>Role-Based Access Control (RBAC)</h4>
+                {/* Invariant 3 */}
+                <div style={styles.invariantCard}>
+                  <div style={styles.invIconWrapPurple}>
+                    <Clock size={24} color="#7c3aed" />
+                  </div>
+                  <h3 style={styles.invTitle}>Time-Gated Scheduled Release</h3>
+                  <div style={styles.invRule}>
+                    RULE: Early access requests prior to scheduled exam date are rejected (403 Forbidden).
+                  </div>
+                  <p style={styles.invDesc}>
+                    Regardless of coordinator credentials, the server checks the scheduled examination date and start time. Decryption is locked until the server-controlled 1-hour pre-examination release window, preventing early paper leaks.
+                  </p>
+                  <div style={styles.invProof}>
+                    &bull; Security invariant: Gating operates at the API route, service layer, and storage retrieval boundary.
+                  </div>
                 </div>
-                <p style={styles.guaranteeDesc}>
-                  Authoritative database role lookup prevents client JWT claim tampering. Only verified TEACHER
-                  authors and assigned EXAM_COORDINATOR recipients can initiate document operations.
-                </p>
-              </div>
 
-              <div style={styles.guaranteeCard}>
-                <div style={styles.guaranteeHeader}>
-                  <ShieldCheck size={20} color="#f59e0b" />
-                  <h4 style={styles.guaranteeTitle}>Scheduled Delivery Gating</h4>
+                {/* Invariant 4 */}
+                <div style={styles.invariantCard}>
+                  <div style={styles.invIconWrapSlate}>
+                    <Database size={24} color="#475569" />
+                  </div>
+                  <h3 style={styles.invTitle}>Zero Secret Leakage &amp; Memory Hygiene</h3>
+                  <div style={styles.invRule}>
+                    RULE: Plaintext keys, IVs, and deciphered streams are zeroized after stream delivery.
+                  </div>
+                  <p style={styles.invDesc}>
+                    Neither the React frontend, browser storage, nor API JSON payloads ever contain plaintext AES keys, IVs, or authentication tags. Decryption operates via ephemeral in-memory Node.js Buffers which are immediately garbage collected and zeroized.
+                  </p>
+                  <div style={styles.invProof}>
+                    &bull; Defense guarantee: Complete defense against heap dumps, browser cache inspection, and unauthorized downloads.
+                  </div>
                 </div>
-                <p style={styles.guaranteeDesc}>
-                  Assigned coordinators are prohibited from downloading or decrypting papers before the server-calculated
-                  scheduled delivery date, ensuring question confidentiality prior to examination sessions.
-                </p>
               </div>
             </div>
           )}
         </div>
 
-        {/* Footer */}
-        <div style={styles.footer}>
-          <div style={styles.footerNote}>
-            ExamGuard Cryptographic Core &bull; Module 20 Alignment &bull; Zero Plaintext Storage
+        {/* Modal Footer */}
+        <div style={styles.dialogFooter}>
+          <div style={styles.footerInfo}>
+            <ShieldCheck size={16} color="#059669" />
+            <span>Strict institutional compliance with Computer Engineering Department cryptographic protocols.</span>
           </div>
-          <button onClick={onClose} style={styles.closeModalBtn}>
-            Close
+          <button
+            type="button"
+            onClick={onClose}
+            style={styles.footerCloseBtn}
+          >
+            Close Diagram
           </button>
         </div>
       </div>
@@ -434,385 +584,493 @@ export default function AlgorithmFlowDiagram({ isOpen, onClose }) {
 const styles = {
   overlay: {
     position: 'fixed',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    inset: 0,
+    backgroundColor: 'rgba(15, 23, 42, 0.7)',
+    backdropFilter: 'blur(4px)',
+    zIndex: 1100,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 1000,
-    padding: '1rem',
-    backdropFilter: 'blur(4px)',
+    padding: '16px',
+    overflowY: 'auto',
   },
-  modal: {
-    backgroundColor: '#0f172a',
-    borderRadius: '16px',
-    border: '1px solid #1e293b',
-    width: 'min(96vw, 1100px)',
-    maxWidth: '1100px',
-    maxHeight: '90vh',
+  dialog: {
+    backgroundColor: '#ffffff',
+    borderRadius: '14px',
+    width: '100%',
+    maxWidth: '1060px',
+    maxHeight: 'min(92vh, 880px)',
     display: 'flex',
     flexDirection: 'column',
-    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)',
-    color: '#f8fafc',
     overflow: 'hidden',
+    boxShadow: '0 25px 50px -12px rgba(15, 23, 42, 0.25)',
+    border: '1px solid #e2e8f0',
+    margin: 'auto',
+    animation: 'modalEnter 0.2s ease-out',
   },
-  header: {
-    padding: '1.25rem 1.5rem',
+  dialogHeader: {
+    padding: '16px 22px',
+    borderBottom: '1px solid #e2e8f0',
+    backgroundColor: '#ffffff',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderBottom: '1px solid #1e293b',
+    gap: '12px',
+    flexShrink: 0,
   },
-  headerTitleWrap: {
+  headerLeft: {
     display: 'flex',
     alignItems: 'center',
-    gap: '0.875rem',
+    gap: '12px',
   },
-  iconBadge: {
-    padding: '0.625rem',
+  headerIconBadge: {
+    width: '42px',
+    height: '42px',
     borderRadius: '10px',
-    backgroundColor: 'rgba(59, 130, 246, 0.15)',
-    border: '1px solid rgba(59, 130, 246, 0.3)',
+    backgroundColor: '#eff6ff',
+    border: '1px solid #bfdbfe',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
-  title: {
+  dialogTitle: {
     margin: 0,
     fontSize: '1.15rem',
-    fontWeight: '700',
-    color: '#f8fafc',
+    fontWeight: 800,
+    color: '#0f172a',
+    letterSpacing: '-0.02em',
   },
-  subtitle: {
-    margin: '0.2rem 0 0 0',
-    fontSize: '0.8rem',
-    color: '#94a3b8',
+  securityBadge: {
+    fontSize: '0.65rem',
+    fontWeight: 700,
+    color: '#1d4ed8',
+    backgroundColor: '#dbeafe',
+    border: '1px solid #bfdbfe',
+    padding: '2px 8px',
+    borderRadius: '4px',
+    letterSpacing: '0.04em',
+  },
+  dialogSubtitle: {
+    margin: '3px 0 0 0',
+    fontSize: '0.78rem',
+    color: '#64748b',
   },
   closeBtn: {
     background: 'none',
     border: 'none',
-    color: '#64748b',
     cursor: 'pointer',
-    padding: '0.4rem',
+    color: '#64748b',
+    padding: '6px',
     borderRadius: '6px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'all 0.15s ease',
   },
+
+  // Tab Switcher
   tabBar: {
     display: 'flex',
-    gap: '0.5rem',
-    padding: '0.75rem 1.5rem',
-    borderBottom: '1px solid #1e293b',
-    backgroundColor: '#0b1120',
+    alignItems: 'center',
+    gap: '6px',
+    padding: '8px 22px',
+    borderBottom: '1px solid #e2e8f0',
+    backgroundColor: '#f8fafc',
     overflowX: 'auto',
+    flexShrink: 0,
   },
   tabBtn: {
-    padding: '0.5rem 1rem',
-    borderRadius: '8px',
-    fontSize: '0.825rem',
-    fontWeight: '600',
-    color: '#94a3b8',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '7px 14px',
     backgroundColor: 'transparent',
     border: '1px solid transparent',
+    borderRadius: '6px',
+    fontSize: '0.8rem',
+    fontWeight: 500,
+    color: '#475569',
     cursor: 'pointer',
     whiteSpace: 'nowrap',
     transition: 'all 0.15s ease',
   },
-  activeTabBtn: {
-    color: '#38bdf8',
-    backgroundColor: 'rgba(56, 189, 248, 0.12)',
-    border: '1px solid rgba(56, 189, 248, 0.3)',
+  tabBtnActive: {
+    backgroundColor: '#ffffff',
+    borderColor: '#cbd5e1',
+    color: '#1d4ed8',
+    fontWeight: 600,
+    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
   },
-  body: {
-    padding: '1.25rem 1.5rem',
+
+  // Dialog Body
+  dialogBody: {
+    padding: '20px 22px',
     overflowY: 'auto',
+    flex: '1 1 auto',
+    WebkitOverflowScrolling: 'touch',
+  },
+  tabContent: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '20px',
+  },
+
+  // Legend Banner
+  legendBanner: {
+    backgroundColor: '#f8fafc',
+    border: '1px solid #e2e8f0',
+    borderRadius: '8px',
+    padding: '12px 16px',
+  },
+  legendTitle: {
+    fontSize: '0.68rem',
+    fontWeight: 700,
+    color: '#64748b',
+    letterSpacing: '0.05em',
+    marginBottom: '6px',
+  },
+  legendRow: {
+    display: 'flex',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: '12px',
+    fontSize: '0.78rem',
+    color: '#334155',
+  },
+  legendItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+  },
+  legendDot: {
+    width: '8px',
+    height: '8px',
+    borderRadius: '50%',
+    display: 'inline-block',
+  },
+  legendDivider: {
+    color: '#cbd5e1',
+    fontWeight: 700,
+  },
+
+  // Phases & Grids
+  phaseContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '12px',
+  },
+  phaseHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  phaseBadge: {
+    fontSize: '0.72rem',
+    fontWeight: 700,
+    padding: '3px 10px',
+    borderRadius: '9999px',
+    border: '1px solid',
+    letterSpacing: '0.04em',
+  },
+  phaseSubtext: {
+    fontSize: '0.75rem',
+    color: '#64748b',
+  },
+  cardsGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+    gap: '12px',
+  },
+  stageCard: {
+    border: '1px solid',
+    borderRadius: '10px',
+    padding: '14px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+    boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.04)',
+    transition: 'all 0.15s ease',
+  },
+  cardTopRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  stageNumberBadge: {
+    fontSize: '0.65rem',
+    fontWeight: 700,
+    padding: '2px 8px',
+    borderRadius: '4px',
+    border: '1px solid',
+    letterSpacing: '0.05em',
+  },
+  stageIconSquircle: {
+    width: '32px',
+    height: '32px',
+    borderRadius: '8px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stageTitle: {
+    margin: 0,
+    fontSize: '0.9rem',
+    fontWeight: 700,
+    color: '#0f172a',
+  },
+  cipherTermPill: {
+    fontSize: '0.72rem',
+    fontFamily: 'monospace',
+    fontWeight: 600,
+    color: '#0f172a',
+    backgroundColor: '#f1f5f9',
+    padding: '3px 8px',
+    borderRadius: '4px',
+    border: '1px solid #e2e8f0',
+    display: 'inline-block',
+  },
+  stageSummary: {
+    margin: 0,
+    fontSize: '0.78rem',
+    color: '#475569',
+    lineHeight: 1.45,
     flex: 1,
   },
-  infoBox: {
-    display: 'flex',
-    alignItems: 'flex-start',
-    gap: '0.75rem',
-    padding: '0.75rem 1rem',
-    borderRadius: '8px',
-    backgroundColor: 'rgba(30, 41, 59, 0.5)',
-    border: '1px solid #334155',
-    marginBottom: '1.25rem',
-  },
-  infoText: {
-    fontSize: '0.825rem',
-    color: '#cbd5e1',
-    lineHeight: '1.45',
-  },
-  flowSection: {
-    padding: '1rem',
-    borderRadius: '12px',
-    backgroundColor: 'rgba(37, 99, 235, 0.05)',
-    border: '1px solid rgba(37, 99, 235, 0.2)',
-    marginBottom: '1rem',
-  },
-  flowSectionCoordinator: {
-    padding: '1rem',
-    borderRadius: '12px',
-    backgroundColor: 'rgba(16, 185, 129, 0.05)',
-    border: '1px solid rgba(16, 185, 129, 0.2)',
-  },
-  sectionHeader: {
+  stageFooter: {
+    marginTop: '6px',
+    paddingTop: '8px',
+    borderTop: '1px solid #f1f5f9',
     display: 'flex',
     alignItems: 'center',
-    gap: '0.75rem',
-    marginBottom: '1rem',
-    flexWrap: 'wrap',
+    justifyContent: 'space-between',
   },
-  teacherBadge: {
-    fontSize: '0.75rem',
-    fontWeight: '700',
-    padding: '0.25rem 0.65rem',
-    borderRadius: '9999px',
-    backgroundColor: '#2563eb',
-    color: '#ffffff',
-    textTransform: 'uppercase',
-    letterSpacing: '0.04em',
-  },
-  coordBadge: {
-    fontSize: '0.75rem',
-    fontWeight: '700',
-    padding: '0.25rem 0.65rem',
-    borderRadius: '9999px',
-    backgroundColor: '#10b981',
-    color: '#ffffff',
-    textTransform: 'uppercase',
-    letterSpacing: '0.04em',
-  },
-  sectionTitle: {
-    fontSize: '0.875rem',
-    fontWeight: '600',
-    color: '#e2e8f0',
-  },
-  stepGrid: {
-    display: 'flex',
-    alignItems: 'stretch',
-    gap: '0.5rem',
-    flexWrap: 'wrap',
-  },
-  stepCard: {
-    flex: '1 1 140px',
-    minWidth: '135px',
-    backgroundColor: '#1e293b',
-    borderRadius: '10px',
-    padding: '0.875rem 0.75rem',
-    border: '1px solid #334155',
-    position: 'relative',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'flex-start',
-  },
-  stepCardCoord: {
-    flex: '1 1 140px',
-    minWidth: '135px',
-    backgroundColor: '#1e293b',
-    borderRadius: '10px',
-    padding: '0.875rem 0.75rem',
-    border: '1px solid #334155',
-    position: 'relative',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'flex-start',
-  },
-  stepNumberBadge: {
-    position: 'absolute',
-    top: '8px',
-    right: '8px',
+  techTag: {
     fontSize: '0.7rem',
-    fontWeight: '700',
-    color: '#60a5fa',
-    backgroundColor: 'rgba(96, 165, 250, 0.15)',
-    padding: '0.15rem 0.45rem',
-    borderRadius: '6px',
-  },
-  stepNumberBadgeCoord: {
-    position: 'absolute',
-    top: '8px',
-    right: '8px',
-    fontSize: '0.7rem',
-    fontWeight: '700',
-    color: '#34d399',
-    backgroundColor: 'rgba(52, 211, 153, 0.15)',
-    padding: '0.15rem 0.45rem',
-    borderRadius: '6px',
-  },
-  stepIconWrapTeacher: {
-    padding: '0.4rem',
-    borderRadius: '8px',
-    backgroundColor: 'rgba(37, 99, 235, 0.15)',
-    marginBottom: '0.5rem',
-  },
-  stepIconWrapCoord: {
-    padding: '0.4rem',
-    borderRadius: '8px',
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-    marginBottom: '0.5rem',
-  },
-  stepTitle: {
-    fontSize: '0.8rem',
-    fontWeight: '700',
-    color: '#f1f5f9',
-    marginBottom: '0.35rem',
-  },
-  stepDesc: {
-    fontSize: '0.7rem',
-    color: '#94a3b8',
-    lineHeight: '1.4',
-    margin: 0,
-  },
-  arrowWrap: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
+    fontWeight: 600,
     color: '#64748b',
-    padding: '0 0.2rem',
   },
-  desktopArrow: {
-    display: 'block',
-  },
-  mobileArrow: {
-    display: 'none',
-  },
-  bridgeWrap: {
+
+  // Bridge
+  bridgeContainer: {
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'center',
-    margin: '1rem 0',
+    gap: '12px',
+    margin: '4px 0',
   },
   bridgeLine: {
     flex: 1,
     height: '1px',
-    backgroundColor: '#334155',
+    backgroundColor: '#cbd5e1',
   },
   bridgeBadge: {
-    padding: '0.35rem 0.85rem',
-    borderRadius: '9999px',
-    backgroundColor: '#1e293b',
-    border: '1px solid #334155',
-    fontSize: '0.75rem',
-    color: '#cbd5e1',
-    fontWeight: '600',
-  },
-  decryptionFlowWrap: {
-    display: 'flex',
-    alignItems: 'stretch',
-    gap: '0.5rem',
-    flexWrap: 'wrap',
-  },
-  decryptionStep: {
-    flex: '1 1 170px',
-    minWidth: '150px',
-    backgroundColor: '#1e293b',
-    borderRadius: '10px',
-    padding: '1rem',
-    border: '1px solid #334155',
-  },
-  decryptionStepHighlight: {
-    flex: '1 1 170px',
-    minWidth: '150px',
-    backgroundColor: 'rgba(139, 92, 246, 0.15)',
-    borderRadius: '10px',
-    padding: '1rem',
-    border: '1px solid rgba(139, 92, 246, 0.4)',
-  },
-  decryptionStepHeader: {
-    display: 'flex',
+    display: 'inline-flex',
     alignItems: 'center',
-    gap: '0.5rem',
-    marginBottom: '0.5rem',
+    gap: '8px',
+    padding: '6px 14px',
+    backgroundColor: '#f8fafc',
+    border: '1px solid #cbd5e1',
+    borderRadius: '9999px',
+    fontSize: '0.74rem',
+    fontWeight: 700,
+    color: '#334155',
+    letterSpacing: '0.03em',
   },
-  decStepNum: {
-    fontSize: '0.75rem',
-    fontWeight: '700',
-    backgroundColor: '#334155',
-    color: '#f8fafc',
-    padding: '0.15rem 0.5rem',
-    borderRadius: '4px',
+
+  // Sequence Flow
+  sequenceContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '14px',
   },
-  decStepNumHighlight: {
-    fontSize: '0.75rem',
-    fontWeight: '700',
-    backgroundColor: '#8b5cf6',
-    color: '#ffffff',
-    padding: '0.15rem 0.5rem',
-    borderRadius: '4px',
+  sequenceItem: {
+    display: 'flex',
+    gap: '16px',
   },
-  decStepName: {
-    fontSize: '0.85rem',
-    fontWeight: '700',
-    color: '#f8fafc',
+  sequenceLeft: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    width: '36px',
   },
-  decStepNameHighlight: {
-    fontSize: '0.85rem',
-    fontWeight: '700',
-    color: '#c4b5fd',
-  },
-  decStepDesc: {
-    fontSize: '0.75rem',
-    color: '#94a3b8',
-    lineHeight: '1.45',
-    margin: 0,
-  },
-  decArrowWrap: {
+  seqNumberCircle: {
+    width: '32px',
+    height: '32px',
+    borderRadius: '50%',
+    border: '2px solid',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: '0 0.25rem',
+    fontWeight: 800,
+    fontSize: '0.85rem',
+    flexShrink: 0,
   },
-  guaranteeGrid: {
+  seqConnectingLine: {
+    flex: 1,
+    width: '2px',
+    backgroundColor: '#e2e8f0',
+    margin: '4px 0',
+  },
+  sequenceCard: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+    border: '1px solid #e2e8f0',
+    borderRadius: '10px',
+    padding: '14px 18px',
+    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
+  },
+  seqCardHeader: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: '8px',
+  },
+  phaseBadgeSmall: {
+    fontSize: '0.65rem',
+    fontWeight: 700,
+    padding: '1px 6px',
+    borderRadius: '4px',
+    letterSpacing: '0.04em',
+  },
+  cipherTermPillSmall: {
+    fontSize: '0.7rem',
+    fontFamily: 'monospace',
+    color: '#64748b',
+  },
+  seqCardTitle: {
+    margin: '4px 0 0 0',
+    fontSize: '0.92rem',
+    fontWeight: 700,
+    color: '#0f172a',
+  },
+  seqCardDesc: {
+    margin: 0,
+    fontSize: '0.8rem',
+    color: '#475569',
+    lineHeight: 1.5,
+  },
+  seqCardMeta: {
+    marginTop: '10px',
+    paddingTop: '8px',
+    borderTop: '1px solid #f1f5f9',
+  },
+
+  // Invariants Grid
+  invariantsGrid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-    gap: '1rem',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
+    gap: '16px',
   },
-  guaranteeCard: {
-    backgroundColor: '#1e293b',
+  invariantCard: {
+    backgroundColor: '#ffffff',
+    border: '1px solid #e2e8f0',
     borderRadius: '12px',
-    padding: '1.25rem',
-    border: '1px solid #334155',
+    padding: '20px',
+    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.04)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px',
   },
-  guaranteeHeader: {
+  invIconWrapBlue: {
+    width: '44px',
+    height: '44px',
+    borderRadius: '10px',
+    backgroundColor: '#eff6ff',
+    border: '1px solid #bfdbfe',
     display: 'flex',
     alignItems: 'center',
-    gap: '0.625rem',
-    marginBottom: '0.75rem',
+    justifyContent: 'center',
   },
-  guaranteeTitle: {
+  invIconWrapGreen: {
+    width: '44px',
+    height: '44px',
+    borderRadius: '10px',
+    backgroundColor: '#ecfdf5',
+    border: '1px solid #a7f3d0',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  invIconWrapPurple: {
+    width: '44px',
+    height: '44px',
+    borderRadius: '10px',
+    backgroundColor: '#f5f3ff',
+    border: '1px solid #ddd6fe',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  invIconWrapSlate: {
+    width: '44px',
+    height: '44px',
+    borderRadius: '10px',
+    backgroundColor: '#f8fafc',
+    border: '1px solid #cbd5e1',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  invTitle: {
     margin: 0,
-    fontSize: '0.9rem',
-    fontWeight: '700',
-    color: '#f8fafc',
+    fontSize: '1rem',
+    fontWeight: 700,
+    color: '#0f172a',
   },
-  guaranteeDesc: {
+  invRule: {
+    fontSize: '0.75rem',
+    fontWeight: 700,
+    fontFamily: 'monospace',
+    color: '#1e293b',
+    backgroundColor: '#f1f5f9',
+    padding: '6px 10px',
+    borderRadius: '6px',
+    border: '1px solid #e2e8f0',
+  },
+  invDesc: {
     margin: 0,
-    fontSize: '0.785rem',
-    color: '#94a3b8',
-    lineHeight: '1.5',
+    fontSize: '0.8rem',
+    color: '#475569',
+    lineHeight: 1.5,
   },
-  footer: {
-    padding: '1rem 1.5rem',
+  invProof: {
+    fontSize: '0.74rem',
+    fontWeight: 600,
+    color: '#059669',
+    backgroundColor: '#ecfdf5',
+    padding: '6px 10px',
+    borderRadius: '6px',
+    border: '1px solid #a7f3d0',
+  },
+
+  // Footer
+  dialogFooter: {
+    padding: '14px 22px',
+    borderTop: '1px solid #e2e8f0',
+    backgroundColor: '#f8fafc',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderTop: '1px solid #1e293b',
-    backgroundColor: '#0b1120',
+    gap: '12px',
+    flexShrink: 0,
   },
-  footerNote: {
+  footerInfo: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
     fontSize: '0.75rem',
-    color: '#64748b',
+    color: '#334155',
+    fontWeight: 500,
   },
-  closeModalBtn: {
-    backgroundColor: '#2563eb',
-    color: '#ffffff',
-    border: 'none',
-    padding: '0.45rem 1rem',
-    borderRadius: '8px',
-    fontSize: '0.825rem',
-    fontWeight: '600',
+  footerCloseBtn: {
+    padding: '8px 18px',
+    backgroundColor: '#ffffff',
+    border: '1px solid #cbd5e1',
+    borderRadius: '6px',
+    fontSize: '0.82rem',
+    fontWeight: 600,
+    color: '#334155',
     cursor: 'pointer',
+    transition: 'all 0.15s ease',
   },
 };

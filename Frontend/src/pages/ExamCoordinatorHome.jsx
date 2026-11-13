@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import examCoordinatorService from '../services/examCoordinatorService';
 import answerKeyService from '../services/answerKeyService';
 import AlgorithmFlowDiagram from '../components/AlgorithmFlowDiagram';
+import AppHeader from '../components/AppHeader';
 import {
   ClipboardCheck,
   FileText,
@@ -485,212 +486,24 @@ export default function ExamCoordinatorHome() {
     if (el) el.scrollIntoView({ behavior: 'smooth' });
   };
 
+  const coordNavTabs = useMemo(() => [
+    { id: 'overview', label: 'Overview', icon: Activity },
+    { id: 'papers', label: 'Assigned Papers', icon: FileText, badge: papers.length },
+    { id: 'deliveries', label: 'Upcoming Deliveries', icon: Clock, badge: upcomingDeliveries.length, badgeColor: '#eab308' },
+  ], [papers.length, upcomingDeliveries.length]);
+
   return (
     <div style={styles.container}>
-      {/* Top Navigation Bar */}
-      <header style={styles.header}>
-        <div style={styles.brandGroup}>
-          <div style={styles.brandIcon}>
-            <ClipboardCheck size={26} color="#38bdf8" />
-          </div>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <h1 style={styles.brandTitle}>ExamGuard</h1>
-              <span style={styles.appEnvironmentPill}>COMPUTER ENGINEERING</span>
-            </div>
-            <p style={styles.brandSubtitle}>Department of Computer Engineering • Examination Coordinator Control Center</p>
-          </div>
-        </div>
-
-        {/* Center Navigation Links (Desktop) */}
-        <nav className="nav-desktop-tabs" style={styles.navTabs}>
-          <button
-            onClick={() => setActiveTab('overview')}
-            style={{
-              ...styles.navTabBtn,
-              ...(activeTab === 'overview' ? styles.navTabBtnActive : {}),
-            }}
-          >
-            <Activity size={15} />
-            <span>Overview</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('papers')}
-            style={{
-              ...styles.navTabBtn,
-              ...(activeTab === 'papers' ? styles.navTabBtnActive : {}),
-            }}
-          >
-            <FileText size={15} />
-            <span>Assigned Papers</span>
-            {papers.length > 0 && <span style={styles.navTabBadge}>{papers.length}</span>}
-          </button>
-          <button
-            onClick={() => setActiveTab('deliveries')}
-            style={{
-              ...styles.navTabBtn,
-              ...(activeTab === 'deliveries' ? styles.navTabBtnActive : {}),
-            }}
-          >
-            <Clock size={15} />
-            <span>Upcoming Deliveries</span>
-            {upcomingDeliveries.length > 0 && (
-              <span style={{ ...styles.navTabBadge, backgroundColor: 'rgba(234, 179, 8, 0.2)', color: '#fde047' }}>
-                {upcomingDeliveries.length}
-              </span>
-            )}
-          </button>
-        </nav>
-
-        {/* Desktop Profile Section */}
-        <div className="nav-desktop" style={styles.userProfile}>
-          <button
-            onClick={() => setShowAlgorithmModal(true)}
-            style={styles.algorithmFlowBtn}
-            title="View Cryptographic Algorithm Flow"
-          >
-            <Layers size={15} />
-            <span>Algorithm Flow</span>
-          </button>
-          <div style={styles.roleBadge}>
-            <Lock size={12} style={{ marginRight: '4px' }} />
-            Role: EXAM_COORDINATOR
-          </div>
-          <div style={styles.userInfo}>
-            <span style={styles.userName}>{user?.name || 'Exam Coordinator'}</span>
-            <span style={styles.userEmail}>{user?.email}</span>
-          </div>
-          <button onClick={handleLogout} style={styles.logoutBtn} title="Sign Out">
-            <LogOut size={16} />
-            <span>Sign Out</span>
-          </button>
-        </div>
-
-        {/* Mobile Navigation Controls */}
-        <div className="nav-mobile-controls" style={styles.navMobileControls}>
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            style={styles.mobileMenuToggle}
-            aria-label="Toggle navigation menu"
-            aria-expanded={mobileMenuOpen}
-          >
-            {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
-          </button>
-        </div>
-      </header>
-
-      {/* Mobile Drawer */}
-      {mobileMenuOpen && (
-        <div className="mobile-nav-backdrop" onClick={() => setMobileMenuOpen(false)}>
-          <div className="mobile-nav-drawer open" onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <ClipboardCheck size={20} color="var(--color-primary)" />
-                <span style={{ fontWeight: '700', color: 'var(--color-structure-text)', fontSize: '1rem' }}>
-                  ExamGuard
-                </span>
-              </div>
-              <button
-                onClick={() => setMobileMenuOpen(false)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--color-structure-muted)',
-                  cursor: 'pointer',
-                  padding: '0.25rem',
-                }}
-                aria-label="Close menu"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <div style={styles.mobileUserBox}>
-              <User size={22} color="var(--color-accent)" />
-              <div>
-                <div style={{ fontSize: '0.9rem', fontWeight: '600', color: 'var(--color-structure-text)' }}>
-                  {user?.name || 'Exam Coordinator'}
-                </div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--color-accent)', fontFamily: 'var(--font-jetbrains)' }}>
-                  {user?.email}
-                </div>
-                <div style={{ fontSize: '0.7rem', color: 'var(--color-structure-muted)', marginTop: '2px' }}>
-                  ROLE: EXAM_COORDINATOR
-                </div>
-              </div>
-            </div>
-
-            {/* Mobile Tab Selectors */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '1rem' }}>
-              <button
-                onClick={() => {
-                  setActiveTab('overview');
-                  setMobileMenuOpen(false);
-                }}
-                style={{
-                  ...styles.mobileNavTabBtn,
-                  ...(activeTab === 'overview' ? styles.mobileNavTabBtnActive : {}),
-                }}
-              >
-                <Activity size={18} />
-                <span>Overview Dashboard</span>
-              </button>
-              <button
-                onClick={() => {
-                  setActiveTab('papers');
-                  setMobileMenuOpen(false);
-                }}
-                style={{
-                  ...styles.mobileNavTabBtn,
-                  ...(activeTab === 'papers' ? styles.mobileNavTabBtnActive : {}),
-                }}
-              >
-                <FileText size={18} />
-                <span>Assigned Papers ({papers.length})</span>
-              </button>
-              <button
-                onClick={() => {
-                  setActiveTab('deliveries');
-                  setMobileMenuOpen(false);
-                }}
-                style={{
-                  ...styles.mobileNavTabBtn,
-                  ...(activeTab === 'deliveries' ? styles.mobileNavTabBtnActive : {}),
-                }}
-              >
-                <Clock size={18} />
-                <span>Upcoming Deliveries ({upcomingDeliveries.length})</span>
-              </button>
-            </div>
-
-            <div
-              style={{
-                marginTop: 'auto',
-                paddingTop: '1rem',
-                borderTop: '1px solid var(--color-structure-border)',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '0.5rem',
-              }}
-            >
-              <button
-                onClick={() => {
-                  setShowAlgorithmModal(true);
-                  setMobileMenuOpen(false);
-                }}
-                style={styles.mobileActionBtn}
-              >
-                <Layers size={18} />
-                <span>Algorithm Flow Diagram</span>
-              </button>
-              <button onClick={handleLogout} style={styles.mobileLogoutBtn}>
-                <LogOut size={18} />
-                <span>Sign Out</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Unified Modern Academic Navigation Header */}
+      <AppHeader
+        user={user}
+        role="EXAM_COORDINATOR"
+        activeTab={activeTab}
+        onTabChange={(tabId) => setActiveTab(tabId)}
+        tabs={coordNavTabs}
+        onOpenAlgorithmFlow={() => setShowAlgorithmModal(true)}
+        onLogout={handleLogout}
+      />
 
       {/* Main Content Area */}
       <main style={styles.main}>

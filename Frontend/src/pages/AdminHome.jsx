@@ -38,14 +38,17 @@ import { useAuth } from '../context/AuthContext';
 import auditLogService from '../services/auditLogService';
 import adminService from '../services/adminService';
 import academicService from '../services/academicService';
+import AppHeader from '../components/AppHeader';
+import AlgorithmFlowDiagram from '../components/AlgorithmFlowDiagram';
 
 export default function AdminHome() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  // Active top tab: 'users' or 'audit'
+  // Active top tab: 'users' or 'academic'
   const [activeTab, setActiveTab] = useState('users');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showAlgorithmModal, setShowAlgorithmModal] = useState(false);
 
   // ==========================================
   // SECTION A: User Management States
@@ -614,146 +617,32 @@ export default function AdminHome() {
     }
   };
 
+  const adminNavTabs = React.useMemo(() => [
+    {
+      id: 'users',
+      label: 'User Management',
+      icon: Users,
+      badge: usersList.filter((u) => u.status === 'PENDING').length || null,
+    },
+    {
+      id: 'academic',
+      label: 'Academic & Paper Config',
+      icon: BookOpen,
+    },
+  ], [usersList]);
+
   return (
     <div style={styles.container}>
-      {/* Header */}
-      <header style={styles.header}>
-        <div style={styles.headerLeft}>
-          <div style={styles.brandIconWrapper}>
-            <ShieldAlert size={26} color="var(--color-primary)" />
-          </div>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <h1 style={styles.headerTitle}>ExamGuard Administration</h1>
-              <span style={{
-                background: 'rgba(56, 189, 248, 0.15)',
-                color: '#38bdf8',
-                border: '1px solid rgba(56, 189, 248, 0.3)',
-                padding: '2px 8px',
-                borderRadius: '9999px',
-                fontSize: '0.7rem',
-                fontWeight: 700,
-                letterSpacing: '0.05em'
-              }}>COMP DEPT</span>
-            </div>
-            <p style={styles.headerSubtitle}>
-              Department of Computer Engineering • Security Oversight, User Administration & Cryptographic Audit
-            </p>
-          </div>
-        </div>
-
-        {/* Desktop Profile Section */}
-        <div className="nav-desktop" style={styles.headerRight}>
-          <div style={styles.userProfilePill}>
-            <User size={16} color="var(--color-accent)" style={{ marginRight: '0.4rem' }} />
-            <span style={styles.userName}>{user?.name || 'Administrator'}</span>
-            <span style={styles.roleBadge}>ADMIN</span>
-          </div>
-
-          <button onClick={handleLogout} style={styles.logoutBtn} title="Sign Out">
-            <LogOut size={16} style={{ marginRight: '0.4rem' }} />
-            <span>Sign Out</span>
-          </button>
-        </div>
-
-        {/* Mobile Navigation Controls */}
-        <div className="nav-mobile-controls" style={styles.navMobileControls}>
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            style={styles.mobileMenuToggle}
-            aria-label="Toggle navigation menu"
-            aria-expanded={mobileMenuOpen}
-          >
-            {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
-          </button>
-        </div>
-      </header>
-
-      {/* Mobile Drawer */}
-      {mobileMenuOpen && (
-        <div style={styles.mobileDrawer}>
-          <div style={styles.mobileDrawerContent}>
-            <div style={styles.mobileUserBox}>
-              <div style={styles.mobileUserIcon}>
-                <User size={18} color="var(--color-accent)" />
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={styles.mobileUserName}>
-                  {user?.name || 'Administrator'}
-                </div>
-                <div style={styles.mobileUserEmail}>
-                  {user?.email}
-                </div>
-              </div>
-              <span style={styles.roleBadge}>ADMIN</span>
-            </div>
-
-            <div style={styles.mobileNavGroup}>
-              <button
-                onClick={() => {
-                  setActiveTab('users');
-                  setMobileMenuOpen(false);
-                }}
-                style={{
-                  ...styles.mobileNavBtn,
-                  ...(activeTab === 'users' ? styles.mobileNavBtnActive : {}),
-                }}
-              >
-                <Users size={18} />
-                <span>User Management</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  setActiveTab('academic');
-                  setMobileMenuOpen(false);
-                }}
-                style={{
-                  ...styles.mobileNavBtn,
-                  ...(activeTab === 'academic' ? styles.mobileNavBtnActive : {}),
-                }}
-              >
-                <BookOpen size={18} />
-                <span>Academic &amp; Paper Config</span>
-              </button>
-
-              {/* Security audit logging operates continuously on backend; UI navigation tab removed per Section 11 */}
-            </div>
-
-            <div style={styles.mobileLogoutWrapper}>
-              <button onClick={handleLogout} style={styles.mobileLogoutBtn}>
-                <LogOut size={16} />
-                <span>Sign Out</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Main Tab Navigation */}
-      <nav style={styles.tabNav}>
-        <button
-          onClick={() => setActiveTab('users')}
-          style={{
-            ...styles.tabBtn,
-            ...(activeTab === 'users' ? styles.tabBtnActive : {}),
-          }}
-        >
-          <Users size={18} style={{ marginRight: '0.5rem' }} />
-          <span>User Management</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('academic')}
-          style={{
-            ...styles.tabBtn,
-            ...(activeTab === 'academic' ? styles.tabBtnActive : {}),
-          }}
-        >
-          <BookOpen size={18} style={{ marginRight: '0.5rem' }} />
-          <span>Academic &amp; Paper Config</span>
-        </button>
-      </nav>
+      {/* Unified Modern Academic Navigation Header */}
+      <AppHeader
+        user={user}
+        role="ADMIN"
+        activeTab={activeTab}
+        onTabChange={(tabId) => setActiveTab(tabId)}
+        tabs={adminNavTabs}
+        onOpenAlgorithmFlow={() => setShowAlgorithmModal(true)}
+        onLogout={handleLogout}
+      />
 
       {/* Main Body */}
       <main style={styles.main}>
@@ -2549,6 +2438,12 @@ export default function AdminHome() {
           </div>
         </div>
       )}
+
+      {/* Cryptographic Algorithm Flow Modal */}
+      <AlgorithmFlowDiagram
+        isOpen={showAlgorithmModal}
+        onClose={() => setShowAlgorithmModal(false)}
+      />
     </div>
   );
 }

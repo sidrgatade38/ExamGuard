@@ -310,6 +310,25 @@ button, input, select, textarea {
 /* --------------------------------------------------------------------------
    Responsive Mobile Navigation Drawer
    -------------------------------------------------------------------------- */
+.header-mobile-toggle {
+  display: none !important;
+}
+
+.header-nav-desktop,
+.header-actions-desktop {
+  display: flex !important;
+}
+
+@media (max-width: 1023px) {
+  .header-mobile-toggle {
+    display: flex !important;
+  }
+  .header-nav-desktop,
+  .header-actions-desktop {
+    display: none !important;
+  }
+}
+
 .nav-mobile-controls {
   display: none !important;
 }

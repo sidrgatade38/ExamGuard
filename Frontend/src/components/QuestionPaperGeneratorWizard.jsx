@@ -3439,7 +3439,9 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
             style={{
               ...styles.modalCard,
               maxWidth: '680px',
-              maxHeight: 'min(92vh, 820px)',
+              width: '100%',
+              maxHeight: 'calc(100dvh - 28px)',
+              height: 'min(780px, calc(100dvh - 28px))',
               display: 'flex',
               flexDirection: 'column',
               overflow: 'hidden',
@@ -3452,17 +3454,17 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                padding: '16px 20px',
+                padding: '14px 20px',
                 borderBottom: '1px solid #e2e8f0',
                 backgroundColor: '#ffffff',
                 flexShrink: 0,
               }}
             >
               <div>
-                <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 700, color: '#0f172a' }}>
+                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>
                   {editingQuestionId ? 'Edit / Replace Question' : 'Add Question'} for {blueprint.subject}
                 </h3>
-                <p style={{ margin: '3px 0 0 0', fontSize: '12px', color: '#64748b' }}>
+                <p style={{ margin: '2px 0 0 0', fontSize: '11px', color: '#64748b' }}>
                   Enter question details, outcomes, Bloom&apos;s level, text, and optional diagram.
                 </p>
               </div>
@@ -3493,8 +3495,9 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
               style={{
                 display: 'flex',
                 flexDirection: 'column',
-                flex: 1,
+                flex: '1 1 auto',
                 minHeight: 0,
+                maxHeight: '100%',
                 overflow: 'hidden',
                 margin: 0,
               }}
@@ -3502,9 +3505,10 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
               {/* Scrollable Form Body */}
               <div
                 style={{
-                  padding: '18px 20px',
+                  padding: '16px 20px',
                   overflowY: 'auto',
                   flex: '1 1 auto',
+                  minHeight: 0,
                   WebkitOverflowScrolling: 'touch',
                 }}
               >
@@ -3803,10 +3807,13 @@ export default function QuestionPaperGeneratorWizard({ initialDraft = null, reci
                   justifyContent: 'flex-end',
                   alignItems: 'center',
                   gap: '10px',
-                  padding: '14px 20px',
+                  padding: '12px 20px',
                   borderTop: '1px solid #e2e8f0',
                   backgroundColor: '#f8fafc',
                   flexShrink: 0,
+                  position: 'sticky',
+                  bottom: 0,
+                  zIndex: 10,
                 }}
               >
                 <button
